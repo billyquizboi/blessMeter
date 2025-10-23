@@ -1,0 +1,211 @@
+/* 
+  The html and css in this widget use styling developed here: https://github.com/cafeTechne/Final-Fantasy-CSS
+  Thanks to cafeTechne the original developer of this styling.
+*/
+
+:root {
+    --outer-battle-window-color-0: #7c7874;
+    --outer-battle-window-color-1: #c8c4c0;
+    --outer-battle-window-color-2: #ccc9cc;
+    --outer-battle-window-color-3: #c9c9cb;
+    --outer-battle-window-color-4: #c2c1c5;
+    --outer-battle-window-color-5: #71767e;
+    --outer-battle-window-color-6: #6b6e87;
+  
+    --battle-window-top-gradient-color: #6c70a6;
+    --background-color-blue:#21217c;
+    /* --background-color-black:#181820; */
+    --battle-window-bottom-gradient-color: #040136;
+  
+  
+    --dialogue-window-color-gradient:#6d6db3,#5554ad,#5352a8,#3f4791,#354783,#32348d,#32328a,#313188,#222279,#14156d,#02045a,#040233,#020234,#020134;
+    --battle-window-border-radius: 5px;
+  
+    --br:5px;     /* border radius   */
+    --bg:#6b6e87,#71767e,#c2c1c5,#c9c9cb,#ccc9cc,#c8c4c0,#7c7874,#c0bcb3;/*border gradient */
+    --bgb: #6b6e87,#71767e,#c2c1c5,#c9c9cb,#ccc9cc,#c8c4c0,#7c7874,#c0bcb3,#020134;
+    --f:25px;/* minimum font size */
+  
+    --highlighted-text: #edd758;
+  
+  }
+  
+  * {
+      font-family: "Press Start 2P", system-ui; // license info available at bottom of css file or here: https://fonts.google.com/specimen/Press+Start+2P/license?categoryFilters=Appearance:%2FTheme%2FTechno
+      color: {{fontColor}};
+      font-size: 16px;
+      overflow: hidden;
+      font-weight: 400;
+      font-style: normal;
+  }
+  
+  html{
+      /* font-family: "Final Fantasy 3/6 Font Regular", monospace; */
+      color: #ecedee;
+      margin: 0px;
+      padding: 0px;
+      /* background-color: var(--background-color-black); */
+      text-shadow: 1px 1px #2d2a4b;
+  }
+  div{
+      /* background-color: var(--background-color-black); */
+  }
+  h1,h2,h3,h4,h5{
+      /* font-weight: normal; This typeface does not look good bold */
+      font-weight: 400;
+  }
+  
+  .main-title {
+    /* color: #181820; */
+    text-align: center;
+    margin-bottom: 5px;
+  }
+  
+  .outer-dialogue-window {
+      border-radius:var(--br);
+      padding:calc(var(--br) + 5px);
+      background:
+        /*corners*/
+        radial-gradient(farthest-side at bottom right,var(--bg)) top    left /var(--br) var(--br),
+        radial-gradient(farthest-side at top    right,var(--bg)) bottom left /var(--br) var(--br),
+        radial-gradient(farthest-side at bottom left ,var(--bg)) top    right/var(--br) var(--br),
+        radial-gradient(farthest-side at top    left ,var(--bg)) bottom right/var(--br) var(--br),
+        /* borders*/
+        linear-gradient(to top   ,var(--bg)) top   /calc(100% - 2*var(--br)) var(--br),
+        linear-gradient(to bottom,var(--bg)) bottom/calc(100% - 2*var(--br)) var(--br),
+        linear-gradient(to right ,var(--bg)) right /var(--br) calc(100% - 2*var(--br)),
+        linear-gradient(to left  ,var(--bg)) left  /var(--br) calc(100% - 2*var(--br));
+      background-repeat:no-repeat;
+      /*
+      My first approach to solving this led to unmaintainable code. 
+      As of now, I feel that my current gradients are "good enough" at 
+      approximating the pixelated anti-aliasing of the original ui menu window.
+      */
+  
+      box-sizing:border-box;
+      display:inline-block;
+      vertical-align:top;
+      font-size:var(--f);
+      border-width: 1px;
+      text-shadow: 2px 1px #2d2a4b;
+  
+      width: 100%;
+      height: 100%;
+    }
+  
+  .inner-dialogue-window {
+    background: linear-gradient(to bottom,var(--dialogue-window-color-gradient));
+    padding: 5px;
+    margin: -5px;
+    display: flex;
+    flex-direction: column;
+    /* align-items: ; */
+  
+    width: 100%;
+    height: 100%;
+  }
+  
+  .bless-container,.curse-container,.blurse-container {
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  .bless-container,.curse-container {
+    margin-bottom: 15px;
+  }
+  
+  .meter,.meter-title {
+    display: inline-block;
+  }
+  
+  .meter-title {
+    width: 35%;
+  }
+  
+  .meter {
+    width: 55%;
+    margin-right: 10px;
+  }
+  
+  .meter {
+      height: 10px;
+      background-color: #555;
+      margin-top: 0px;
+      border: 2px solid var(--outer-battle-window-color-4);
+      border-radius: 7px;
+  }
+  
+  .meter-fill {
+      height: 100%;
+      width: 50%; /* Example fill level */
+  }
+  
+  .bless-container .meter-fill {
+      background-color: #0f0;
+  }
+  
+  .curse-container .meter-fill {
+    /* background-color: orangered; */
+    /* background-color: #FF7F04; /* squash */
+    background-color: #FF3886; /* three */
+  }
+  
+  .blurse-container .meter-fill {
+    /* background-color: #00CAFF; /* squash */
+    background-color: #00D1FF; /* three */
+  }
+  
+  /* Check these colors out */
+    /* Dark Blue/Purple Backgrounds */
+    /* --ffvi-bg-dark: #283878; */
+  
+    /* Mid-tone Blues and Greys */
+    /* --ffvi-mid-blue: #3d8df2; */
+    /* --ffvi-mid-grey: #b5b8b9; */
+  
+    /* Accent Colors (Yellow and Green) */
+    /* --ffvi-accent-yellow: #fde722; */
+    /* --ffvi-accent-green: #165241; */
+  
+    /* For window borders or text highlight */
+    /* --ffvi-window-border: #4e818e; */
+  
+    /* White-like color for text */
+    /* --ffvi-text-light: #cedade; */
+  
+  /**
+  Font courtesy of https://fonts.google.com/specimen/Press+Start+2P?categoryFilters=Appearance:%2FTheme%2FTechno
+  Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net), with Reserved Font Name "Press Start 2P".
+  This Font Software is licensed under the SIL Open Font License, Version 1.1 . This license is copied below, and is also available with a FAQ at: https://openfontlicense.org
+  
+  SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+  
+  PREAMBLE
+  The goals of the Open Font License (OFL) are to stimulate worldwide development of collaborative font projects, to support the font creation efforts of academic and linguistic communities, and to provide a free and open framework in which fonts may be shared and improved in partnership with others.
+  
+  The OFL allows the licensed fonts to be used, studied, modified and redistributed freely as long as they are not sold by themselves. The fonts, including any derivative works, can be bundled, embedded, redistributed and/or sold with any software provided that any reserved names are not used by derivative works. The fonts and derivatives, however, cannot be released under any other type of license. The requirement for fonts to remain under this license does not apply to any document created using the fonts or their derivatives.
+  
+  DEFINITIONS
+  "Font Software" refers to the set of files released by the Copyright Holder(s) under this license and clearly marked as such. This may include source files, build scripts and documentation.
+  
+  "Reserved Font Name" refers to any names specified as such after the copyright statement(s).
+  
+  "Original Version" refers to the collection of Font Software components as distributed by the Copyright Holder(s).
+  "Modified Version" refers to any derivative made by adding to, deleting, or substituting -- in part or in whole -- any of the components of the Original Version, by changing formats or by porting the Font Software to a new environment.
+  
+  "Author" refers to any designer, engineer, programmer, technical writer or other person who contributed to the Font Software.
+  
+  PERMISSION & CONDITIONS
+  Permission is hereby granted, free of charge, to any person obtaining a copy of the Font Software, to use, study, copy, merge, embed, modify, redistribute, and sell modified and unmodified copies of the Font Software, subject to the following conditions:
+  
+  Neither the Font Software nor any of its individual components, in Original or Modified Versions, may be sold by itself.
+  Original or Modified Versions of the Font Software may be bundled, redistributed and/or sold with any software, provided that each copy contains the above copyright notice and this license. These can be included either as stand-alone text files, human-readable headers or in the appropriate machine-readable metadata fields within text or binary files as long as those fields can be easily viewed by the user.
+  No Modified Version of the Font Software may use the Reserved Font Name(s) unless explicit written permission is granted by the corresponding Copyright Holder. This restriction only applies to the primary font name as presented to the users.
+  The name(s) of the Copyright Holder(s) or the Author(s) of the Font Software shall not be used to promote, endorse or advertise any Modified Version, except to acknowledge the contribution(s) of the Copyright Holder(s) and the Author(s) or with their explicit written permission.
+  The Font Software, modified or unmodified, in part or in whole, must be distributed entirely under this license, and must not be distributed under any other license. The requirement for fonts to remain under this license does not apply to any document created using the Font Software.
+  TERMINATION
+  This license becomes null and void if any of the above conditions are not met.
+  
+  DISCLAIMER
+  THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
+  */
