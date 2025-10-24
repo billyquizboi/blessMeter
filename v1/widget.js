@@ -20,12 +20,15 @@ const initialWidgetState = {
         numberOfBlesses: 0,
         numberOfCurses: 0,
         numberOfBlurses: 0
-    }
+    },
+    showAll: false
 };
 
 initialWidgetState.lastUpdated = new Date();
 
 const STORE_KEY_NAME = "blessCurseMeterState";
+
+const STORE_SHOW_ALL_KEY_NAME = "showAll";
 
 const ATTRIBUTE_LAST_COUNT = "lastCount";
 
@@ -191,9 +194,9 @@ function getRedemptionName(detail) {
 function updateDisplay(widgetState) {
     if (widgetState != undefined && widgetState.current != undefined) {
         console.log(`Updating meter display ${JSON.stringify(widgetState)}`);
-        const numberOfBlesses = getOrDefaultCount(widgetState.current[numberOfBlessesKey]);
-        const numberOfCurses = getOrDefaultCount(widgetState.current[numberOfCursesKey]);
-        const numberOfBlurses = getOrDefaultCount(widgetState.current[numberOfBlursesKey]);
+        const numberOfBlesses = getCountFromState(widgetState, numberOfBlessesKey);
+        const numberOfCurses = getCountFromState(widgetState, numberOfCursesKey);
+        const numberOfBlurses = getCountFromState(widgetState, numberOfBlursesKey);
         const total = numberOfBlesses + numberOfCurses + numberOfBlurses;
 
         if (numberOfBlesses === blessMeterFill.attr(ATTRIBUTE_LAST_COUNT)
@@ -235,6 +238,14 @@ function updateDisplay(widgetState) {
     }
 }
 
+function getCountFromState(widgetState, keyName) {
+    if (Boolean(widgetState[STORE_SHOW_ALL_KEY_NAME])) {
+        return getOrDefaultCount(widgetState.allTime[keyName]);
+    } else {
+        return getOrDefaultCount(widgetState.current[keyName]);
+    }
+}
+
 function getOrDefaultCount(value) {
     if (value == undefined || value == NaN) {
         return 0;
@@ -258,19 +269,87 @@ function animateChange(ele, currentWidth, targetWidth) {
     });
 }
 
+//////////////////
+// RESET FUNCTIONS 
+//////////////////
+
 function resetCurrentState() {
-    SE_API,store.get(STORE_KEY_NAME).then(obj => {
+    SE_API.store.get(STORE_KEY_NAME).then(obj => {
         obj.lastUpdated = new Date();
         obj.current = {
             numberOfBlesses: 0,
             numberOfCurses: 0,
             numberOfBlurses: 0
         };
+        SE_API.store.set(STORE_KEY_NAME, obj);
     });
-    SE_API.store.set(STORE_KEY_NAME, initialWidgetState);
 }
 
 function resetAllTimeState() {
     initialWidgetState.lastUpdated = new Date();
     SE_API.store.set(STORE_KEY_NAME, initialWidgetState);
+}
+
+
+//////////////////
+// TOGGLE ALL TIME 
+//////////////////
+
+function toggleAllTime(button) {
+    SE_API.store.get(STORE_KEY_NAME).then(obj => {
+        console.log(`Toggling all-time: Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
+        if (!storeHasBeenInitialized(obj)) {
+            console.log("Toggling all-time: The store object has not yet been initialized. Setting up initial values.");
+            obj = initialWidgetState;
+        }
+        obj[STORE_SHOW_ALL_KEY_NAME] = !obj[STORE_SHOW_ALL_KEY_NAME];
+        obj.lastUpdated = new Date();
+        SE_API.store.set(STORE_KEY_NAME, obj);
+        // the SE.store.set function emits an onEventReceived for every custom widget
+        if (obj[STORE_SHOW_ALL_KEY_NAME]) {
+            button.innerText = "All time";
+        } else {
+            button.innerText = "Current";
+        }
+    });
+}
+
+///////////////
+// TESTING CODE 
+///////////////
+
+function testMeters() {
+    for (var i = 0; i < 5; i++) {
+        window.dispatchEvent(mockRedeemEvent(blessTheRun));
+        setTimeout(() => {}, 1001);
+    }
+
+    for (var i = 0; i < 5; i++) {
+        window.dispatchEvent(mockRedeemEvent(curseTheRun));
+        setTimeout(() => {}, 1001);
+    }
+
+    for (var i = 0; i < 5; i++) {
+        window.dispatchEvent(mockRedeemEvent(blurseTheRun));
+        setTimeout(() => {}, 1001);
+    }
+
+    for (var i = 0; i < 5; i++) {
+        window.dispatchEvent(mockRedeemEvent(blessTheRun));
+        setTimeout(() => {}, 1001);
+        window.dispatchEvent(mockRedeemEvent(curseTheRun));
+        setTimeout(() => {}, 1001);
+        window.dispatchEvent(mockRedeemEvent(blurseTheRun));
+        setTimeout(() => {}, 1001);
+    }
+}
+
+function mockRedeemEvent(redemptionName) {
+    return new CustomEvent("onEventReceived", {
+        detail: {
+            event: {
+                itemId: redemptionName
+            }
+        }
+    });
 }

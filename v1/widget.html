@@ -19,7 +19,23 @@
 
   </head>
   <body>
-    <div class="outer-dialogue-window">
+    <div class="button-container">
+        <div class="outer-dialogue-window outer-dialogue-window-button">
+            <div class="inner-dialogue-window">
+                <button id="reset-run-button" class="text-button" onclick="resetCurrentState()">
+                    Reset
+                </button>
+            </div>
+        </div>
+        <div class="outer-dialogue-window outer-dialogue-window-button">
+            <div class="inner-dialogue-window">
+                <button id="all-time-toggle" class="text-button" onclick="toggleAllTime(this)">
+                    Current
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="outer-dialogue-window outer-dialogue-window-main">
       <div class="inner-dialogue-window">
         <div class="main-title">
           <h1>CURSE METER</h1>
