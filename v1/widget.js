@@ -8,7 +8,7 @@ const numberOfBlursesKey = "numberOfBlurses";
 
 // for testing use only you can set this to true
 // don't use live or meter will change on every redeem of any type
-const matchAnyRedemptionName = true;
+const matchAnyRedemptionName = false;
 
 const initialWidgetState = {
     current: {
@@ -26,6 +26,8 @@ const initialWidgetState = {
 initialWidgetState.lastUpdated = new Date();
 
 const STORE_KEY_NAME = "blessCurseMeterState";
+
+const ATTRIBUTE_LAST_COUNT = "lastCount";
 
 const blessMeterFill = $("div.bless-container div.meter div.meter-fill")
 const curseMeterFill = $("div.curse-container div.meter div.meter-fill")
@@ -47,7 +49,7 @@ const animationDuration = 1000;
 function updateState(toIncrement) {
     console.log(`Incrementing ${toIncrement}`);
     SE_API.store.get(STORE_KEY_NAME).then(obj => {
-        console.log(`Retrieved widgetState from store is: ${obj}`);
+        console.log(`Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
         if (storeHasBeenInitialized(obj)) {
             if (!canIncrement(obj, toIncrement)) {
                 console.log(`Store has been initialized but cannot increment so something is wrong. Defaulting ${toIncrement} to 0 I guess.`);
@@ -80,36 +82,38 @@ function canIncrement(obj, toIncrement) {
         && obj.allTime[toIncrement] != undefined;
 }
 
-function initialize() {
-    widgetState.meters = $("div.block-meter");
-    widgetState.current.numberOfBlesses = 0;
-    widgetState.current.numberOfCurses = 0;
-    widgetState.current.numberOfBlurses = 0;
-    updateMeters();
-}
-
 window.addEventListener('onEventReceived', function (obj) {
-    console.log(`Received an event ${obj}`);
+    console.log(`Received an event ${JSON.stringify(obj)}`);
     if (!obj.detail.event) {
       return;
     }
     if (typeof obj.detail.event.itemId !== "undefined") {
         obj.detail.listener = "redemption-latest"
     }
-    const listener = obj.detail.listener.split("-")[0];
+    var listener;
+    if (obj.detail.listener == undefined) {
+        listener = undefined;
+    } else {
+        listener = obj.detail.listener.split("-")[0];
+    }
     const event = obj.detail.event;
     if (listener === 'redemption') {
         console.log("Redemption message received");
-        console.log(obj.detail);
+        console.log(JSON.stringify(obj.detail));
         handleRedemption(obj.detail);
     } else if (obj.detail.listener === 'kvstore:update') {
-        console.log("Key store was updated so update the widget display");
+        console.log(`Key store was updated so update the widget display ${JSON.stringify(obj)}`);
         if (event != undefined && event.data != undefined
         && event.data.key === STORE_KEY_NAME && event.data.value != undefined) {
             console.log("Updating widget display");
             updateDisplay(event.data.value);
         } else {
-            console.log("This kvstore update is invalid or isn't for us. A different key store item was saved matching name " + obj);
+            console.log(`This kvstore update may be invalid or not for us but we are going to check current state anyway as a fallback. This was necessary during testing on SE site.`);
+            console.log(`A different key store item was saved ${JSON.stringify(obj)}`);
+            SE_API.store.get(STORE_KEY_NAME).then(state => {
+                console.log(`Retrieved widget state: ${JSON.stringify(state)}`);
+                updateDisplay(state);
+            });
         }
     }
 });
@@ -117,7 +121,7 @@ window.addEventListener('onEventReceived', function (obj) {
 window.addEventListener('onWidgetLoad', function (obj) {
     // since we initialize from stored state we don't need to re-process recents 
     SE_API.store.get(STORE_KEY_NAME).then(obj => {
-        console.log(`Initializing with retrieved widgetState from store: ${obj}`);
+        console.log(`Initializing with retrieved widgetState from store: ${JSON.stringify(obj)}`);
         if (storeHasBeenInitialized(obj)) {
             updateDisplay(obj);
         } else {
@@ -135,24 +139,29 @@ function handleRedemption(detail) {
     const redemptionName = getRedemptionName(detail);
     if (redemptionName != undefined && redemptionName != null) {
         // we can do something
+        console.log(`Redemption name is ${redemptionName}`);
         if (redemptionName == blessTheRun) {
+            console.log(`Bless it: Verily let this run be bless-ed`);
             updateState(numberOfBlessesKey);
             setTimeout(SE_API.resumeQueue, 1001);
         } else if (redemptionName == curseTheRun) {
+            console.log(`Curse it: I say unto you Locke shall not steal this run.`);
             updateState(numberOfCursesKey);
             setTimeout(SE_API.resumeQueue, 1001);
         } else if (redemptionName == blurseTheRun) {
+            console.log(`Blurse it - who knows? Maybe gau, maybe no gau. Maybe black belt, maybe trench death.`);
             updateState(numberOfBlursesKey);
             setTimeout(SE_API.resumeQueue, 1001);
         } else if (matchAnyRedemptionName) {
             // This is for testing the widget -- can make a random function or just always curse/always bless or whatever
             // Change 'matchAnyRedemptionName' variable at the top to one of true to use this, else should be false
             // add if wanted for testing
+            updateState(numberOfBlursesKey);
+            setTimeout(SE_API.resumeQueue, 1001);
         }
     } else {
         // we fukt
-        console.log("Feels bad man. Redemption name not located in detail");
-        console.log(detail);
+        console.log(`Feels bad man. Redemption name not located in detail ${JSON.stringify(detail)}`);
     }
 }
 
@@ -181,30 +190,48 @@ function getRedemptionName(detail) {
 
 function updateDisplay(widgetState) {
     if (widgetState != undefined && widgetState.current != undefined) {
-        console.log("Updating meter display");
+        console.log(`Updating meter display ${JSON.stringify(widgetState)}`);
         const numberOfBlesses = getOrDefaultCount(widgetState.current[numberOfBlessesKey]);
         const numberOfCurses = getOrDefaultCount(widgetState.current[numberOfCursesKey]);
         const numberOfBlurses = getOrDefaultCount(widgetState.current[numberOfBlursesKey]);
         const total = numberOfBlesses + numberOfCurses + numberOfBlurses;
+
+        if (numberOfBlesses === blessMeterFill.attr(ATTRIBUTE_LAST_COUNT)
+            && numberOfCurses === curseMeterFill.attr(ATTRIBUTE_LAST_COUNT)
+            && numberOfBlurses === blurseMeterFill.attr(ATTRIBUTE_LAST_COUNT)) {
+            console.log("No change detected to lastCount attributes. Will not update display.");
+            return;
+        }
+
         if (total === 0) {
             console.log("No blesses, curses, or blurses. Hopefully this is expected in this scenario...");
-            animateChange(blessMeterFill.get(0), blessMeterFill.width(), "33%");
-            animateChange(curseMeterFill.get(0), curseMeterFill.width(), "33%");
-            animateChange(blurseMeterFill.get(0), blurseMeterFill.width(), "33%");
+            // trigger the display change
+            animateChange(blessMeterFill.get(0), blessMeterFill.width(), "0%");
+            animateChange(curseMeterFill.get(0), curseMeterFill.width(), "0%");
+            animateChange(blurseMeterFill.get(0), blurseMeterFill.width(), "0%");
+            // update lastCount attributes
+            blessMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlesses);
+            curseMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfCurses);
+            blurseMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlurses);
         } else {
             console.log("Computing widths for the meters");
             console.log(`Current widths are bless: ${blessMeterFill.width()}, curse: ${curseMeterFill.width()}, blurse: ${blurseMeterFill.width()}`);
-            const blessWidth = (numberOfBlesses / total).toFixed(2);
-            const curseWidth = (numberOfCurses / total).toFixed(2);
-            const blurseWidth = (numberOfBlurses / total).toFixed(2);
+            const blessWidth = ((numberOfBlesses / total) * 100).toFixed(2) + "%";
+            const curseWidth = ((numberOfCurses / total) * 100).toFixed(2) + "%";
+            const blurseWidth = ((numberOfBlurses / total) * 100).toFixed(2) + "%";
             console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}, blurse: ${blurseWidth}`);
+            // trigger the display change
             animateChange(blessMeterFill.get(0), blessMeterFill.width(), blessWidth);
             animateChange(curseMeterFill.get(0), curseMeterFill.width(), curseWidth);
             animateChange(blurseMeterFill.get(0), blurseMeterFill.width(), blurseWidth);
+            // update lastCount attributes
+            // update lastCount attributes
+            blessMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlesses);
+            curseMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfCurses);
+            blurseMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlurses);
         }
     } else {
-        console.log("Current widget state is undefined! Feels bad man");
-        console.log(widgetState);
+        console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
     }
 }
 
