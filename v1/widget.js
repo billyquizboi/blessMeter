@@ -20,16 +20,14 @@ const initialWidgetState = {
         numberOfBlesses: 0,
         numberOfCurses: 0,
         numberOfBlurses: 0
-    },
-    showAll: false
+    }
 };
 
 initialWidgetState.lastUpdated = new Date();
 
 const STORE_KEY_NAME = "blessCurseMeterState";
 
-const STORE_SHOW_ALL_KEY_NAME = "showAll";
-
+const ATTRIBUTE_SHOW_ALL = "showAll";
 const ATTRIBUTE_LAST_COUNT = "lastCount";
 
 const blessMeterFill = $("div.bless-container div.meter div.meter-fill")
@@ -48,6 +46,25 @@ if (blessMeterFill.length === 0 || curseMeterFill.length === 0 || blurseMeterFil
 }
 
 const animationDuration = 1000;
+const shortAnimationDuration = 1;
+
+
+var lastWidgetState = null;
+initializeLastWidgetState();
+
+function initializeLastWidgetState() {
+    console.log("Trying to initialize last widget state");
+    try {
+        SE_API.store.get(STORE_KEY_NAME).then(obj => {
+            lastWidgetState = obj;
+        });
+    } catch(error) {
+        console.log(`Received error ${error}`);
+    }
+    if (lastWidgetState == null || lastWidgetState == undefined) {
+        lastWidgetState = initialWidgetState;
+    }
+}
 
 function updateState(toIncrement) {
     console.log(`Incrementing ${toIncrement}`);
@@ -68,6 +85,7 @@ function updateState(toIncrement) {
         obj.lastUpdated = new Date();
         SE_API.store.set(STORE_KEY_NAME, obj);
         // the SE.store.set function emits an onEventReceived for every custom widget
+        lastWidgetState = obj;
     });
 }
 
@@ -109,32 +127,38 @@ window.addEventListener('onEventReceived', function (obj) {
         if (event != undefined && event.data != undefined
         && event.data.key === STORE_KEY_NAME && event.data.value != undefined) {
             console.log("Updating widget display");
-            updateDisplay(event.data.value);
+            updateDisplay(event.data.value, true);
         } else {
             console.log(`This kvstore update may be invalid or not for us but we are going to check current state anyway as a fallback. This was necessary during testing on SE site.`);
             console.log(`A different key store item was saved ${JSON.stringify(obj)}`);
             SE_API.store.get(STORE_KEY_NAME).then(state => {
                 console.log(`Retrieved widget state: ${JSON.stringify(state)}`);
-                updateDisplay(state);
+                lastWidgetState = state;
+                updateDisplay(state, true);
             });
         }
     }
 });
 
 window.addEventListener('onWidgetLoad', function (obj) {
-    // since we initialize from stored state we don't need to re-process recents 
-    SE_API.store.get(STORE_KEY_NAME).then(obj => {
-        console.log(`Initializing with retrieved widgetState from store: ${JSON.stringify(obj)}`);
-        if (storeHasBeenInitialized(obj)) {
-            updateDisplay(obj);
-        } else {
-            console.log("The store object has not yet been initialized. Setting up initial values.");
-            initialWidgetState.lastUpdated = new Date();
-            obj = initialWidgetState;
-            SE_API.store.set(STORE_KEY_NAME, obj);
-            // the SE.store.set function emits an onEventReceived for every custom widget
-        }
-    });
+    // since we initialize from stored state we don't need to re-process recents
+    try {
+        SE_API.store.get(STORE_KEY_NAME).then(retrieved => {
+            console.log(`Initializing with retrieved widgetState from store: ${JSON.stringify(retrieved)}`);
+            if (storeHasBeenInitialized(retrieved)) {
+                updateDisplay(retrieved, true);
+            } else {
+                console.log("The store object has not yet been initialized. Setting up initial values.");
+                initialWidgetState.lastUpdated = new Date();
+                const toSave = initialWidgetState;
+                SE_API.store.set(STORE_KEY_NAME, toSave);
+                // the SE.store.set function emits an onEventReceived for every custom widget
+                lastWidgetState = toSave;
+            }
+        });
+    } catch(error) {
+        console.log(`onWidgetLoad threw error ${error}`);
+    }
 });
 
 function handleRedemption(detail) {
@@ -191,13 +215,16 @@ function getRedemptionName(detail) {
     return redemptionName;
 }
 
-function updateDisplay(widgetState) {
+function updateDisplay(widgetState, showAnimate) {
+    // TODO: I THINK THAT THE CURRENT WIDTH IS INVALID FORMAT FOR THE ANIMATE CALL
+
     if (widgetState != undefined && widgetState.current != undefined) {
         console.log(`Updating meter display ${JSON.stringify(widgetState)}`);
         const numberOfBlesses = getCountFromState(widgetState, numberOfBlessesKey);
         const numberOfCurses = getCountFromState(widgetState, numberOfCursesKey);
         const numberOfBlurses = getCountFromState(widgetState, numberOfBlursesKey);
         const total = numberOfBlesses + numberOfCurses + numberOfBlurses;
+        const animationTime = showAnimate ? animationDuration : shortAnimationDuration;
 
         if (numberOfBlesses === blessMeterFill.attr(ATTRIBUTE_LAST_COUNT)
             && numberOfCurses === curseMeterFill.attr(ATTRIBUTE_LAST_COUNT)
@@ -209,24 +236,24 @@ function updateDisplay(widgetState) {
         if (total === 0) {
             console.log("No blesses, curses, or blurses. Hopefully this is expected in this scenario...");
             // trigger the display change
-            animateChange(blessMeterFill.get(0), blessMeterFill.width(), "0%");
-            animateChange(curseMeterFill.get(0), curseMeterFill.width(), "0%");
-            animateChange(blurseMeterFill.get(0), blurseMeterFill.width(), "0%");
+            animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime);
+            animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime);
+            animateChange(blurseMeterFill.get(0), blurseMeterFill.css("width"), "0%", animationTime);
             // update lastCount attributes
             blessMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlesses);
             curseMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfCurses);
             blurseMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlurses);
         } else {
             console.log("Computing widths for the meters");
-            console.log(`Current widths are bless: ${blessMeterFill.width()}, curse: ${curseMeterFill.width()}, blurse: ${blurseMeterFill.width()}`);
+            console.log(`Current widths are bless: ${blessMeterFill.css("width")}, curse: ${curseMeterFill.css("width")}, blurse: ${blurseMeterFill.css("width")}`);
             const blessWidth = ((numberOfBlesses / total) * 100).toFixed(2) + "%";
             const curseWidth = ((numberOfCurses / total) * 100).toFixed(2) + "%";
             const blurseWidth = ((numberOfBlurses / total) * 100).toFixed(2) + "%";
             console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}, blurse: ${blurseWidth}`);
             // trigger the display change
-            animateChange(blessMeterFill.get(0), blessMeterFill.width(), blessWidth);
-            animateChange(curseMeterFill.get(0), curseMeterFill.width(), curseWidth);
-            animateChange(blurseMeterFill.get(0), blurseMeterFill.width(), blurseWidth);
+            animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime);
+            animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime);
+            animateChange(blurseMeterFill.get(0), blurseMeterFill.css("width"), blurseWidth, animationTime);
             // update lastCount attributes
             // update lastCount attributes
             blessMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlesses);
@@ -239,7 +266,7 @@ function updateDisplay(widgetState) {
 }
 
 function getCountFromState(widgetState, keyName) {
-    if (Boolean(widgetState[STORE_SHOW_ALL_KEY_NAME])) {
+    if (isShowingAll()) {
         return getOrDefaultCount(widgetState.allTime[keyName]);
     } else {
         return getOrDefaultCount(widgetState.current[keyName]);
@@ -256,14 +283,14 @@ function getOrDefaultCount(value) {
     }
 }
 
-function animateChange(ele, currentWidth, targetWidth) {
+function animateChange(ele, currentWidth, targetWidth, durationOfAnimation) {
     ele.animate(
     [
         { width: currentWidth }, // Start width
         { width: targetWidth }  // End width
     ],
     {
-        duration: animationDuration, // 1 second
+        duration: durationOfAnimation, // 1 second
         easing: 'ease-in-out', // Optional easing function
         fill: 'forwards' // Keep the final state after animation
     });
@@ -282,12 +309,14 @@ function resetCurrentState() {
             numberOfBlurses: 0
         };
         SE_API.store.set(STORE_KEY_NAME, obj);
+        lastWidgetState = obj;
     });
 }
 
 function resetAllTimeState() {
     initialWidgetState.lastUpdated = new Date();
     SE_API.store.set(STORE_KEY_NAME, initialWidgetState);
+    lastWidgetState = initialWidgetState;
 }
 
 
@@ -295,23 +324,31 @@ function resetAllTimeState() {
 // TOGGLE ALL TIME 
 //////////////////
 
-function toggleAllTime(button) {
-    SE_API.store.get(STORE_KEY_NAME).then(obj => {
-        console.log(`Toggling all-time: Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
-        if (!storeHasBeenInitialized(obj)) {
-            console.log("Toggling all-time: The store object has not yet been initialized. Setting up initial values.");
-            obj = initialWidgetState;
-        }
-        obj[STORE_SHOW_ALL_KEY_NAME] = !obj[STORE_SHOW_ALL_KEY_NAME];
-        obj.lastUpdated = new Date();
-        SE_API.store.set(STORE_KEY_NAME, obj);
-        // the SE.store.set function emits an onEventReceived for every custom widget
-        if (obj[STORE_SHOW_ALL_KEY_NAME]) {
-            button.innerText = "All time";
-        } else {
-            button.innerText = "Current";
-        }
-    });
+function toggleAllTime() {
+    toggleButton();
+    updateDisplay(lastWidgetState, false);
+}
+
+function isShowingAll() {
+    let showingAll = $("#all-time-toggle").attr(ATTRIBUTE_SHOW_ALL) == "true";
+    console.log(`isShowingAll? ${showingAll}`);
+    return showingAll;
+}
+
+function toggleButton() {
+    console.log(`Toggling display ${JSON.stringify(lastWidgetState)}`);
+    const button = $("#all-time-toggle");
+    if (isShowingAll()) {
+        console.log("Show all");
+        button.text("Show all");
+        button.attr(ATTRIBUTE_SHOW_ALL, "false");
+        console.log(`Updated show all attribute to: ${button.attr(ATTRIBUTE_SHOW_ALL)}`);
+    } else {
+        console.log("Show run");
+        button.text("Show run");
+        button.attr(ATTRIBUTE_SHOW_ALL, "true");
+        console.log(`Updated show all attribute to: ${button.attr(ATTRIBUTE_SHOW_ALL)}`);
+    }
 }
 
 ///////////////

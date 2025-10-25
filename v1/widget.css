@@ -38,17 +38,35 @@
       color: #ecedee;
   }
   
-html{
+html {
     /* font-family: "Final Fantasy 3/6 Font Regular", monospace; */
     color: #ecedee;
     margin: 0px;
     padding: 0px;
     /* background-color: var(--background-color-black); */
     text-shadow: 1px 1px #2d2a4b;
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
 }
-div{
-    /* background-color: var(--background-color-black); */
+
+body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
 }
+
+.container {
+    height: 100%;
+    width: 100%;
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
 h1,h2,h3,h4,h5{
     /* font-weight: normal; This typeface does not look good bold */
     font-weight: 400;
@@ -90,35 +108,36 @@ h1,h2,h3,h4,h5{
 }
 
 .outer-dialogue-window-main {
-    height: 800%;
+    height: 75%;
     width: 100%;
 }
 
 .outer-dialogue-window-button {
-    height: 20%;
+    height: 25%;
     width: 50%;
 }
 
 .button-container {
     display: flex;
     flex-direction: row;
+    font-size: 14px;
 }
 
 .text-button {
-    background: none; /* Removes any background color */
-    border: none; /* Removes the border */
-    margin: 0; /* Removes default margin */
-    padding: 0; /* Removes default padding */
+    background: none;
+    border: none;
+    margin: 0;
+    padding: 0;
     cursor: pointer; /* Changes the cursor to a pointer on hover, indicating it's clickable */
-    font-family: inherit; /* Inherits the font family from the parent element */
-    font-size: inherit; /* Inherits the font size from the parent element */
-    color: inherit; /* Inherits the text color from the parent element */
-    /* Optional: Add hover styles for visual feedback */
-    transition: color 0.2s ease-in-out; /* Smooth transition for color change on hover */
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    transition: color 0.2s ease-in-out;
 }
 
 .text-button:hover {
-    color: #00D1FF; /* Example: Change text color on hover */
+    color: #00D1FF;
+    /* color: #2d2a4b; */
 }
 
 #reset-run-button {
@@ -130,37 +149,36 @@ h1,h2,h3,h4,h5{
 }
 
 .inner-dialogue-window {
-background: linear-gradient(to bottom,var(--dialogue-window-color-gradient));
-padding: 5px;
-margin: -5px;
-display: flex;
-flex-direction: column;
-/* align-items: ; */
-
-width: 100%;
-height: 100%;
+    background: linear-gradient(to bottom,var(--dialogue-window-color-gradient));
+    padding: 5px;
+    margin: -5px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    width: 100%;
+    height: 100%;
 }
 
 .bless-container,.curse-container,.blurse-container {
-display: flex;
-justify-content: space-between;
+    display: flex;
+    justify-content: space-between;
 }
 
 .bless-container,.curse-container {
-margin-bottom: 15px;
+    margin-bottom: 15px;
 }
 
 .meter,.meter-title {
-display: inline-block;
+    display: inline-block;
 }
 
 .meter-title {
-width: 35%;
+    width: 35%;
 }
 
 .meter {
-width: 55%;
-margin-right: 10px;
+    width: 70%;
+    margin-right: 10px;
 }
 
 .meter {
@@ -181,33 +199,16 @@ margin-right: 10px;
 }
 
 .curse-container .meter-fill {
-/* background-color: orangered; */
-/* background-color: #FF7F04; /* squash */
-background-color: #FF3886; /* three */
+    background-color: #FF3886; /* three */
+}
+
+.blurse-container {
+    margin-bottom: 15px;
 }
 
 .blurse-container .meter-fill {
-/* background-color: #00CAFF; /* squash */
-background-color: #00D1FF; /* three */
+    background-color: #00D1FF; /* three */
 }
-
-/* Check these colors out */
-/* Dark Blue/Purple Backgrounds */
-/* --ffvi-bg-dark: #283878; */
-
-/* Mid-tone Blues and Greys */
-/* --ffvi-mid-blue: #3d8df2; */
-/* --ffvi-mid-grey: #b5b8b9; */
-
-/* Accent Colors (Yellow and Green) */
-/* --ffvi-accent-yellow: #fde722; */
-/* --ffvi-accent-green: #165241; */
-
-/* For window borders or text highlight */
-/* --ffvi-window-border: #4e818e; */
-
-/* White-like color for text */
-/* --ffvi-text-light: #cedade; */
 
 /**
 Font courtesy of https://fonts.google.com/specimen/Press+Start+2P?categoryFilters=Appearance:%2FTheme%2FTechno
