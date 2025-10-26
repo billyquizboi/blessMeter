@@ -1,0 +1,21 @@
+{
+  "name": "cursemeter",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "A FFVI inspired StreamElements custom widget for tracking number of blesses, curses, or blurses redeemed for a speedrun.",
+  "devDependencies": {
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
+    "@babel/runtime": "^7.28.4",
+    "babel-jest": "^30.2.0",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
+    "jquery": "^3.7.1"
+  }
+}

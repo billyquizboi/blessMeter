@@ -103,7 +103,7 @@ function canIncrement(obj, toIncrement) {
         && obj.allTime[toIncrement] != undefined;
 }
 
-window.addEventListener('onEventReceived', function (obj) {
+function eventReceivedHandler(obj) {
     console.log(`Received an event ${JSON.stringify(obj)}`);
     if (!obj.detail.event) {
       return;
@@ -138,9 +138,11 @@ window.addEventListener('onEventReceived', function (obj) {
             });
         }
     }
-});
+}
 
-window.addEventListener('onWidgetLoad', function (obj) {
+window.addEventListener('onEventReceived', eventReceivedHandler); 
+
+function widgetLoadHandler(obj) {
     // since we initialize from stored state we don't need to re-process recents
     try {
         SE_API.store.get(STORE_KEY_NAME).then(retrieved => {
@@ -159,7 +161,9 @@ window.addEventListener('onWidgetLoad', function (obj) {
     } catch(error) {
         console.log(`onWidgetLoad threw error ${error}`);
     }
-});
+}
+
+window.addEventListener('onWidgetLoad', widgetLoadHandler);
 
 function handleRedemption(detail) {
     console.log("In redemption handling");
@@ -349,44 +353,4 @@ function toggleButton() {
         button.attr(ATTRIBUTE_SHOW_ALL, "true");
         console.log(`Updated show all attribute to: ${button.attr(ATTRIBUTE_SHOW_ALL)}`);
     }
-}
-
-///////////////
-// TESTING CODE 
-///////////////
-
-function testMeters() {
-    for (var i = 0; i < 5; i++) {
-        window.dispatchEvent(mockRedeemEvent(blessTheRun));
-        setTimeout(() => {}, 1001);
-    }
-
-    for (var i = 0; i < 5; i++) {
-        window.dispatchEvent(mockRedeemEvent(curseTheRun));
-        setTimeout(() => {}, 1001);
-    }
-
-    for (var i = 0; i < 5; i++) {
-        window.dispatchEvent(mockRedeemEvent(blurseTheRun));
-        setTimeout(() => {}, 1001);
-    }
-
-    for (var i = 0; i < 5; i++) {
-        window.dispatchEvent(mockRedeemEvent(blessTheRun));
-        setTimeout(() => {}, 1001);
-        window.dispatchEvent(mockRedeemEvent(curseTheRun));
-        setTimeout(() => {}, 1001);
-        window.dispatchEvent(mockRedeemEvent(blurseTheRun));
-        setTimeout(() => {}, 1001);
-    }
-}
-
-function mockRedeemEvent(redemptionName) {
-    return new CustomEvent("onEventReceived", {
-        detail: {
-            event: {
-                itemId: redemptionName
-            }
-        }
-    });
 }
