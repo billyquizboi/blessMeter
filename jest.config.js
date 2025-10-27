@@ -1,6 +1,6 @@
 // jest.config.js
 module.exports = {
-  testEnvironment: 'jsdom',
+  testEnvironment: 'jest-fixed-jsdom',
   setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
   transformIgnorePatterns: ['node_modules/(?!(sucrase)/)'],
   transform: {

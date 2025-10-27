@@ -1,6 +1,6 @@
-const blurseTheRun = "Blurse the run";
-const blessTheRun = "Bless the run";
-const curseTheRun = "Curse the run";
+const blurseTheRun = "Blurse the Run";
+const blessTheRun = "Bless the Run";
+const curseTheRun = "Curse the Run";
 
 const numberOfBlessesKey = "numberOfBlesses";
 const numberOfCursesKey = "numberOfCurses";
@@ -30,27 +30,31 @@ const STORE_KEY_NAME = "blessCurseMeterState";
 const ATTRIBUTE_SHOW_ALL = "showAll";
 const ATTRIBUTE_LAST_COUNT = "lastCount";
 
-const blessMeterFill = $("div.bless-container div.meter div.meter-fill")
-const curseMeterFill = $("div.curse-container div.meter div.meter-fill")
-const blurseMeterFill = $("div.blurse-container div.meter div.meter-fill")
-
-const meters = [
-    blessMeterFill,
-    curseMeterFill,
-    blurseMeterFill
-];
-
-if (blessMeterFill.length === 0 || curseMeterFill.length === 0 || blurseMeterFill.length === 0) {
-    console.log("Didn't find all the meters. This is GGs I guess.");
-    console.log(meters);
-}
-
 const animationDuration = 1000;
 const shortAnimationDuration = 1;
 
-
 var lastWidgetState = null;
 initializeLastWidgetState();
+
+function getBlessMeterFill() {
+    return $("div.bless-container div.meter div.meter-fill");
+}
+
+function getCurseMeterFill() {
+    return $("div.curse-container div.meter div.meter-fill");
+}
+
+function getBlurseMeterFill() {
+    return $("div.blurse-container div.meter div.meter-fill");
+}
+
+function getMeters() {
+    return [
+        getBlessMeterFill(),
+        getCurseMeterFill(),
+        getBlurseMeterFill()
+    ];
+}
 
 function initializeLastWidgetState() {
     console.log("Trying to initialize last widget state");
@@ -229,6 +233,10 @@ function updateDisplay(widgetState, showAnimate) {
         const numberOfBlurses = getCountFromState(widgetState, numberOfBlursesKey);
         const total = numberOfBlesses + numberOfCurses + numberOfBlurses;
         const animationTime = showAnimate ? animationDuration : shortAnimationDuration;
+
+        const blessMeterFill = getBlessMeterFill();
+        const curseMeterFill = getCurseMeterFill();
+        const blurseMeterFill = getBlurseMeterFill();
 
         if (numberOfBlesses === blessMeterFill.attr(ATTRIBUTE_LAST_COUNT)
             && numberOfCurses === curseMeterFill.attr(ATTRIBUTE_LAST_COUNT)

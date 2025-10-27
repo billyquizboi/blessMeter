@@ -3,26 +3,33 @@
 // import { describe } from "yargs";
 // import jQuery from 'jquery';
 // import $ from 'jquery';
-
+// const path = require('path');
+import path from 'path';
+import fs from 'fs';
+import { JSDOM } from 'jsdom';
 const widget = require("./widget");
-
-const SE_API = {
-    resumeQueue: function() {},
-    store: {
-        get: function() {},
-        set: function() {}
-    }
-}
 
 // MOCK for the SE_API
 beforeEach(() => {
     global.SE_API = {
         resumeQueue: function() {},
         store: {
-            get: function() {},
-            set: function() {}
+            get: jest.fn((keyName) => Promise.resolve(initialWidgetState)),
+            set: jest.fn((keyName, obj) => {})
         }
-    }
+    };
+    // Setup the dom for testing
+    const htmlFilePath = path.resolve(__dirname, '.', 'widget.html');
+    const htmlContent = fs.readFileSync(htmlFilePath, 'utf-8');
+
+    const dom = new JSDOM(htmlContent);
+
+    // Expose the window and document objects globally for Jest
+    global.window = dom.window;
+    global.document = dom.window.document;
+
+    console.log("Loaded dom.window.document:" + JSON.stringify(dom.window.document));
+    console.log(dom.serialize());
 });
 
 afterAll(() => {
@@ -43,7 +50,7 @@ describe('My Component', () => {
 
 ///////////////
 // TESTING CODE
-///////////////
+/////////////// info
 
 function testMeters() {
     for (var i = 0; i < 5; i++) {
