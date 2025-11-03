@@ -17,13 +17,14 @@
     :root {
       --primary-color: #0d6efd;
       --secondary-color: #6c757d;
-      --barline-color: lightgray
+      --barline-color: lightgray;
       --success-color: #198754;
       --danger-color: #dc3545;
       --warning-color: #ffc107;
       --info-color: #0dcaf0;
-      --font-stack: "Helvetica Neue", Helvetica, Arial, sans-serif;
-      --container-padding: 30px
+      --font-stack: 'Open Sans', sans-serif;
+      --container-padding: 30px;
+      --font-color: #717171;
     }
 
     html {
@@ -35,18 +36,15 @@
     }
 
     * {
-      /* font-family: "Press Start 2P", system-ui; */
-      /* font-size: 16px; */
-
-      font-family: 'Open Sans', sans-serif;
+      font-family: var(--font-stack);
       text-align: center;
 
       font-size: small;
       overflow: hidden;
       font-weight: 400;
       font-style: normal;
-      /* color: #ecedee; */
-      color: #717171;
+
+      color: var(--font-color);
       border: none;
       margin: 0;
       padding: 0;
@@ -76,20 +74,12 @@
       position: relative;
     }
 
-    /* .inline {
-      display: flex;
-      flex-direction: row;
-      width: 100px;
-      height: 30px;
-    } */
-
     .labels, .meters {
       display: flex;
       flex-direction: column;
     }
 
     .label {
-      /*   margin-bottom: 10px; */
       display: flex;
       align-items: flex-end;
     }
@@ -208,9 +198,10 @@
     }
 
     .meter-fill {
-      background-color: rgb(167, 232, 139);
+      /* background-color: rgb(167, 232, 139); */
+      background: linear-gradient(0deg,rgba(255, 0, 26, 1) 0%, rgba(87, 199, 133, 1) 50%, rgba(237, 221, 83, 1) 100%);
       width: 100%;
-      height: 50%;
+      height: 100%;
       margin: 0;
       padding: 0;
     }
@@ -291,22 +282,6 @@
       top: 485px;
       left: 0;
     }
-/* 
-    .label-container:first-of-type {
-      position: absolute;
-      top: 0px;
-      left: 0px;
-    }
-
-    .label-container:nth-of-type(2) {
-      position: absolute;
-      top: 10%;
-    }
-
-    .label-container:nth-of-type(3) {
-      position: absolute;
-      top: 10%;
-    } */
   </style>
 
 </head>
