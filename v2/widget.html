@@ -23,6 +23,7 @@
       --warning-color: #ffc107;
       --info-color: #0dcaf0;
       --font-stack: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      --container-padding: 30px
     }
 
     html {
@@ -36,6 +37,10 @@
     * {
       /* font-family: "Press Start 2P", system-ui; */
       /* font-size: 16px; */
+
+      font-family: 'Open Sans', sans-serif;
+      text-align: center;
+
       font-size: small;
       overflow: hidden;
       font-weight: 400;
@@ -100,14 +105,6 @@
       z-index: 2;
       border: 1px solid var(--barline-color);
       border-radius: 3px;
-    }
-
-    .labels {
-      width: 25%;
-      height: 100%;
-      position: relative;
-      padding-top: 30px;
-      padding-bottom: 30px;
     }
 
     .bar-lines {
@@ -219,13 +216,82 @@
     }
 
     .label-container {
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-start;
+      /* display: flex; */
+      /* flex-direction: column; */
+      /* justify-content: flex-start; */
       height: 100%;
       width: 100%;
+      position: absolute;
+      top: 0;
+      left: 93px;
     }
 
+    .label:nth-child(1) {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .label:nth-child(2) {
+      position: absolute;
+      top: 42.5px;;
+      left: 0;
+    }
+
+    .label:nth-child(3) {
+      position: absolute;
+      top: 92.5px;;
+      left: 0;
+    }
+
+    .label:nth-child(4) {
+      position: absolute;
+      top: 142.5px;;
+      left: 0;
+    }
+
+    .label:nth-child(5) {
+      position: absolute;
+      top: 192.5px;
+      left: 0;
+    }
+
+    .label:nth-child(6) {
+      position: absolute;
+      top: 242.5px;
+      left: 0;
+    }
+
+    .label:nth-child(7) {
+      position: absolute;
+      top: 292.5px;
+      left: 0;
+    }
+
+    .label:nth-child(8) {
+      position: absolute;
+      top: 342.5px;
+      left: 0;
+    }
+
+    .label:nth-child(9) {
+      position: absolute;
+      top: 392.5px;
+      left: 0;
+    }
+
+    .label:nth-child(10) {
+      position: absolute;
+      top: 442.5px;
+      left: 0;
+    }
+
+    .label:nth-child(11) {
+      position: absolute;
+      top: 485px;
+      left: 0;
+    }
+/* 
     .label-container:first-of-type {
       position: absolute;
       top: 0px;
@@ -240,7 +306,7 @@
     .label-container:nth-of-type(3) {
       position: absolute;
       top: 10%;
-    }
+    } */
   </style>
 
 </head>
@@ -264,73 +330,44 @@
       <div class="meter-fill"></div>
       <!-- <div class="meter-fill"></div> -->
     </div>
-    
   </div>
+  <div class="label-container">
+      <div class="label">
+        50%
+      </div>
+      <div class="label">
+        40%
+      </div>
+      <div class="label">
+        30%
+      </div>
+      <div class="label">
+        20%
+      </div>
+      <div class="label">
+        10%
+      </div>
 
-  <!-- <div class="labels">
-    <div class="label-container label-container-100">
-      <span class="label-100 label">100%</span>
-    </div>
-    <div class="label-container label-container-95">
-      <span class="label-95 label">95%</span>
-    </div>
-    <div class="label-container label-container-90">
-      <span class="label-90 label">90%</span>
-    </div>
-    <div class="label-container label-container-85">
-      <span class="label-85 label">85%</span>
-    </div>
-    <div class="label-container label-container-80">
-      <span class="label-80 label">80%</span>
-    </div>
-    <div class="label-container label-container-75">
-      <span class="label-75 label">75%</span>
-    </div>
-    <div class="label-container label-container-70">
-      <span class="label-70 label">70%</span>
-    </div>
-    <div class="label-container label-container-65">
-      <span class="label-65 label">65%</span>
-    </div>
-    <div class="label-container label-container-60">
-      <span class="label-60 label">60%</span>
-    </div>
-    <div class="label-container label-container-55">
-      <span class="label-55 label">55%</span>
-    </div>
-    <div class="label-container label-container-50">
-      <span class="label-50 label">50%</span>
-    </div>
-    <div class="label-container label-container-45">
-      <span class="label-45 label">45%</span>
-    </div>
-    <div class="label-container label-container-40">
-      <span class="label-40 label">40%</span>
-    </div>
-    <div class="label-container label-container-35">
-      <span class="label-35 label">35%</span>
-    </div>
-    <div class="label-container label-container-30">
-      <span class="label-30 label">30%</span>
-    </div>
-    <div class="label-container label-container-25">
-      <span class="label-25 label">25%</span>
-    </div>
-    <div class="label-container label-container-20">
-      <span class="label-20 label">20%</span>
-    </div>
-    <div class="label-container label-container-15">
-      <span class="label-15 label">15%</span>
-    </div>
-    <div class="label-container label-container-10">
-      <span class="label-10 label">10%</span>
-    </div>
-    <div class="label-container label-container-5">
-      <span class="label-5 label">5%</span>
-    </div>
-    <div class="label-container label-container-0">
-      <span class="label-0 label">0%</span>
-    </div>
-</div> -->
+      <div class="label">
+        0%
+      </div>
+
+      <div class="label">
+        10%
+      </div>
+      <div class="label">
+        20%
+      </div>
+      <div class="label">
+        30%
+      </div>
+      <div class="label">
+        40%
+      </div>
+      <div class="label">
+        50%
+      </div>
+  </div>
+</div>
 </body>
 </html>
