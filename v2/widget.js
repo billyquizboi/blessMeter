@@ -11,7 +11,7 @@ const numberOfBlursesThatBlessedKey = "numberOfBlursesThatBlessed";
 
 // for testing use only you can set this to true
 // don't use live or meter will change on every redeem of any type
-const matchAnyRedemptionName = true;
+const matchAnyRedemptionName = false;
 
 const initialWidgetState = {
     current: {
