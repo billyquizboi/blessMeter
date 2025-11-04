@@ -271,17 +271,18 @@ function updateDisplay(widgetState, showAnimate) {
         const curseCounter = getCurseCounter();
         const blessCounter = getBlessCounter();
 
+        var difference = 0;
+        var isBlessed = numberOfBlesses > numberOfCurses;
+        var isCursed = numberOfCurses > numberOfBlesses;
+
         if (total === 0) {
             console.log("No blesses, curses, or blurses. Hopefully this is expected in this scenario...");
         } else {
             console.log("Computing heights for the meters");
             console.log(`Current heights are bless: ${blessMeterFill.offsetHeight + "px"}, curse: ${curseMeterFill.offsetHeight + "px"}`);
-            
-            const isBlessed = numberOfBlesses > numberOfCurses;
-            const isCursed = numberOfCurses > numberOfBlesses;
 
             if (isBlessed) {
-                var difference = (numberOfBlesses - numberOfCurses);
+                difference = (numberOfBlesses - numberOfCurses);
                 if (difference > 50) {
                     difference = 50;
                 }
@@ -289,7 +290,7 @@ function updateDisplay(widgetState, showAnimate) {
                 console.log(`Bless is winning. Bless height is going to: ${blessedPixels}`);
                 targetBlessHeight = blessedPixels;
             } else if (isCursed) {
-                var difference = (numberOfCurses - numberOfBlesses);
+                difference = (numberOfCurses - numberOfBlesses);
                 if (difference > 50) {
                     difference = 50;
                 }
@@ -297,6 +298,7 @@ function updateDisplay(widgetState, showAnimate) {
                 console.log(`Curse is winning. Curse height is going to: ${cursedPixels}`);
                 targetCurseHeight = cursedPixels;
             } else {
+                difference = 0;
                 // is even
                 console.log("It's all even");
             }
@@ -309,10 +311,28 @@ function updateDisplay(widgetState, showAnimate) {
         curseMeterFill.setAttribute(ATTRIBUTE_LAST_COUNT, numberOfCurses);
         // update counters
         if (blessCounter != undefined) {
-            blessCounter.innerHTML = "+" + numberOfBlesses;
+            if (isBlessed) {
+                blessCounter.innerHTML = "+" + difference;
+                blessCounter.style.display = "block";
+            } else if (isCursed) {
+                blessCounter.innerHTML = "-" + difference;
+                blessCounter.style.display = "none";
+            } else {
+                blessCounter.innerHTML = "+" + "0";
+                blessCounter.style.display = "block";
+            }
         }
         if (curseCounter != undefined) {
-            curseCounter.innerHTML = "-" + numberOfCurses;
+            if (isCursed) {
+                curseCounter.innerHTML = "+" + difference;
+                curseCounter.style.display = "block";
+            } else if (isBlessed) {
+                curseCounter.innerHTML = "-" + difference;
+                curseCounter.style.display = "none";
+            } else {
+                curseCounter.innerHTML = "-" + "0";
+                curseCounter.style.display = "block";
+            }
         }
     } else {
         console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
