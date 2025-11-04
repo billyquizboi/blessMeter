@@ -310,11 +310,11 @@ function updateDisplay(widgetState, showAnimate) {
 }
 
 function getEffectiveBlesses(widgetState) {
-    return getCountFromState(widgetState, numberOfBlessesKey) + getCountFromState(widgetState, numberOfBlursesThatBlessedKey);
+    return (getCountFromState(widgetState, numberOfBlessesKey) * 2) + getCountFromState(widgetState, numberOfBlursesThatBlessedKey);
 }
 
 function getEffectiveCurses(widgetState) {
-    return getCountFromState(widgetState, numberOfCursesKey) + getCountFromState(widgetState, numberOfBlursesThatCursedKey);
+    return (getCountFromState(widgetState, numberOfCursesKey) * 2) + getCountFromState(widgetState, numberOfBlursesThatCursedKey);
 }
 
 function getCountFromState(widgetState, keyName) {

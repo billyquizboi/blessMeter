@@ -6,6 +6,7 @@
     --font-color: #717171;
     --blessed-color: rgba(237, 221, 83, 1);
     --ok-color: rgba(87, 199, 133, 1);
+    --start-warn-color: #f4cd70;
     --warn-color: #ed6f02;
     --cursed-color: rgba(255, 0, 26, 1);
   }
@@ -194,10 +195,9 @@
   }
 
   .bless-meter-fill {
-    /* background-color: rgb(167, 232, 139); */
-    background: linear-gradient(0deg,var(--blessed-color) 0%, var(--ok-color) 50%, var(--cursed-color) 100%);
+    background: linear-gradient(0deg,var(--ok-color) 0%, var(--blessed-color) 85%);
     width: 100%;
-    height: 30%;
+    height: 100%;
     margin: 0;
     padding: 0;
   }
@@ -213,10 +213,9 @@
   }
 
   .curse-meter-fill {
-    /* background-color: rgb(167, 232, 139); */
-    background: linear-gradient(0deg,var(--cursed-color) 0%, var(--warn-color) 50%, var(--ok-color) 100%);
+    background: linear-gradient(0deg,var(--cursed-color) 0%, var(--warn-color) 50%, var(--start-warn-color) 100%);
     width: 100%;
-    height: 30%;
+    height: 100%;
   }
 
   .label-container {
@@ -292,3 +291,46 @@
     top: 485px;
     left: 0;
   }
+
+  .buttons-container {
+    position: absolute;
+    top: 505px;
+    left: 0;
+    display: flex;
+    flex-direction: row;
+    width: 120px;
+  }
+
+  .reset-button {
+    background-color: var(--secondary-color);
+    color: white;
+    font-size: large;
+    font-weight: bold;
+    border: 1px solid var(--barline-color);
+    border-radius: 5px;
+    padding: 5px;
+    box-sizing: border-box;
+    width: 91px;
+  }
+
+  .reset-button:hover {
+    background-color: lightgray;
+    color: darkslateblue;
+  }
+
+  .reset-button:active {
+    background-color: var(--secondary-color);
+    color: white;
+  }
+
+  /* .toggle-button {
+    background-color: var(--barline-color);
+    color: white;
+    font-size: large;
+    font-weight: bold;
+    border: 1px solid var(--barline-color);
+    border-radius: 5px;
+    padding: 5px;
+    box-sizing: border-box;
+    width: 60px;
+  } */
