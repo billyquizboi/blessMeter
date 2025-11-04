@@ -268,6 +268,9 @@ function updateDisplay(widgetState, showAnimate) {
         var targetBlessHeight = "0%";
         var targetCurseHeight = "0%";
 
+        const curseCounter = getCurseCounter();
+        const blessCounter = getBlessCounter();
+
         if (total === 0) {
             console.log("No blesses, curses, or blurses. Hopefully this is expected in this scenario...");
         } else {
@@ -304,9 +307,24 @@ function updateDisplay(widgetState, showAnimate) {
         // update lastCount attributes
         blessMeterFill.setAttribute(ATTRIBUTE_LAST_COUNT, numberOfBlesses);
         curseMeterFill.setAttribute(ATTRIBUTE_LAST_COUNT, numberOfCurses);
+        // update counters
+        if (blessCounter != undefined) {
+            blessCounter.innerHTML = "+" + numberOfBlesses;
+        }
+        if (curseCounter != undefined) {
+            curseCounter.innerHTML = "-" + numberOfCurses;
+        }
     } else {
         console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
     }
+}
+
+function getBlessCounter() {
+    return document.querySelector(".bless-counter");
+}
+
+function getCurseCounter() {
+    return document.querySelector(".curse-counter");
 }
 
 function getEffectiveBlesses(widgetState) {
