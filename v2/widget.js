@@ -11,7 +11,7 @@ const numberOfBlursesThatBlessedKey = "numberOfBlursesThatBlessed";
 
 // for testing use only you can set this to true
 // don't use live or meter will change on every redeem of any type
-const matchAnyRedemptionName = false;
+const matchAnyRedemptionName = true;
 
 const initialWidgetState = {
     current: {
@@ -43,7 +43,7 @@ const shortAnimationDuration = 1;
 var lastWidgetState = null;
 initializeLastWidgetState();
 
-export function getBlessMeterFill() {
+function getBlessMeterFill() {
     return document.querySelector("div.bless-meter-fill");
 }
 
@@ -246,6 +246,9 @@ function updateDisplay(widgetState, showAnimate) {
         const numberOfBlesses = getEffectiveBlesses(widgetState);
         const numberOfCurses = getEffectiveCurses(widgetState);
 
+        console.log(`Effective blesses ${numberOfBlesses}`);
+        console.log(`Effective curses ${numberOfCurses}`);
+
         // TODO: handle displaying difference
         const total = numberOfBlesses + numberOfCurses;
         const animationTime = showAnimate ? animationDuration : shortAnimationDuration;
@@ -279,17 +282,17 @@ function updateDisplay(widgetState, showAnimate) {
                 if (difference > 50) {
                     difference = 50;
                 }
-                var blessedPercentage = (( difference / 50 ) * 100).toFixed();
-                console.log(`Bless is winning. Bless height is going to: ${blessedPercentage}%`);
-                targetBlessHeight = `${blessedPercentage}%`;
+                var blessedPixels = (( difference / 50 ) * 250).toFixed() + "px";
+                console.log(`Bless is winning. Bless height is going to: ${blessedPixels}`);
+                targetBlessHeight = blessedPixels;
             } else if (isCursed) {
                 var difference = (numberOfCurses - numberOfBlesses);
                 if (difference > 50) {
                     difference = 50;
                 }
-                var cursedPercentage = (( difference / 50 ) * 100).toFixed();
-                console.log(`Curse is winning. Curse height is going to: ${cursedPercentage}%`);
-                targetCurseHeight = `${cursedPercentage}%`;
+                var cursedPixels = (( difference / 50 ) * 250).toFixed() + "px";
+                console.log(`Curse is winning. Curse height is going to: ${cursedPixels}`);
+                targetCurseHeight = cursedPixels;
             } else {
                 // is even
                 console.log("It's all even");
@@ -307,11 +310,11 @@ function updateDisplay(widgetState, showAnimate) {
 }
 
 function getEffectiveBlesses(widgetState) {
-    return getOrDefaultCount(widgetState, numberOfBlessesKey) + getOrDefaultCount(widgetState, numberOfBlursesThatBlessedKey);
+    return getCountFromState(widgetState, numberOfBlessesKey) + getCountFromState(widgetState, numberOfBlursesThatBlessedKey);
 }
 
 function getEffectiveCurses(widgetState) {
-    return getOrDefaultCount(widgetState, numberOfCursesKey) + getOrDefaultCount(widgetState, numberOfBlursesThatCursedKey);
+    return getCountFromState(widgetState, numberOfCursesKey) + getCountFromState(widgetState, numberOfBlursesThatCursedKey);
 }
 
 function getCountFromState(widgetState, keyName) {
