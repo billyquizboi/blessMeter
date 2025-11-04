@@ -323,14 +323,22 @@
     color: white;
   }
 
-  /* .toggle-button {
-    background-color: var(--barline-color);
-    color: white;
-    font-size: large;
-    font-weight: bold;
-    border: 1px solid var(--barline-color);
-    border-radius: 5px;
-    padding: 5px;
-    box-sizing: border-box;
-    width: 60px;
-  } */
+  .counters-container {
+    z-index: 3;
+  }
+
+  .bless-counter {
+    position: absolute;
+    top: 225px;
+    left: 31.4295px;
+    color: black;
+    font-size: medium;
+  }
+
+  .curse-counter {
+    position: absolute;
+    top: 266px;
+    left: 31.4295px;
+    color: black;
+    font-size: medium;
+  }
