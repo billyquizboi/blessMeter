@@ -17,6 +17,11 @@ A StreamElements custom widget vertical meter for tracking number of blesses, cu
 - Overwrite the contents of the JS tab in the stream elements custom code editor with the contents of [widget.js](./widget.js)
 - Click DONE in the custom code editor and click the SAVE button in the top right
 
+**One way to test on stream elements widget editor**
+These two steps result in every test redeem being considered a blurse, curse, or bless. Revert these changes and reset the meters before using live.
+- Change this variable's value to true [widget.js line 14](./widget.js#L14) - this should only be used for testing and should be reverted when done.
+- This line [widget.js line 211](./widget.js#L211) can be changed to one of: `updateState(numberOfBlursesKey);` `updateState(numberOfCursesKey);` or `updateState(numberOfBlessesKey);`
+
 **To add this overlay as a source to OBS**
 - Copy the link to the widget from the top right link icon near the PREVIEW button
 
