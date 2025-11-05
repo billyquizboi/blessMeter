@@ -117,6 +117,16 @@ h1,h2,h3,h4,h5{
     width: 50%;
 }
 
+.outer-dialogue-window-button:nth-child(1) {
+    height: 25%;
+    width: 35%;
+}
+
+.outer-dialogue-window-button:nth-child(2) {
+    height: 25%;
+    width: 65%;
+}
+
 .button-container {
     display: flex;
     flex-direction: row;
@@ -138,14 +148,6 @@ h1,h2,h3,h4,h5{
 .text-button:hover {
     color: #00D1FF;
     /* color: #2d2a4b; */
-}
-
-#reset-run-button {
-
-}
-
-#all-time-toggle {
-
 }
 
 .inner-dialogue-window {

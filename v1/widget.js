@@ -362,3 +362,43 @@ function toggleButton() {
         console.log(`Updated show all attribute to: ${button.attr(ATTRIBUTE_SHOW_ALL)}`);
     }
 }
+
+///////////////
+// TESTING CODE 
+///////////////
+
+function testMeters() {
+    for (var i = 0; i < 5; i++) {
+        window.dispatchEvent(mockRedeemEvent(blessTheRun));
+        setTimeout(() => {}, 1001);
+    }
+
+    for (var i = 0; i < 5; i++) {
+        window.dispatchEvent(mockRedeemEvent(curseTheRun));
+        setTimeout(() => {}, 1001);
+    }
+
+    for (var i = 0; i < 5; i++) {
+        window.dispatchEvent(mockRedeemEvent(blurseTheRun));
+        setTimeout(() => {}, 1001);
+    }
+
+    for (var i = 0; i < 5; i++) {
+        window.dispatchEvent(mockRedeemEvent(blessTheRun));
+        setTimeout(() => {}, 1001);
+        window.dispatchEvent(mockRedeemEvent(curseTheRun));
+        setTimeout(() => {}, 1001);
+        window.dispatchEvent(mockRedeemEvent(blurseTheRun));
+        setTimeout(() => {}, 1001);
+    }
+}
+
+function mockRedeemEvent(redemptionName) {
+    return new CustomEvent("onEventReceived", {
+        detail: {
+            event: {
+                itemId: redemptionName
+            }
+        }
+    });
+}
