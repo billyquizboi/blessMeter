@@ -13,7 +13,7 @@ A StreamElements custom widget vertical meter for tracking number of blesses, cu
 - In the left side-bar, click on 'Settings' again 
 - Click on the blue button 'Open Editor'
 - Overwrite the contents of the HTML tab in the stream elements custom code editor with the contents of [widget.html](./v2/widget.html) 
-- Overwrite the contents of the CSS tab in the stream elements custom code editor to be *empty*. The css styling is included in [widget.html](./v2/widget.html).
+- Overwrite the contents of the CSS tab in the stream elements custom code editor with the contents of [widget.css](./v2/widget.css).
 - Overwrite the contents of the JS tab in the stream elements custom code editor with the contents of [widget.js](./v2/widget.js)
 - Click DONE in the custom code editor and click the SAVE button in the top right
 
