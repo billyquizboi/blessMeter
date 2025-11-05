@@ -24,11 +24,13 @@ It uses a font [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P
 - Click DONE in the custom code editor and click the SAVE button in the top right
 
 **One way to test on stream elements widget editor**
+
 These two steps result in every test redeem being considered a blurse, curse, or bless. Revert these changes and reset the meters before using live.
 - Change this variable's value to true [widget.js line 11](./widget.js#L11) - this should only be used for testing and should be reverted when done.
 - This line [widget.js line 194](./widget.js#L194) can be changed to one of: `updateState(numberOfBlursesKey);` `updateState(numberOfCursesKey);` or `updateState(numberOfBlessesKey);`
 
 **To add this overlay as a source to OBS**
+
 - Copy the link to the widget from the top right link icon near the PREVIEW button
 
 *These OBS instructions below were copied from google*
