@@ -18,9 +18,9 @@ It uses a font [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P
 - The widget was tested using roughly 400px width and 694 pixel height but you can adjust as needed. You may need to modify the CSS or request me to make it more resizable in the CSS.
 - In the left side-bar, click on 'Settings' again 
 - Click on the blue button 'Open Editor'
-- Overwrite the contents of the HTML tab in the stream elements custom code editor with the contents of [widget.html](./v1/widget.html) 
-- Overwrite the contents of the CSS tab in the stream elements custom code editor with the contents of [widget.css](./v1/widget.css)
-- Overwrite the contents of the JS tab in the stream elements custom code editor with the contents of [widget.js](./v1/widget.js)
+- Overwrite the contents of the HTML tab in the stream elements custom code editor with the contents of [widget.html](./widget.html) 
+- Overwrite the contents of the CSS tab in the stream elements custom code editor with the contents of [widget.css](./widget.css)
+- Overwrite the contents of the JS tab in the stream elements custom code editor with the contents of [widget.js](./widget.js)
 - Click DONE in the custom code editor and click the SAVE button in the top right
 
 **To add this overlay as a source to OBS**
