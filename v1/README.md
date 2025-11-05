@@ -4,6 +4,8 @@ A FFVI inspired StreamElements custom widget for tracking number of blesses, cur
 
 Final Fantasy and all other trademarked material is the intellectual property of Square Enix.
 
+[Example display](./blessCurseMeterV1.png)
+
 The basis of the display & styling for this widget is based on a repository [cafeTechne/Final-Fantasy-CSS](https://github.com/cafeTechne/Final-Fantasy-CSS). Thanks to cafeTechne for their work there.
 
 It uses a font [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P) which is licensed under the [SIL Open Font License Version 1.1](https://fonts.google.com/specimen/Press+Start+2P/license). In accordance with that license, the license text is included in the css and html resources which relate to the Press Start 2P font.
