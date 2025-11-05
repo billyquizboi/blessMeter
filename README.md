@@ -1,4 +1,4 @@
-# curseMeter
+# blessMeter
 
 Two versions of a StreamElements widget for tracking number of blesses, curses, and blurses redeemed in twitch chat.
 

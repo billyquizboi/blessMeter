@@ -1,4 +1,4 @@
-# curseMeter V1
+# blessMeter V1
 
 A FFVI inspired StreamElements custom widget for tracking number of blesses, curses, and blurses redeemed for a speedrun.
 

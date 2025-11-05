@@ -1,4 +1,4 @@
-# curseMeter V2
+# blessMeter V2
 
 A StreamElements custom widget vertical meter for tracking number of blesses, curses, and blurses redeemed for a speedrun.
 
