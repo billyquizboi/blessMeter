@@ -414,3 +414,29 @@ function resetAllTimeState() {
 function isShowingAll() {
     return false;
 }
+
+///////////////
+// TESTING CODE 
+///////////////
+
+function testBless() {
+    window.dispatchEvent(mockRedeemEvent(blessTheRun));    
+}
+
+function testCurse() {
+    window.dispatchEvent(mockRedeemEvent(curseTheRun));    
+}
+
+function testBlurse() {
+    window.dispatchEvent(mockRedeemEvent(blurseTheRun));    
+}
+
+function mockRedeemEvent(redemptionName) {
+    return new CustomEvent("onEventReceived", {
+        detail: {
+            event: {
+                itemId: redemptionName
+            }
+        }
+    });
+}

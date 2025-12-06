@@ -49,7 +49,7 @@ body {
   flex-direction: row;
   justify-content: center;
   align-items: center;
-  height: 500px;
+  height: 625px;
   width: 120px;
   margin: 0;
   padding: 0;
@@ -296,12 +296,15 @@ body {
   position: absolute;
   top: 505px;
   left: 0;
-  display: flex;
-  flex-direction: row;
   width: 120px;
 }
 
-.reset-button {
+.button-container {
+  display: flex;
+  flex-direction: row;
+}
+
+.common-button {
   background-color: var(--secondary-color);
   color: white;
   font-size: large;
@@ -313,12 +316,12 @@ body {
   width: 91px;
 }
 
-.reset-button:hover {
+.common-button:hover {
   background-color: lightgray;
   color: darkslateblue;
 }
 
-.reset-button:active {
+.common-button:active {
   background-color: var(--secondary-color);
   color: white;
 }
