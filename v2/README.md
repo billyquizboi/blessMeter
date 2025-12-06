@@ -11,7 +11,7 @@ A StreamElements custom widget vertical meter for tracking number of blesses, cu
 - Follow the initial instructions for creating a custom widget [here](https://docs.streamelements.com/overlays/getting-started#custom-widget)
 - Once you have a custom widget created, select it in the UI by clicking on it
 - In the left side-bar, click on 'Position, size, and style'
-- The widget was tested using roughly 125px width and 625px pixel height but you can adjust as needed. You may need to modify the CSS or request me to make it more resizable in the CSS. The v2 widget itself is 120px x 560px. 
+- The widget was tested using roughly 250px width and 850px pixel height but you can adjust as needed. You may need to modify the CSS or request me to make it more resizable in the CSS. The v2 widget itself is 120px x 625px. 
 - In the left side-bar, click on 'Settings' again 
 - Click on the blue button 'Open Editor'
 - Overwrite the contents of the HTML tab in the stream elements custom code editor with the contents of [widget.html](./widget.html) 
