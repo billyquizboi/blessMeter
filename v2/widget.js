@@ -420,14 +420,17 @@ function isShowingAll() {
 ///////////////
 
 function testBless() {
+    console.log("Testing bless");
     window.dispatchEvent(mockRedeemEvent(blessTheRun));    
 }
 
 function testCurse() {
+    console.log("Testing curse");
     window.dispatchEvent(mockRedeemEvent(curseTheRun));    
 }
 
 function testBlurse() {
+    console.log("Testing blurse");
     window.dispatchEvent(mockRedeemEvent(blurseTheRun));    
 }
 
