@@ -148,6 +148,13 @@ function eventReceivedHandler(obj) {
         console.log(`Determined listener to be ${listener}`);
     }
     const event = obj.detail.event;
+
+    if (listener != 'redemption') {
+        if (event.type === 'channelPointsRedemption') {
+            listener = 'redemption';
+        }
+    }
+
     if (listener === 'redemption') {
         console.log("Redemption message received");
         console.log(JSON.stringify(obj.detail));
@@ -200,6 +207,7 @@ window.addEventListener('onWidgetLoad', widgetLoadHandler);
 function handleRedemption(detail) {
     console.log("In redemption handling");
     const redemptionName = getRedemptionName(detail);
+    console.log(`Redemption name is ${redemptionName}`);
     if (redemptionName != undefined && redemptionName != null) {
         // we can do something
         console.log(`Redemption name is ${redemptionName}`);
@@ -246,6 +254,11 @@ function getRedemptionName(detail) {
         if (detail.event != undefined) {
             // for testing in stream elements, the redemption name is here I believe
             redemptionName = detail.event.itemId;
+        }
+    }
+    if (redemptionName == null || redemptionName == undefined || redemptionName.length == 0) {
+        if (detail.event != undefined) {
+            redemptionName = detail.event.data != undefined ? detail.event.data.type : null;
         }
     }
     return redemptionName;
