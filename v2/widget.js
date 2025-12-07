@@ -260,7 +260,6 @@ function updateDisplay(widgetState, showAnimate) {
         console.log(`Effective blesses ${numberOfBlesses}`);
         console.log(`Effective curses ${numberOfCurses}`);
 
-        // TODO: handle displaying difference
         const total = numberOfBlesses + numberOfCurses;
         const animationTime = showAnimate ? animationDuration : shortAnimationDuration;
 
@@ -282,7 +281,8 @@ function updateDisplay(widgetState, showAnimate) {
         const curseCounter = getCurseCounter();
         const blessCounter = getBlessCounter();
 
-        var difference = 0;
+        var effectiveDifference = 0;
+        var actualDifference = 0;
         var isBlessed = numberOfBlesses > numberOfCurses;
         var isCursed = numberOfCurses > numberOfBlesses;
 
@@ -293,23 +293,26 @@ function updateDisplay(widgetState, showAnimate) {
             console.log(`Current heights are bless: ${blessMeterFill.offsetHeight + "px"}, curse: ${curseMeterFill.offsetHeight + "px"}`);
 
             if (isBlessed) {
-                difference = (numberOfBlesses - numberOfCurses);
-                if (difference > 50) {
-                    difference = 50;
+                effectiveDifference = (numberOfBlesses - numberOfCurses);
+                actualDifference = effectiveDifference;
+                if (effectiveDifference > 50) {
+                    effectiveDifference = 50;
                 }
-                var blessedPixels = (( difference / 50 ) * 250).toFixed() + "px";
+                var blessedPixels = (( effectiveDifference / 50 ) * 250).toFixed() + "px";
                 console.log(`Bless is winning. Bless height is going to: ${blessedPixels}`);
                 targetBlessHeight = blessedPixels;
             } else if (isCursed) {
-                difference = (numberOfCurses - numberOfBlesses);
-                if (difference > 50) {
-                    difference = 50;
+                effectiveDifference = (numberOfCurses - numberOfBlesses);
+                actualDifference = effectiveDifference;
+                if (effectiveDifference > 50) {
+                    actualDifference = effectiveDifference;
                 }
-                var cursedPixels = (( difference / 50 ) * 250).toFixed() + "px";
+                var cursedPixels = (( effectiveDifference / 50 ) * 250).toFixed() + "px";
                 console.log(`Curse is winning. Curse height is going to: ${cursedPixels}`);
                 targetCurseHeight = cursedPixels;
             } else {
-                difference = 0;
+                effectiveDifference = 0;
+                actualDifference = 0;
                 // is even
                 console.log("It's all even");
             }
@@ -323,10 +326,10 @@ function updateDisplay(widgetState, showAnimate) {
         // update counters
         if (blessCounter != undefined) {
             if (isBlessed) {
-                blessCounter.innerHTML = "+" + difference;
+                blessCounter.innerHTML = "+" + actualDifference;
                 blessCounter.style.display = "block";
             } else if (isCursed) {
-                blessCounter.innerHTML = "-" + difference;
+                blessCounter.innerHTML = "-" + actualDifference;
                 blessCounter.style.display = "none";
             } else {
                 blessCounter.innerHTML = "+" + "0";
@@ -335,10 +338,10 @@ function updateDisplay(widgetState, showAnimate) {
         }
         if (curseCounter != undefined) {
             if (isCursed) {
-                curseCounter.innerHTML = "+" + difference;
+                curseCounter.innerHTML = "+" + actualDifference;
                 curseCounter.style.display = "block";
             } else if (isBlessed) {
-                curseCounter.innerHTML = "-" + difference;
+                curseCounter.innerHTML = "-" + actualDifference;
                 curseCounter.style.display = "none";
             } else {
                 curseCounter.innerHTML = "-" + "0";
