@@ -241,7 +241,10 @@ function getRedemptionName(detail) {
     if (detail == undefined) {
         return null;
     }
-    if (detail.session != undefined
+    if (detail.event != undefined && detail.event.data != undefined) {
+        redemptionName = detail.event.data.type;
+    }
+    if (redemptionName == null && detail.session != undefined
       && detail.session.data != undefined
       && detail["session"]["data"]["channel-points-latest"] != undefined
     ) {
