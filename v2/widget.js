@@ -242,7 +242,7 @@ function getRedemptionName(detail) {
         return null;
     }
     if (detail.event != undefined && detail.event.data != undefined) {
-        redemptionName = detail.event.data.type;
+        redemptionName = detail.event.data.redemption;
     }
     if (redemptionName == null && detail.session != undefined
       && detail.session.data != undefined
@@ -261,7 +261,7 @@ function getRedemptionName(detail) {
     }
     if (redemptionName == null || redemptionName == undefined || redemptionName.length == 0) {
         if (detail.event != undefined) {
-            redemptionName = detail.event.data != undefined ? detail.event.data.type : null;
+            redemptionName = detail.event.data != undefined ? detail.event.data.redemption : null;
         }
     }
     return redemptionName;
