@@ -126,17 +126,26 @@ function canIncrement(obj, toIncrement) {
 
 function eventReceivedHandler(obj) {
     console.log(`Received an event ${JSON.stringify(obj)}`);
-    if (!obj.detail.event) {
+    if (obj.detail == undefined) {
+        console.log("obj.detail does not exist so exiting");
+        return;
+    }
+    if (obj.detail.event == undefined || !obj.detail.event) {
+      console.log("obj.detail.event does not exist so exiting");
       return;
     }
     if (typeof obj.detail.event.itemId !== "undefined") {
+        console.log(`obj.detail.event.itemId ${obj.detail.event.itemId}`);
         obj.detail.listener = "redemption-latest"
     }
     var listener;
     if (obj.detail.listener == undefined) {
+        console.log(`obj.detail.listener is undefined`);
         listener = undefined;
     } else {
+        console.log(`obj.detail.listener is ${obj.detail.listener}`);
         listener = obj.detail.listener.split("-")[0];
+        console.log(`Determined listener to be ${listener}`);
     }
     const event = obj.detail.event;
     if (listener === 'redemption') {
@@ -158,6 +167,8 @@ function eventReceivedHandler(obj) {
                 updateDisplay(state, true);
             });
         }
+    } else {
+        console.log(`Not doing anything with object ${obj} and detail ${obj.detail}`);
     }
 }
 
