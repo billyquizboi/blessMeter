@@ -168,7 +168,7 @@ function eventReceivedHandler(obj) {
             });
         }
     } else {
-        console.log(`Not doing anything with object ${obj} and detail ${obj.detail}`);
+        console.log(`Not doing anything with object ${JSON.stringify(obj)} and detail ${JSON.stringify(obj.detail)}`);
     }
 }
 
