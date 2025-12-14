@@ -300,6 +300,9 @@ function updateDisplay(widgetState, showAnimate) {
             // update lastCount attributes
             blessMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlesses);
             curseMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfCurses);
+            getBlessInfoValue().text(0);
+            getCurseInfoValue().text(0);
+            getBlurseInfoValue().text(0);
         } else {
             const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
             const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
