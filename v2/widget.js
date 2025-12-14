@@ -241,9 +241,11 @@ function getRedemptionName(detail) {
     if (detail == undefined) {
         return null;
     }
+    // for twitch this is where it actually is
     if (detail.event != undefined && detail.event.data != undefined) {
         redemptionName = detail.event.data.redemption;
     }
+    // the rest of this is where I thought the redemption name would be either from the SE docs or SE mock redeems
     if (redemptionName == null && detail.session != undefined
       && detail.session.data != undefined
       && detail["session"]["data"]["channel-points-latest"] != undefined
