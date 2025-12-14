@@ -14,7 +14,6 @@
   
     --battle-window-top-gradient-color: #6c70a6;
     --background-color-blue:#21217c;
-    /* --background-color-black:#181820; */
     --battle-window-bottom-gradient-color: #040136;
   
     --dialogue-window-color-gradient:#6d6db3,#5554ad,#5352a8,#3f4791,#354783,#32348d,#32328a,#313188,#222279,#14156d,#02045a,#040233,#020234,#020134;
@@ -39,11 +38,9 @@
   }
   
 html {
-    /* font-family: "Final Fantasy 3/6 Font Regular", monospace; */
     color: #ecedee;
     margin: 0px;
     padding: 0px;
-    /* background-color: var(--background-color-black); */
     text-shadow: 1px 1px #2d2a4b;
     height: 100%;
     width: 100%;
@@ -65,10 +62,12 @@ body {
     width: 100%;
     margin: 0;
     padding: 0;
+    /* TODO: Remove this fixed height and width after testing - recommend these dimensions be used in SE in the README */
+    height: 125px;
+    width: 400px;
 }
 
 h1,h2,h3,h4,h5{
-    /* font-weight: normal; This typeface does not look good bold */
     font-weight: 400;
 }
 
@@ -93,12 +92,6 @@ h1,h2,h3,h4,h5{
     linear-gradient(to left  ,var(--bg)) left  /var(--br) calc(100% - 2*var(--br));
     background-repeat:no-repeat;
 
-    /*
-    My first approach to solving this led to unmaintainable code. 
-    As of now, I feel that my current gradients are "good enough" at 
-    approximating the pixelated anti-aliasing of the original ui menu window.
-    */
-
     box-sizing:border-box;
     display:inline-block;
     vertical-align:top;
@@ -108,7 +101,7 @@ h1,h2,h3,h4,h5{
 }
 
 .outer-dialogue-window-main {
-    height: 75%;
+    height: 65%;
     width: 100%;
 }
 
@@ -147,7 +140,6 @@ h1,h2,h3,h4,h5{
 
 .text-button:hover {
     color: #00D1FF;
-    /* color: #2d2a4b; */
 }
 
 .inner-dialogue-window {
@@ -161,13 +153,9 @@ h1,h2,h3,h4,h5{
     height: 100%;
 }
 
-.bless-container,.curse-container,.blurse-container {
+.bless-container,.curse-container,.blurse-container,.info-container {
     display: flex;
     justify-content: space-between;
-}
-
-.bless-container,.curse-container {
-    margin-bottom: 15px;
 }
 
 .meter,.meter-title {
@@ -201,15 +189,30 @@ h1,h2,h3,h4,h5{
 }
 
 .curse-container .meter-fill {
-    background-color: #FF3886; /* three */
-}
-
-.blurse-container {
-    margin-bottom: 15px;
+    background-color: #FF3886;
 }
 
 .blurse-container .meter-fill {
-    background-color: #00D1FF; /* three */
+    background-color: #00D1FF;
+}
+
+.info-container {
+    display: flex;
+    flex-direction: row;
+}
+
+.bless-info,.curse-info,.blurse-info {
+    display: flex;
+    flex-direction: row;
+}
+
+.bless-info-label,.curse-info-label,.blurse-info-label {
+    vertical-align: -0.125em;
+    overflow: visible;
+    height: 16px;
+    width: 16px;
+    fill: white;
+    margin-right: 2px;
 }
 
 /**
