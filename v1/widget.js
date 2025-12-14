@@ -6,6 +6,9 @@ const numberOfBlessesKey = "numberOfBlesses";
 const numberOfCursesKey = "numberOfCurses";
 const numberOfBlursesKey = "numberOfBlurses";
 
+const numberOfBlursesThatCursedKey = "numberOfBlursesThatCursed";
+const numberOfBlursesThatBlessedKey = "numberOfBlursesThatBlessed";
+
 // for testing use only you can set this to true
 // don't use live or meter will change on every redeem of any type
 const matchAnyRedemptionName = false;
@@ -14,12 +17,16 @@ const initialWidgetState = {
     current: {
         numberOfBlesses: 0,
         numberOfCurses: 0,
-        numberOfBlurses: 0
+        numberOfBlurses: 0,
+        numberOfBlursesThatCursed: 0,
+        numberOfBlursesThatBlessed: 0
     },
     allTime: {
         numberOfBlesses: 0,
         numberOfCurses: 0,
-        numberOfBlurses: 0
+        numberOfBlurses: 0,
+        numberOfBlursesThatCursed: 0,
+        numberOfBlursesThatBlessed: 0
     }
 };
 
@@ -42,18 +49,6 @@ function getBlessMeterFill() {
 
 function getCurseMeterFill() {
     return $("div.curse-container div.meter div.meter-fill");
-}
-
-function getBlurseMeterFill() {
-    return $("div.blurse-container div.meter div.meter-fill");
-}
-
-function getMeters() {
-    return [
-        getBlessMeterFill(),
-        getCurseMeterFill(),
-        getBlurseMeterFill()
-    ];
 }
 
 function initializeLastWidgetState() {
@@ -84,6 +79,20 @@ function updateState(toIncrement) {
             console.log("The store object has not yet been initialized. Setting up initial values.");
             obj = initialWidgetState;
         }
+        // hanldes blurses
+        if (toIncrement == numberOfBlursesKey) {
+            if (Math.random() < 0.5) {
+                // blessed af
+                optionallyInitializeNumericField(obj, numberOfBlursesThatBlessedKey);
+                obj.current[numberOfBlursesThatBlessedKey] += 1;
+                obj.allTime[numberOfBlursesThatBlessedKey] += 1;
+            } else {
+                // curse it bby
+                optionallyInitializeNumericField(obj, numberOfBlursesThatCursedKey);
+                obj.current[numberOfBlursesThatCursedKey] += 1;
+                obj.allTime[numberOfBlursesThatCursedKey] += 1;
+            }
+        }
         obj.current[toIncrement] += 1;
         obj.allTime[toIncrement] += 1;
         obj.lastUpdated = new Date();
@@ -107,21 +116,42 @@ function canIncrement(obj, toIncrement) {
         && obj.allTime[toIncrement] != undefined;
 }
 
+function optionallyInitializeNumericField(obj, fieldName) {
+    if (obj.current[fieldName] == undefined || typeof obj.current[fieldName] !== 'number') {
+        obj.current[fieldName] = 0;
+    }
+    if (obj.allTime[fieldName] == undefined || typeof obj.allTime[fieldName] !== 'number') {
+        obj.allTime[fieldName] = 0;
+    }
+}
+
 function eventReceivedHandler(obj) {
     console.log(`Received an event ${JSON.stringify(obj)}`);
     if (!obj.detail.event) {
+        console.log("obj.detail does not exist so exiting");
       return;
     }
     if (typeof obj.detail.event.itemId !== "undefined") {
+        console.log(`obj.detail.event.itemId ${obj.detail.event.itemId}`);
         obj.detail.listener = "redemption-latest"
     }
     var listener;
     if (obj.detail.listener == undefined) {
+        console.log(`obj.detail.listener is undefined`);
         listener = undefined;
     } else {
+        console.log(`obj.detail.listener is ${obj.detail.listener}`);
         listener = obj.detail.listener.split("-")[0];
+        console.log(`Determined listener to be ${listener}`);
     }
     const event = obj.detail.event;
+
+    if (listener != 'redemption') {
+        if (event.type === 'channelPointsRedemption') {
+            listener = 'redemption';
+        }
+    }
+
     if (listener === 'redemption') {
         console.log("Redemption message received");
         console.log(JSON.stringify(obj.detail));
@@ -141,6 +171,8 @@ function eventReceivedHandler(obj) {
                 updateDisplay(state, true);
             });
         }
+    } else {
+        console.log(`Not doing anything with object ${JSON.stringify(obj)} and detail ${JSON.stringify(obj.detail)}`);
     }
 }
 
@@ -228,24 +260,34 @@ function getRedemptionName(detail) {
     return redemptionName;
 }
 
-function updateDisplay(widgetState, showAnimate) {
-    // TODO: I THINK THAT THE CURRENT WIDTH IS INVALID FORMAT FOR THE ANIMATE CALL
+// TODO: If removing the blurse meter will have to change code relating to blurses
+// - blurse meter was removed
+// - needs to be effective curse/blurse +2 or -2 randomly
+// - counters were added
+// - counters need to be toggleable also for showing current vs. all
+// - for current run:
+//   - meters fill up to max of 25 and then counter keeps going but meter does not
+// - for showing all:
+//   - meters show relative size based on all time data
 
+function updateDisplay(widgetState, showAnimate) {
     if (widgetState != undefined && widgetState.current != undefined) {
         console.log(`Updating meter display ${JSON.stringify(widgetState)}`);
         const numberOfBlesses = getCountFromState(widgetState, numberOfBlessesKey);
         const numberOfCurses = getCountFromState(widgetState, numberOfCursesKey);
         const numberOfBlurses = getCountFromState(widgetState, numberOfBlursesKey);
+
+        const numberOfBlursesThatBlessed = getCountFromState(widgetState, numberOfBlursesThatBlessedKey);
+        const numberOfBlursesThatCursed = getCountFromState(widgetState, numberOfBlursesThatCursedKey);
+
         const total = numberOfBlesses + numberOfCurses + numberOfBlurses;
         const animationTime = showAnimate ? animationDuration : shortAnimationDuration;
 
         const blessMeterFill = getBlessMeterFill();
         const curseMeterFill = getCurseMeterFill();
-        const blurseMeterFill = getBlurseMeterFill();
 
         if (numberOfBlesses === blessMeterFill.attr(ATTRIBUTE_LAST_COUNT)
-            && numberOfCurses === curseMeterFill.attr(ATTRIBUTE_LAST_COUNT)
-            && numberOfBlurses === blurseMeterFill.attr(ATTRIBUTE_LAST_COUNT)) {
+            && numberOfCurses === curseMeterFill.attr(ATTRIBUTE_LAST_COUNT)) {
             console.log("No change detected to lastCount attributes. Will not update display.");
             return;
         }
@@ -255,27 +297,43 @@ function updateDisplay(widgetState, showAnimate) {
             // trigger the display change
             animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime);
             animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime);
-            animateChange(blurseMeterFill.get(0), blurseMeterFill.css("width"), "0%", animationTime);
             // update lastCount attributes
             blessMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlesses);
             curseMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfCurses);
-            blurseMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlurses);
         } else {
+            const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
+            const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
+
             console.log("Computing widths for the meters");
-            console.log(`Current widths are bless: ${blessMeterFill.css("width")}, curse: ${curseMeterFill.css("width")}, blurse: ${blurseMeterFill.css("width")}`);
-            const blessWidth = ((numberOfBlesses / total) * 100).toFixed(2) + "%";
-            const curseWidth = ((numberOfCurses / total) * 100).toFixed(2) + "%";
-            const blurseWidth = ((numberOfBlurses / total) * 100).toFixed(2) + "%";
+            console.log(`Current widths are bless: ${blessMeterFill.css("width")}, curse: ${curseMeterFill.css("width")}`);
+
+            var blessWidth;
+            var curseWidth;
+            var blurseWidth;
+            if (isShowingAll()) {
+                console.log(`Showing all so meter length is relative`);
+                blessWidth = ((numberOfBlesses / total) * 100).toFixed(2) + "%";
+                curseWidth = ((numberOfCurses / total) * 100).toFixed(2) + "%";
+                blurseWidth = ((numberOfBlurses / total) * 100).toFixed(2) + "%";
+            } else {
+                console.log(`Showing all so meter length is based on 25 max`);
+                blessWidth = ( (effectiveBlesses >= 25 ? 100 : (effectiveBlesses / 25) * 100) ).toFixed(2) + "%";
+                curseWidth = ( (effectiveCurses >= 25 ? 100 : (effectiveCurses / 25) * 100) ).toFixed(2) + "%";
+                blurseWidth = ( (numberOfBlurses >= 25 ? 100 : (numberOfBlurses / 25) * 100) ).toFixed(2) + "%";
+            }
             console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}, blurse: ${blurseWidth}`);
+            
             // trigger the display change
             animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime);
             animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime);
-            animateChange(blurseMeterFill.get(0), blurseMeterFill.css("width"), blurseWidth, animationTime);
             // update lastCount attributes
             // update lastCount attributes
             blessMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlesses);
             curseMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfCurses);
-            blurseMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlurses);
+
+            getBlessInfoValue().text(numberOfBlesses);
+            getCurseInfoValue().text(numberOfCurses);
+            getBlurseInfoValue().text(numberOfBlurses);
         }
     } else {
         console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
@@ -298,6 +356,18 @@ function getOrDefaultCount(value) {
     } else {
         return value;
     }
+}
+
+function getBlessInfoValue() {
+    return $("span.bless-info-value");
+}
+
+function getCurseInfoValue() {
+    return $("span.curse-info-value");
+}
+
+function getBlurseInfoValue() {
+    return $("span.blurse-info-value");
 }
 
 function animateChange(ele, currentWidth, targetWidth, durationOfAnimation) {
@@ -323,7 +393,9 @@ function resetCurrentState() {
         obj.current = {
             numberOfBlesses: 0,
             numberOfCurses: 0,
-            numberOfBlurses: 0
+            numberOfBlurses: 0,
+            numberOfBlursesThatCursed: 0,
+            numberOfBlursesThatBlessed: 0
         };
         SE_API.store.set(STORE_KEY_NAME, obj);
         lastWidgetState = obj;
