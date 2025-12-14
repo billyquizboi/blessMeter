@@ -62,9 +62,9 @@ body {
     width: 100%;
     margin: 0;
     padding: 0;
-    /* TODO: Remove this fixed height and width after testing - recommend these dimensions be used in SE in the README */
-    height: 125px;
-    width: 400px;
+    /* These dimensions were used during testing fyi */
+    /* height: 125px;
+    width: 400px; */
 }
 
 h1,h2,h3,h4,h5{
