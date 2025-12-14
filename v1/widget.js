@@ -127,8 +127,12 @@ function optionallyInitializeNumericField(obj, fieldName) {
 
 function eventReceivedHandler(obj) {
     console.log(`Received an event ${JSON.stringify(obj)}`);
-    if (!obj.detail.event) {
+    if (obj.detail == undefined) {
         console.log("obj.detail does not exist so exiting");
+        return;
+    }
+    if (obj.detail.event == undefined || !obj.detail.event) {
+      console.log("obj.detail.event does not exist so exiting");
       return;
     }
     if (typeof obj.detail.event.itemId !== "undefined") {
@@ -306,6 +310,7 @@ function updateDisplay(widgetState, showAnimate) {
         } else {
             const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
             const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
+            const effectiveTotal = effectiveBlesses + effectiveCurses;
 
             console.log("Computing widths for the meters");
             console.log(`Current widths are bless: ${blessMeterFill.css("width")}, curse: ${curseMeterFill.css("width")}`);
@@ -315,14 +320,12 @@ function updateDisplay(widgetState, showAnimate) {
             var blurseWidth;
             if (isShowingAll()) {
                 console.log(`Showing all so meter length is relative`);
-                blessWidth = ((numberOfBlesses / total) * 100).toFixed(2) + "%";
-                curseWidth = ((numberOfCurses / total) * 100).toFixed(2) + "%";
-                blurseWidth = ((numberOfBlurses / total) * 100).toFixed(2) + "%";
+                blessWidth = ((effectiveBlesses / effectiveTotal) * 100).toFixed(2) + "%";
+                curseWidth = ((effectiveCurses / effectiveTotal) * 100).toFixed(2) + "%";
             } else {
                 console.log(`Showing all so meter length is based on 25 max`);
                 blessWidth = ( (effectiveBlesses >= 25 ? 100 : (effectiveBlesses / 25) * 100) ).toFixed(2) + "%";
                 curseWidth = ( (effectiveCurses >= 25 ? 100 : (effectiveCurses / 25) * 100) ).toFixed(2) + "%";
-                blurseWidth = ( (numberOfBlurses >= 25 ? 100 : (numberOfBlurses / 25) * 100) ).toFixed(2) + "%";
             }
             console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}, blurse: ${blurseWidth}`);
             
@@ -459,12 +462,10 @@ function testBlurse() {
 }
 
 function mockRedeemEvent(redemptionName) {
-    if (detail.event != undefined && detail.event.data != undefined) {
-        redemptionName = detail.event.data.redemption;
-    }
     return new CustomEvent("onEventReceived", {
         detail: {
             event: {
+                type: "channelPointsRedemption",
                 data: {
                     redemption: redemptionName
                 }
