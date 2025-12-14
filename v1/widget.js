@@ -446,38 +446,28 @@ function toggleButton() {
 ///////////////
 // TESTING CODE 
 ///////////////
+function testBless() {
+    window.dispatchEvent(mockRedeemEvent(blessTheRun));
+}
 
-function testMeters() {
-    for (var i = 0; i < 5; i++) {
-        window.dispatchEvent(mockRedeemEvent(blessTheRun));
-        setTimeout(() => {}, 1001);
-    }
+function testCurse() {
+    window.dispatchEvent(mockRedeemEvent(curseTheRun));
+}
 
-    for (var i = 0; i < 5; i++) {
-        window.dispatchEvent(mockRedeemEvent(curseTheRun));
-        setTimeout(() => {}, 1001);
-    }
-
-    for (var i = 0; i < 5; i++) {
-        window.dispatchEvent(mockRedeemEvent(blurseTheRun));
-        setTimeout(() => {}, 1001);
-    }
-
-    for (var i = 0; i < 5; i++) {
-        window.dispatchEvent(mockRedeemEvent(blessTheRun));
-        setTimeout(() => {}, 1001);
-        window.dispatchEvent(mockRedeemEvent(curseTheRun));
-        setTimeout(() => {}, 1001);
-        window.dispatchEvent(mockRedeemEvent(blurseTheRun));
-        setTimeout(() => {}, 1001);
-    }
+function testBlurse() {
+    window.dispatchEvent(mockRedeemEvent(blurseTheRun));
 }
 
 function mockRedeemEvent(redemptionName) {
+    if (detail.event != undefined && detail.event.data != undefined) {
+        redemptionName = detail.event.data.redemption;
+    }
     return new CustomEvent("onEventReceived", {
         detail: {
             event: {
-                itemId: redemptionName
+                data: {
+                    redemption: redemptionName
+                }
             }
         }
     });
