@@ -17,7 +17,7 @@ It uses a font [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P
 - Follow the initial instructions for creating a custom widget [here](https://docs.streamelements.com/overlays/getting-started#custom-widget)
 - Once you have a custom widget created, select it in the UI by clicking on it
 - In the left side-bar, click on 'Position, size, and style'
-- The widget was tested using roughly 400px width and 694 pixel height but you can adjust as needed. You may need to modify the CSS or request me to make it more resizable in the CSS.
+- The widget was tested using roughly 400px width and 200 pixel height but you can adjust as needed. You may need to modify the CSS or request me to make it more resizable in the CSS.
 - In the left side-bar, click on 'Settings' again 
 - Click on the blue button 'Open Editor'
 - Overwrite the contents of the HTML tab in the stream elements custom code editor with the contents of [widget.html](./widget.html) 
