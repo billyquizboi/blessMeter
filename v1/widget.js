@@ -27,7 +27,8 @@ const initialWidgetState = {
         numberOfBlurses: 0,
         numberOfBlursesThatCursed: 0,
         numberOfBlursesThatBlessed: 0
-    }
+    },
+    showAll: false
 };
 
 initialWidgetState.lastUpdated = new Date();
@@ -35,7 +36,6 @@ initialWidgetState.lastUpdated = new Date();
 const STORE_KEY_NAME = "blessCurseMeterState";
 
 const ATTRIBUTE_SHOW_ALL = "showAll";
-const ATTRIBUTE_LAST_COUNT = "lastCount";
 
 const animationDuration = 1000;
 const shortAnimationDuration = 1;
@@ -65,7 +65,27 @@ function initializeLastWidgetState() {
     }
 }
 
-function updateState(toIncrement) {
+function toggleShowAllState() {
+    console.log(`Updating state showAll to ${showAll}`);
+    SE_API.store.get(STORE_KEY_NAME).then(obj => {
+        console.log(`Updating showAll to ${showAll}: Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
+        if (!storeHasBeenInitialized(obj)) {
+            console.log(`Updating state showAll to ${showAll}: The store object has not yet been initialized. Setting up initial values.`);
+            obj = initialWidgetState;
+        }
+        obj.lastUpdated = new Date();
+        if (obj[ATTRIBUTE_SHOW_ALL] == undefined) {
+            obj[ATTRIBUTE_SHOW_ALL] = true;
+        } else {
+            obj[ATTRIBUTE_SHOW_ALL] = !obj[ATTRIBUTE_SHOW_ALL];
+        }
+        SE_API.store.set(STORE_KEY_NAME, obj);
+        // the SE.store.set function emits an onEventReceived for every custom widget
+        lastWidgetState = obj;
+    });
+}
+
+function incrementState(toIncrement, showAll) {
     console.log(`Incrementing ${toIncrement}`);
     SE_API.store.get(STORE_KEY_NAME).then(obj => {
         console.log(`Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
@@ -96,6 +116,7 @@ function updateState(toIncrement) {
         obj.current[toIncrement] += 1;
         obj.allTime[toIncrement] += 1;
         obj.lastUpdated = new Date();
+        obj[ATTRIBUTE_SHOW_ALL] = showAll;
         SE_API.store.set(STORE_KEY_NAME, obj);
         // the SE.store.set function emits an onEventReceived for every custom widget
         lastWidgetState = obj;
@@ -213,21 +234,21 @@ function handleRedemption(detail) {
         console.log(`Redemption name is ${redemptionName}`);
         if (redemptionName == blessTheRun) {
             console.log(`Bless it: Verily let this run be bless-ed`);
-            updateState(numberOfBlessesKey);
+            incrementState(numberOfBlessesKey, false);
             setTimeout(SE_API.resumeQueue, 1001);
         } else if (redemptionName == curseTheRun) {
             console.log(`Curse it: I say unto you Locke shall not steal this run.`);
-            updateState(numberOfCursesKey);
+            incrementState(numberOfCursesKey, false);
             setTimeout(SE_API.resumeQueue, 1001);
         } else if (redemptionName == blurseTheRun) {
             console.log(`Blurse it - who knows? Maybe gau, maybe no gau. Maybe black belt, maybe trench death.`);
-            updateState(numberOfBlursesKey);
+            incrementState(numberOfBlursesKey, false);
             setTimeout(SE_API.resumeQueue, 1001);
         } else if (matchAnyRedemptionName) {
             // This is for testing the widget -- can make a random function or just always curse/always bless or whatever
             // Change 'matchAnyRedemptionName' variable at the top to one of true to use this, else should be false
             // add if wanted for testing
-            updateState(numberOfBlursesKey);
+            incrementState(numberOfBlursesKey. false);
             setTimeout(SE_API.resumeQueue, 1001);
         }
     } else {
@@ -264,16 +285,6 @@ function getRedemptionName(detail) {
     return redemptionName;
 }
 
-// TODO: If removing the blurse meter will have to change code relating to blurses
-// - blurse meter was removed
-// - needs to be effective curse/blurse +2 or -2 randomly
-// - counters were added
-// - counters need to be toggleable also for showing current vs. all
-// - for current run:
-//   - meters fill up to max of 25 and then counter keeps going but meter does not
-// - for showing all:
-//   - meters show relative size based on all time data
-
 function updateDisplay(widgetState, showAnimate) {
     if (widgetState != undefined && widgetState.current != undefined) {
         console.log(`Updating meter display ${JSON.stringify(widgetState)}`);
@@ -290,20 +301,11 @@ function updateDisplay(widgetState, showAnimate) {
         const blessMeterFill = getBlessMeterFill();
         const curseMeterFill = getCurseMeterFill();
 
-        if (numberOfBlesses === blessMeterFill.attr(ATTRIBUTE_LAST_COUNT)
-            && numberOfCurses === curseMeterFill.attr(ATTRIBUTE_LAST_COUNT)) {
-            console.log("No change detected to lastCount attributes. Will not update display.");
-            return;
-        }
-
         if (total === 0) {
             console.log("No blesses, curses, or blurses. Hopefully this is expected in this scenario...");
             // trigger the display change
             animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime);
             animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime);
-            // update lastCount attributes
-            blessMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlesses);
-            curseMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfCurses);
             getBlessInfoValue().text(0);
             getCurseInfoValue().text(0);
             getBlurseInfoValue().text(0);
@@ -318,14 +320,23 @@ function updateDisplay(widgetState, showAnimate) {
             var blessWidth;
             var curseWidth;
             var blurseWidth;
-            if (isShowingAll()) {
+            const toggleButton = $("#all-time-toggle");
+            if (isShowingAll(widgetState)) {
                 console.log(`Showing all so meter length is relative`);
                 blessWidth = ((effectiveBlesses / effectiveTotal) * 100).toFixed(2) + "%";
                 curseWidth = ((effectiveCurses / effectiveTotal) * 100).toFixed(2) + "%";
+
+                console.log("Show all");
+                toggleButton.text("Show all");
+                console.log(`Updated show all attribute to: ${toggleButton.attr(ATTRIBUTE_SHOW_ALL)}`);
             } else {
-                console.log(`Showing all so meter length is based on 25 max`);
+                console.log(`Showing run so meter length is based on 25 max`);
                 blessWidth = ( (effectiveBlesses >= 25 ? 100 : (effectiveBlesses / 25) * 100) ).toFixed(2) + "%";
                 curseWidth = ( (effectiveCurses >= 25 ? 100 : (effectiveCurses / 25) * 100) ).toFixed(2) + "%";
+
+                console.log("Show run");
+                toggleButton.text("Show run");
+                console.log(`Updated show all attribute to: ${toggleButton.attr(ATTRIBUTE_SHOW_ALL)}`);
             }
             console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}, blurse: ${blurseWidth}`);
             
@@ -334,9 +345,6 @@ function updateDisplay(widgetState, showAnimate) {
             animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime);
             // update lastCount attributes
             // update lastCount attributes
-            blessMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfBlesses);
-            curseMeterFill.attr(ATTRIBUTE_LAST_COUNT, numberOfCurses);
-
             getBlessInfoValue().text(numberOfBlesses);
             getCurseInfoValue().text(numberOfCurses);
             getBlurseInfoValue().text(numberOfBlurses);
@@ -401,7 +409,8 @@ function resetCurrentState() {
             numberOfCurses: 0,
             numberOfBlurses: 0,
             numberOfBlursesThatCursed: 0,
-            numberOfBlursesThatBlessed: 0
+            numberOfBlursesThatBlessed: 0,
+            showAll: false
         };
         SE_API.store.set(STORE_KEY_NAME, obj);
         lastWidgetState = obj;
@@ -420,30 +429,14 @@ function resetAllTimeState() {
 //////////////////
 
 function toggleAllTime() {
-    toggleButton();
-    updateDisplay(lastWidgetState, false);
-}
-
-function isShowingAll() {
-    let showingAll = $("#all-time-toggle").attr(ATTRIBUTE_SHOW_ALL) == "true";
-    console.log(`isShowingAll? ${showingAll}`);
-    return showingAll;
-}
-
-function toggleButton() {
     console.log(`Toggling display ${JSON.stringify(lastWidgetState)}`);
-    const button = $("#all-time-toggle");
-    if (isShowingAll()) {
-        console.log("Show all");
-        button.text("Show all");
-        button.attr(ATTRIBUTE_SHOW_ALL, "false");
-        console.log(`Updated show all attribute to: ${button.attr(ATTRIBUTE_SHOW_ALL)}`);
-    } else {
-        console.log("Show run");
-        button.text("Show run");
-        button.attr(ATTRIBUTE_SHOW_ALL, "true");
-        console.log(`Updated show all attribute to: ${button.attr(ATTRIBUTE_SHOW_ALL)}`);
-    }
+    toggleShowAllState();
+}
+
+function isShowingAll(widgetState) {
+    const isShowingAll = widgetState != undefined && widgetState[ATTRIBUTE_SHOW_ALL] != undefined && widgetState[ATTRIBUTE_SHOW_ALL];
+    console.log(`isShowingAll? ${isShowingAll}`);
+    return isShowingAll;
 }
 
 ///////////////
