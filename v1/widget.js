@@ -327,7 +327,7 @@ function updateDisplay(widgetState, showAnimate) {
                 curseWidth = ((effectiveCurses / effectiveTotal) * 100).toFixed(2) + "%";
 
                 console.log("Show all");
-                toggleButton.text("Show all");
+                toggleButton.text("Show run");
                 console.log(`Updated show all attribute to: ${toggleButton.attr(ATTRIBUTE_SHOW_ALL)}`);
             } else {
                 console.log(`Showing run so meter length is based on 25 max`);
@@ -335,7 +335,7 @@ function updateDisplay(widgetState, showAnimate) {
                 curseWidth = ( (effectiveCurses >= 25 ? 100 : (effectiveCurses / 25) * 100) ).toFixed(2) + "%";
 
                 console.log("Show run");
-                toggleButton.text("Show run");
+                toggleButton.text("Show all");
                 console.log(`Updated show all attribute to: ${toggleButton.attr(ATTRIBUTE_SHOW_ALL)}`);
             }
             console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}, blurse: ${blurseWidth}`);
