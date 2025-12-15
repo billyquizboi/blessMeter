@@ -66,11 +66,11 @@ function initializeLastWidgetState() {
 }
 
 function toggleShowAllState() {
-    console.log(`Updating state showAll to ${showAll}`);
+    console.log(`Toggling state showAll`);
     SE_API.store.get(STORE_KEY_NAME).then(obj => {
-        console.log(`Updating showAll to ${showAll}: Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
+        console.log(`Toggling showAll: Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
         if (!storeHasBeenInitialized(obj)) {
-            console.log(`Updating state showAll to ${showAll}: The store object has not yet been initialized. Setting up initial values.`);
+            console.log(`Toggling state showAll: The store object has not yet been initialized. Setting up initial values.`);
             obj = initialWidgetState;
         }
         obj.lastUpdated = new Date();
