@@ -309,6 +309,7 @@ function updateDisplay(widgetState, showAnimate) {
             getBlessInfoValue().text(0);
             getCurseInfoValue().text(0);
             getBlurseInfoValue().text(0);
+            updateToggleButtonDisplay(isShowingAll(widgetState));
         } else {
             const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
             const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
@@ -320,24 +321,16 @@ function updateDisplay(widgetState, showAnimate) {
             var blessWidth;
             var curseWidth;
             var blurseWidth;
-            const toggleButton = $("#all-time-toggle");
             if (isShowingAll(widgetState)) {
                 console.log(`Showing all so meter length is relative`);
                 blessWidth = ((effectiveBlesses / effectiveTotal) * 100).toFixed(2) + "%";
                 curseWidth = ((effectiveCurses / effectiveTotal) * 100).toFixed(2) + "%";
-
-                console.log("Show all");
-                toggleButton.text("Show run");
-                console.log(`Updated show all attribute to: ${toggleButton.attr(ATTRIBUTE_SHOW_ALL)}`);
             } else {
                 console.log(`Showing run so meter length is based on 25 max`);
                 blessWidth = ( (effectiveBlesses >= 25 ? 100 : (effectiveBlesses / 25) * 100) ).toFixed(2) + "%";
                 curseWidth = ( (effectiveCurses >= 25 ? 100 : (effectiveCurses / 25) * 100) ).toFixed(2) + "%";
-
-                console.log("Show run");
-                toggleButton.text("Show all");
-                console.log(`Updated show all attribute to: ${toggleButton.attr(ATTRIBUTE_SHOW_ALL)}`);
             }
+            updateToggleButtonDisplay(isShowingAll(widgetState));
             console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}, blurse: ${blurseWidth}`);
             
             // trigger the display change
@@ -355,7 +348,7 @@ function updateDisplay(widgetState, showAnimate) {
 }
 
 function getCountFromState(widgetState, keyName) {
-    if (isShowingAll()) {
+    if (isShowingAll(widgetState)) {
         return getOrDefaultCount(widgetState.allTime[keyName]);
     } else {
         return getOrDefaultCount(widgetState.current[keyName]);
@@ -382,6 +375,19 @@ function getCurseInfoValue() {
 
 function getBlurseInfoValue() {
     return $("span.blurse-info-value");
+}
+
+function updateToggleButtonDisplay(showAll) {
+    const toggleButton = $("#all-time-toggle");
+    if (showAll) {
+        console.log("Show all");
+        toggleButton.text("Show run");
+        console.log(`Updated show all attribute to: ${showAll}`);
+    } else {
+        console.log("Show run");
+        toggleButton.text("Show all");
+        console.log(`Updated show all attribute to: ${showAll}`);
+    }
 }
 
 function animateChange(ele, currentWidth, targetWidth, durationOfAnimation) {
