@@ -56,15 +56,11 @@ body {
 }
 
 .container {
-    height: 100%;
-    width: 100%;
-    height: 100%;
-    width: 100%;
     margin: 0;
     padding: 0;
     /* These dimensions were used during testing fyi */
-    /* height: 125px;
-    width: 400px; */
+    height: 125px;
+    width: 400px;
 }
 
 h1,h2,h3,h4,h5{
@@ -213,6 +209,20 @@ h1,h2,h3,h4,h5{
     width: 16px;
     fill: white;
     margin-right: 2px;
+}
+
+.reset-all-container div.outer-dialogue-window {
+    height: 100%;
+}
+
+.test-button-container,.reset-all-container {
+  width: 400px;
+  display: flex;
+  flex-direction: row;
+}
+
+.test-button-container .outer-dialogue-window, .reset-all-container .outer-dialogue-window {
+  width: 50%;
 }
 
 /**
