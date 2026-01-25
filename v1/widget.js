@@ -2,6 +2,11 @@ const blurseTheRun = "Blurse the Run";
 const blessTheRun = "Bless the Run";
 const curseTheRun = "Curse the Run";
 
+const glowForeverClass = 'animated-glow';
+const glowOnceClass = 'animated-glow-once';
+const curseGlowForeverClass = "animated-curse-glow";
+const curseGlowOnceClass = "animated-curse-glow-once"
+
 const numberOfBlessesKey = "numberOfBlesses";
 const numberOfCursesKey = "numberOfCurses";
 const numberOfBlursesKey = "numberOfBlurses";
@@ -39,6 +44,8 @@ const ATTRIBUTE_SHOW_ALL = "showAll";
 
 const animationDuration = 1000;
 const shortAnimationDuration = 1;
+
+let meterMaximum = 15;
 
 var lastWidgetState = null;
 initializeLastWidgetState();
@@ -205,6 +212,18 @@ window.addEventListener('onEventReceived', eventReceivedHandler);
 
 function widgetLoadHandler(obj) {
     // since we initialize from stored state we don't need to re-process recents
+    if (obj.detail != null
+        && obj.detail.fieldData != null
+        && obj.detail.fieldData.meterMaximum != null
+        && typeof obj.detail.fieldData.meterMaximum === 'number')
+    {
+        if (!Number.isInteger(meterMaximum)) {
+            meterMaximum = Math.floor(meterMaximum);
+        }
+        if (Number.isInteger(meterMaximum)) {
+            meterMaximum = obj.detail.fieldData.meterMaximum;
+        }
+    }
     try {
         SE_API.store.get(STORE_KEY_NAME).then(retrieved => {
             console.log(`Initializing with retrieved widgetState from store: ${JSON.stringify(retrieved)}`);
@@ -304,11 +323,11 @@ function updateDisplay(widgetState, showAnimate) {
         if (total === 0) {
             console.log("No blesses, curses, or blurses. Hopefully this is expected in this scenario...");
             // trigger the display change
-            animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime);
-            animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime);
+            animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime, "bless");
+            animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime, "curse");
             getBlessInfoValue().text(0);
             getCurseInfoValue().text(0);
-            getBlurseInfoValue().text(0);
+            getBlurseInfoValue().text("0/0");
             updateToggleButtonDisplay(isShowingAll(widgetState));
         } else {
             const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
@@ -320,27 +339,25 @@ function updateDisplay(widgetState, showAnimate) {
 
             var blessWidth;
             var curseWidth;
-            var blurseWidth;
             if (isShowingAll(widgetState)) {
                 console.log(`Showing all so meter length is relative`);
                 blessWidth = ((effectiveBlesses / effectiveTotal) * 100).toFixed(2) + "%";
                 curseWidth = ((effectiveCurses / effectiveTotal) * 100).toFixed(2) + "%";
             } else {
-                console.log(`Showing run so meter length is based on 25 max`);
-                blessWidth = ( (effectiveBlesses >= 25 ? 100 : (effectiveBlesses / 25) * 100) ).toFixed(2) + "%";
-                curseWidth = ( (effectiveCurses >= 25 ? 100 : (effectiveCurses / 25) * 100) ).toFixed(2) + "%";
+                console.log(`Showing run so meter length is based on ${meterMaximum} max`);
+                blessWidth = ( (effectiveBlesses >= meterMaximum ? 100 : (effectiveBlesses / meterMaximum) * 100) ).toFixed(2) + "%";
+                curseWidth = ( (effectiveCurses >= meterMaximum ? 100 : (effectiveCurses / meterMaximum) * 100) ).toFixed(2) + "%";
             }
             updateToggleButtonDisplay(isShowingAll(widgetState));
-            console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}, blurse: ${blurseWidth}`);
+            console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}`);
             
             // trigger the display change
-            animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime);
-            animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime);
-            // update lastCount attributes
+            animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime, "bless");
+            animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime, "curse");
             // update lastCount attributes
             getBlessInfoValue().text(numberOfBlesses);
             getCurseInfoValue().text(numberOfCurses);
-            getBlurseInfoValue().text(numberOfBlurses);
+            getBlurseInfoValue().text(`${numberOfBlursesThatBlessed}/${numberOfBlursesThatCursed}`); // numberOfBlurses
         }
     } else {
         console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
@@ -390,17 +407,51 @@ function updateToggleButtonDisplay(showAll) {
     }
 }
 
-function animateChange(ele, currentWidth, targetWidth, durationOfAnimation) {
+function animateChange(ele, currentWidth, targetWidth, durationOfAnimation, type) {
+    if ("100.00%" === targetWidth) {
+        animateGlowForever(ele, type);
+    } else {
+        animateGlowOnce(ele, type);
+    }
+    // animate the width
     ele.animate(
     [
-        { width: currentWidth }, // Start width
-        { width: targetWidth }  // End width
+        { width: currentWidth }, // Start width & color
+        { width: targetWidth } // End width 
     ],
     {
         duration: durationOfAnimation, // 1 second
         easing: 'ease-in-out', // Optional easing function
         fill: 'forwards' // Keep the final state after animation
     });
+}
+
+function animateGlowOnce(ele, type) {
+    var parent = ele.parentElement;
+    var handler = function() {
+        endGlowOnce(ele);
+    };
+    parent.addEventListener("animationend", handler, false);
+    parent.classList.add(glowOnceClass);
+}
+
+function animateGlowForever(ele) {
+    var parent = ele.parentElement;
+    if (parent.classList.contains('glowOnceClass')) {
+        endGlowOnce(ele);
+    }
+    if (!parent.classList.contains(glowForeverClass)) {
+        parent.classList.add(glowForeverClass);
+    }
+}
+
+function endGlowOnce(ele) {
+    ele.parentElement.removeEventListener("animationend", handler, false);
+    ele.parentElement.classList.remove(glowOnceClass);
+}
+
+function endGlowForever(ele) {
+    ele.parentElement.classList.remove(glowForeverClass);
 }
 
 //////////////////

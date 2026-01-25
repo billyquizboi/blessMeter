@@ -24,8 +24,11 @@
     --bgb: #6b6e87,#71767e,#c2c1c5,#c9c9cb,#ccc9cc,#c8c4c0,#7c7874,#c0bcb3,#020134;
     --f:25px;/* minimum font size */
   
-    --highlighted-text: #edd758;
-  
+    --bless-color: #0f0;
+    --curse-color: #FF3886;
+
+    --text-color: #ecedee;
+    --bless-glow: #f2c019;
   }
   
 * {
@@ -34,11 +37,11 @@
       overflow: hidden;
       font-weight: 400;
       font-style: normal;
-      color: #ecedee;
+      color: var(--text-color);
   }
   
 html {
-    color: #ecedee;
+    color: var(--text-color);
     margin: 0px;
     padding: 0px;
     text-shadow: 1px 1px #2d2a4b;
@@ -154,6 +157,10 @@ h1,h2,h3,h4,h5{
     justify-content: space-between;
 }
 
+.bless-container,.curse-container {
+    overflow: visible;
+}
+
 .meter,.meter-title {
     display: inline-block;
 }
@@ -181,15 +188,11 @@ h1,h2,h3,h4,h5{
 }
 
 .bless-container .meter-fill {
-    background-color: #0f0;
+    background-color: var(--bless-color);
 }
 
 .curse-container .meter-fill {
-    background-color: #FF3886;
-}
-
-.blurse-container .meter-fill {
-    background-color: #00D1FF;
+    background-color: var(--curse-color);
 }
 
 .info-container {
@@ -225,6 +228,63 @@ h1,h2,h3,h4,h5{
   width: 50%;
 }
 
+/* #00D1FF */
+@keyframes pulse {
+  from { box-shadow: 0 0px 0px var(--bless-glow); }
+  to { box-shadow: 0 0 10px var(--bless-glow); }
+}
+
+@keyframes pulse-curse {
+  from { box-shadow: 0 0px 0px var(--curse-color); }
+  to { box-shadow: 0 0 10px var(--curse-color); }
+}
+
+/* meter glows */
+.animated-glow {
+  animation: pulse 1s infinite alternate;
+}
+
+.animated-curse-glow {
+  animation: pulse-curse 1s infinite alternate;
+}
+
+.animated-glow-once {
+  animation: 1s ease-in-out 0s 1 alternate running pulse-once;
+  animation-iteration-count: 1;
+}
+    
+.animated-curse-glow-once {
+  animation: 1s ease-in-out 0s 1 alternate running pulse-curse-once;
+  animation-iteration-count: 1;
+}
+
+/* text glows */
+@keyframes text-glow {
+  from { color: var(--text-color);}
+  to { color: var(--bless-color); }
+}
+
+@keyframes text-curse-glow {
+  from { color: var(--text-color);}
+  to { color: var(--curse-color); }
+}
+
+.animated-text-glow {
+  animation: text-glow 1s infinite alternate;
+}
+
+.animated-text-curse-glow {
+  animation: text-curse-glow 1s infinite alternate;
+}
+
+.animated-text-glow-once {
+  animation: 1s ease-in-out 0s 1 alternate running text-glow;
+}
+
+.animated-text-curse-glow-once {
+  animation: 1s ease-in-out 0s 1 alternate running text-curse-glow;
+}
+  
 /**
 Font courtesy of https://fonts.google.com/specimen/Press+Start+2P?categoryFilters=Appearance:%2FTheme%2FTechno
 Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net), with Reserved Font Name "Press Start 2P".

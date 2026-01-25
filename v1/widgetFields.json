@@ -1,0 +1,7 @@
+{
+  "meterMaximum": {
+    "type": "number",
+    "label": "Meter maximum count to be filled",
+    "value": 15
+  }
+}
