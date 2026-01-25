@@ -23,6 +23,7 @@ It uses a font [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P
 - Overwrite the contents of the HTML tab in the stream elements custom code editor with the contents of [widget.html](./widget.html) 
 - Overwrite the contents of the CSS tab in the stream elements custom code editor with the contents of [widget.css](./widget.css)
 - Overwrite the contents of the JS tab in the stream elements custom code editor with the contents of [widget.js](./widget.js)
+- Overwrite the contents of the Fields in the stream elements custom code editor with the contents of [widgetFields.json](./widgetFields.json). This allows configuring how many redeems it takes to fill the meter display by editing the 'Meter maximum count to be filled' field.
 - Click DONE in the custom code editor and click the SAVE button in the top right
 
 ### One way to test on stream elements widget editor
