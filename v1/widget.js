@@ -427,22 +427,33 @@ function animateChange(ele, currentWidth, targetWidth, durationOfAnimation, type
 }
 
 function animateGlowOnce(ele, type) {
+    var classToUse = getGlowOnceClass(type);
     var parent = ele.parentElement;
     var handler = function() {
-        endGlowOnce(ele);
+        endGlowOnce(ele, classToUse);
     };
     parent.addEventListener("animationend", handler, false);
-    parent.classList.add(glowOnceClass);
+    parent.classList.add(classToUse);
 }
 
-function animateGlowForever(ele) {
+function animateGlowForever(ele, type) {
+    var classToUse = gletGlowForeverClass(type);
+
     var parent = ele.parentElement;
-    if (parent.classList.contains('glowOnceClass')) {
-        endGlowOnce(ele);
+    if (parent.classList.contains(classToUse)) {
+        endGlowOnce(ele, getGlowOnceClass(type));
     }
-    if (!parent.classList.contains(glowForeverClass)) {
-        parent.classList.add(glowForeverClass);
+    if (!parent.classList.contains(classToUse)) {
+        parent.classList.add(classToUse);
     }
+}
+
+function gletGlowForeverClass(type) {
+    return (type == 'bless' ? glowForeverClass : curseGlowForeverClass);
+}
+
+function getGlowOnceClass(type) {
+    return (type == 'bless' ? glowOnceClass : curseGlowOnceClass);
 }
 
 function endGlowOnce(ele) {

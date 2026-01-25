@@ -257,33 +257,6 @@ h1,h2,h3,h4,h5{
   animation: 1s ease-in-out 0s 1 alternate running pulse-curse-once;
   animation-iteration-count: 1;
 }
-
-/* text glows */
-@keyframes text-glow {
-  from { color: var(--text-color);}
-  to { color: var(--bless-color); }
-}
-
-@keyframes text-curse-glow {
-  from { color: var(--text-color);}
-  to { color: var(--curse-color); }
-}
-
-.animated-text-glow {
-  animation: text-glow 1s infinite alternate;
-}
-
-.animated-text-curse-glow {
-  animation: text-curse-glow 1s infinite alternate;
-}
-
-.animated-text-glow-once {
-  animation: 1s ease-in-out 0s 1 alternate running text-glow;
-}
-
-.animated-text-curse-glow-once {
-  animation: 1s ease-in-out 0s 1 alternate running text-curse-glow;
-}
   
 /**
 Font courtesy of https://fonts.google.com/specimen/Press+Start+2P?categoryFilters=Appearance:%2FTheme%2FTechno
