@@ -3,9 +3,10 @@ const blessTheRun = "Bless the Run";
 const curseTheRun = "Curse the Run";
 
 const glowForeverClass = 'animated-glow';
-const glowOnceClass = 'animated-glow-once';
 const curseGlowForeverClass = "animated-curse-glow";
-const curseGlowOnceClass = "animated-curse-glow-once"
+
+const TYPE_BLESS = "bless";
+const TYPE_CURSE = "curse";
 
 const numberOfBlessesKey = "numberOfBlesses";
 const numberOfCursesKey = "numberOfCurses";
@@ -323,8 +324,8 @@ function updateDisplay(widgetState, showAnimate) {
         if (total === 0) {
             console.log("No blesses, curses, or blurses. Hopefully this is expected in this scenario...");
             // trigger the display change
-            animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime, "bless");
-            animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime, "curse");
+            animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime, TYPE_BLESS);
+            animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime, TYPE_CURSE);
             getBlessInfoValue().text(0);
             getCurseInfoValue().text(0);
             getBlurseInfoValue().text("0/0");
@@ -352,8 +353,8 @@ function updateDisplay(widgetState, showAnimate) {
             console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}`);
             
             // trigger the display change
-            animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime, "bless");
-            animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime, "curse");
+            animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime, TYPE_BLESS);
+            animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime, TYPE_CURSE);
             // update lastCount attributes
             getBlessInfoValue().text(numberOfBlesses);
             getCurseInfoValue().text(numberOfCurses);
@@ -411,7 +412,7 @@ function animateChange(ele, currentWidth, targetWidth, durationOfAnimation, type
     if ("100.00%" === targetWidth) {
         animateGlowForever(ele, type);
     } else {
-        animateGlowOnce(ele, type);
+        endGlowForever(ele, type);
     }
     // animate the width
     ele.animate(
@@ -426,43 +427,21 @@ function animateChange(ele, currentWidth, targetWidth, durationOfAnimation, type
     });
 }
 
-function animateGlowOnce(ele, type) {
-    var classToUse = getGlowOnceClass(type);
-    var parent = ele.parentElement;
-    var handler = function() {
-        endGlowOnce(ele, classToUse);
-    };
-    parent.addEventListener("animationend", handler, false);
-    parent.classList.add(classToUse);
-}
-
 function animateGlowForever(ele, type) {
     var classToUse = gletGlowForeverClass(type);
 
     var parent = ele.parentElement;
-    if (parent.classList.contains(classToUse)) {
-        endGlowOnce(ele, getGlowOnceClass(type));
-    }
     if (!parent.classList.contains(classToUse)) {
         parent.classList.add(classToUse);
     }
 }
 
 function gletGlowForeverClass(type) {
-    return (type == 'bless' ? glowForeverClass : curseGlowForeverClass);
+    return (type == TYPE_BLESS ? glowForeverClass : curseGlowForeverClass);
 }
 
-function getGlowOnceClass(type) {
-    return (type == 'bless' ? glowOnceClass : curseGlowOnceClass);
-}
-
-function endGlowOnce(ele) {
-    ele.parentElement.removeEventListener("animationend", handler, false);
-    ele.parentElement.classList.remove(glowOnceClass);
-}
-
-function endGlowForever(ele) {
-    ele.parentElement.classList.remove(glowForeverClass);
+function endGlowForever(ele, type) {
+    ele.parentElement.classList.remove(gletGlowForeverClass(type));
 }
 
 //////////////////
