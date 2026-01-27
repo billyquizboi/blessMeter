@@ -1,3 +1,5 @@
+// TODO: When a curse / blurse / bless is redeemed show FF6 char SVG(s) animated for that
+
 const blurseTheRun = "Blurse the Run";
 const blessTheRun = "Bless the Run";
 const curseTheRun = "Curse the Run";
@@ -15,17 +17,30 @@ const numberOfBlursesKey = "numberOfBlurses";
 const numberOfBlursesThatCursedKey = "numberOfBlursesThatCursed";
 const numberOfBlursesThatBlessedKey = "numberOfBlursesThatBlessed";
 
+const numberOfBlessesPreResetKey = "numberOfBlessesPreReset";
+const numberOfCursesPreResetKey = "numberOfCursesPreReset";
+const numberOfBlursesPreResetKey = "numberOfBlursesPreReset";
+const numberOfBlursesThatCursedPreResetKey = "numberOfBlursesThatCursedPreReset";
+const numberOfBlursesThatBlessedPreResetKey = "numberOfBlursesThatBlessedPreReset";
+
 // for testing use only you can set this to true
 // don't use live or meter will change on every redeem of any type
 const matchAnyRedemptionName = false;
 
 const initialWidgetState = {
     current: {
+        // primary functionality fields
         numberOfBlesses: 0,
         numberOfCurses: 0,
         numberOfBlurses: 0,
         numberOfBlursesThatCursed: 0,
-        numberOfBlursesThatBlessed: 0
+        numberOfBlursesThatBlessed: 0,
+        // resetFunctionalityRelatedFields
+        numberOfBlessesPreReset: 0,
+        numberOfCursesPreReset: 0,
+        numberOfBlursesPreReset: 0,
+        numberOfBlursesThatCursedPreReset: 0,
+        numberOfBlursesThatBlessedPreReset: 0
     },
     allTime: {
         numberOfBlesses: 0,
@@ -125,10 +140,62 @@ function incrementState(toIncrement, showAll) {
         obj.allTime[toIncrement] += 1;
         obj.lastUpdated = new Date();
         obj[ATTRIBUTE_SHOW_ALL] = showAll;
-        SE_API.store.set(STORE_KEY_NAME, obj);
+
+        if (bothMetersAreAtMax(obj)) {
+            const newState = resetMetersButKeepCurrentState(obj);
+            SE_API.store.set(STORE_KEY_NAME, newState);
+        } else {
+            SE_API.store.set(STORE_KEY_NAME, obj);
+        }
+
         // the SE.store.set function emits an onEventReceived for every custom widget
         lastWidgetState = obj;
     });
+}
+
+function resetMetersButKeepCurrentState(widgetState) {
+    if (!widgetState | widgetState.current == undefined) {
+        console.log(`Passed invalid widget state! Cannot reset meters and keep state ${widgetState}`);
+        return;
+    }
+
+    const numberOfBlesses = getOrDefaultCount(widgetState.current[numberOfBlessesKey]);
+    const numberOfCurses = getOrDefaultCount(widgetState.current[numberOfCursesKey]);
+    const numberOfBlurses = getOrDefaultCount(widgetState.current[numberOfBlursesKey]);
+    const numberOfBlursesThatBlessed = getOrDefaultCount(widgetState.current[numberOfBlursesThatBlessedKey]);
+    const numberOfBlursesThatCursed = getOrDefaultCount(widgetState.current[numberOfBlursesThatCursedKey]);
+    
+    let numberOfBlessesPreReset = getOrDefaultCount(widgetState.current[numberOfBlessesPreResetKey]);
+    numberOfBlessesPreReset += numberOfBlesses;
+    let numberOfCursesPreReset = getOrDefaultCount(widgetState.current[numberOfCursesPreResetKey]);
+    numberOfCursesPreReset += numberOfCurses;
+    let numberOfBlursesPreReset = getOrDefaultCount(widgetState.current[numberOfBlursesPreResetKey]);
+    numberOfBlursesPreReset += numberOfBlurses;
+    let numberOfBlursesThatBlessedPreReset = getOrDefaultCount(widgetState.current[numberOfBlursesThatBlessedPreResetKey]);
+    numberOfBlursesThatBlessedPreReset += numberOfBlursesThatBlessed;
+    let numberOfBlursesThatCursedPreReset = getOrDefaultCount(widgetState.current[numberOfBlursesThatCursedPreResetKey]);
+    numberOfBlursesThatCursedPreReset += numberOfBlursesThatCursed;
+
+    const newState = {};
+    newState.current = {};
+
+    newState.lastUpdated = new Date();
+    newState.allTime = widgetState.allTime;
+    newState.showAll = widgetState.showAll;
+
+    newState.current[numberOfBlessesKey] = 0;
+    newState.current[numberOfCursesKey] = 0;
+    newState.current[numberOfBlursesKey] = 0;
+    newState.current[numberOfBlursesThatBlessedKey] = 0;
+    newState.current[numberOfBlursesThatCursedKey] = 0;
+
+    newState.current[numberOfBlessesPreResetKey] = numberOfBlessesPreReset;
+    newState.current[numberOfCursesPreResetKey] = numberOfCursesPreReset;
+    newState.current[numberOfBlursesPreResetKey] = numberOfBlursesPreReset;
+    newState.current[numberOfBlursesThatBlessedPreResetKey] = numberOfBlursesThatBlessedPreReset;
+    newState.current[numberOfBlursesThatCursedPreResetKey] = numberOfBlursesThatCursedPreReset;
+
+    return newState;
 }
 
 function storeHasBeenInitialized(obj) {
@@ -277,6 +344,19 @@ function handleRedemption(detail) {
     }
 }
 
+function bothMetersAreAtMax(widgetState) {
+    const numberOfBlesses = getOrDefaultCount(widgetState.current[numberOfBlessesKey]);
+    const numberOfCurses = getOrDefaultCount(widgetState.current[numberOfCursesKey]);
+
+    const numberOfBlursesThatBlessed = getOrDefaultCount(widgetState.current[numberOfBlursesThatBlessedKey]);
+    const numberOfBlursesThatCursed = getOrDefaultCount(widgetState.current[numberOfBlursesThatCursedKey]);
+
+    const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
+    const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
+
+    return effectiveBlesses >= meterMaximum && effectiveCurses >= meterMaximum;
+}
+
 function getRedemptionName(detail) {
     var redemptionName = null;
     if (detail == undefined) {
@@ -318,6 +398,11 @@ function updateDisplay(widgetState, showAnimate) {
         const total = numberOfBlesses + numberOfCurses + numberOfBlurses;
         const animationTime = showAnimate ? animationDuration : shortAnimationDuration;
 
+        const preResetBlesses = getOrDefaultCount(widgetState.current[numberOfBlessesPreResetKey]);
+        const preResetCurses = getOrDefaultCount(widgetState.current[numberOfCursesPreResetKey]);
+        const preResetBlursesThatBlessed = getOrDefaultCount(widgetState.current[numberOfBlursesThatBlessedPreResetKey]);
+        const preResetBlursesThatCursed = getOrDefaultCount(widgetState.current[numberOfBlursesThatCursedPreResetKey]);
+
         const blessMeterFill = getBlessMeterFill();
         const curseMeterFill = getCurseMeterFill();
 
@@ -326,9 +411,9 @@ function updateDisplay(widgetState, showAnimate) {
             // trigger the display change
             animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime, TYPE_BLESS);
             animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime, TYPE_CURSE);
-            getBlessInfoValue().text(0);
-            getCurseInfoValue().text(0);
-            getBlurseInfoValue().text("0/0");
+            getBlessInfoValue().text(preResetBlesses);
+            getCurseInfoValue().text(preResetCurses);
+            getBlurseInfoValue().text(`${preResetBlursesThatBlessed} / ${preResetBlursesThatCursed}`);
             updateToggleButtonDisplay(isShowingAll(widgetState));
         } else {
             const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
@@ -356,9 +441,19 @@ function updateDisplay(widgetState, showAnimate) {
             animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime, TYPE_BLESS);
             animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime, TYPE_CURSE);
             // update lastCount attributes
-            getBlessInfoValue().text(numberOfBlesses);
-            getCurseInfoValue().text(numberOfCurses);
-            getBlurseInfoValue().text(`${numberOfBlursesThatBlessed}/${numberOfBlursesThatCursed}`); // numberOfBlurses
+            let blessCounterText = numberOfBlesses;
+            let curseCounterText = numberOfCurses;
+            let blurseThatBlessedCounterText = numberOfBlursesThatBlessed;
+            let blurseThatCursedCounterText = numberOfBlursesThatCursed;
+            if (!isShowingAll(widgetState)) {
+                blessCounterText += preResetBlesses;
+                curseCounterText += preResetCurses;
+                blurseThatBlessedCounterText += preResetBlursesThatBlessed;
+                blurseThatCursedCounterText += preResetBlursesThatCursed;
+            }
+            getBlessInfoValue().text(blessCounterText);
+            getCurseInfoValue().text(curseCounterText);
+            getBlurseInfoValue().text(`${blurseThatBlessedCounterText}/${blurseThatCursedCounterText}`);
         }
     } else {
         console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
@@ -457,7 +552,12 @@ function resetCurrentState() {
             numberOfBlurses: 0,
             numberOfBlursesThatCursed: 0,
             numberOfBlursesThatBlessed: 0,
-            showAll: false
+            showAll: false,
+            numberOfBlessesPreReset: 0,
+            numberOfCursesPreReset: 0,
+            numberOfBlursesPreReset: 0,
+            numberOfBlursesThatCursedPreReset: 0,
+            numberOfBlursesThatBlessedPreReset: 0
         };
         SE_API.store.set(STORE_KEY_NAME, obj);
         lastWidgetState = obj;
