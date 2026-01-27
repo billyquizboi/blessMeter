@@ -257,7 +257,14 @@ h1,h2,h3,h4,h5{
   animation: 1s ease-in-out 0s 1 alternate running pulse-curse-once;
   animation-iteration-count: 1;
 }
-  
+
+
+svg.char-svg {
+  position: absolute;
+  left: 85px;
+  visibility: hidden;
+}
+
 /**
 Font courtesy of https://fonts.google.com/specimen/Press+Start+2P?categoryFilters=Appearance:%2FTheme%2FTechno
 Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net), with Reserved Font Name "Press Start 2P".
