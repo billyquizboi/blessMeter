@@ -78,7 +78,9 @@ function getCurseSvg() {
 }
 
 function getBlurseSvg() {
-    return $("svg.blurse-svg");
+    // if number of blurse SVGs changes this '9' would have to change
+    var randInt = Math.floor(Math.random() * 9) + 1
+    return $(`svg.blurse-svg-${randInt}`);
 }
 
 function initializeLastWidgetState() {
@@ -115,7 +117,7 @@ function toggleShowAllState() {
     });
 }
 
-function incrementState(toIncrement, showAll) {
+function incrementState(toIncrement) {
     console.log(`Incrementing ${toIncrement}`);
     SE_API.store.get(STORE_KEY_NAME).then(obj => {
         console.log(`Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
@@ -146,7 +148,6 @@ function incrementState(toIncrement, showAll) {
         obj.current[toIncrement] += 1;
         obj.allTime[toIncrement] += 1;
         obj.lastUpdated = new Date();
-        obj[ATTRIBUTE_SHOW_ALL] = showAll;
 
         if (bothMetersAreAtMax(obj)) {
             const newState = resetMetersButKeepCurrentState(obj);
@@ -329,17 +330,17 @@ function handleRedemption(detail) {
         if (redemptionName == blessTheRun) {
             console.log(`Bless it: Verily let this run be bless-ed`);
             showCharSvg(TYPE_BLESS);
-            incrementState(numberOfBlessesKey, false);
+            incrementState(numberOfBlessesKey);
             setTimeout(SE_API.resumeQueue, 1001);
         } else if (redemptionName == curseTheRun) {
             console.log(`Curse it: I say unto you Locke shall not steal this run.`);
             showCharSvg(TYPE_CURSE);
-            incrementState(numberOfCursesKey, false);
+            incrementState(numberOfCursesKey);
             setTimeout(SE_API.resumeQueue, 1001);
         } else if (redemptionName == blurseTheRun) {
             console.log(`Blurse it - who knows? Maybe gau, maybe no gau. Maybe black belt, maybe trench death.`);
             showCharSvg(TYPE_BLURSE);
-            incrementState(numberOfBlursesKey, false);
+            incrementState(numberOfBlursesKey);
             setTimeout(SE_API.resumeQueue, 1001);
         } else {
             console.log(`Not handling redemption ${redemptionName}`);
