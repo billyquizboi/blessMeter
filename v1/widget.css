@@ -262,7 +262,8 @@ h1,h2,h3,h4,h5{
 svg.char-svg {
   position: absolute;
   left: 85px;
-  visibility: hidden;
+  display: none;
+  /* visibility: hidden; */
 }
 
 /**

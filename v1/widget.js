@@ -1,5 +1,3 @@
-// TODO: When a curse / blurse / bless is redeemed show FF6 char SVG(s) animated for that
-
 const blurseTheRun = "Blurse the Run";
 const blessTheRun = "Bless the Run";
 const curseTheRun = "Curse the Run";
@@ -9,6 +7,7 @@ const curseGlowForeverClass = "animated-curse-glow";
 
 const TYPE_BLESS = "bless";
 const TYPE_CURSE = "curse";
+const TYPE_BLURSE = "blurse";
 
 const numberOfBlessesKey = "numberOfBlesses";
 const numberOfCursesKey = "numberOfCurses";
@@ -22,10 +21,6 @@ const numberOfCursesPreResetKey = "numberOfCursesPreReset";
 const numberOfBlursesPreResetKey = "numberOfBlursesPreReset";
 const numberOfBlursesThatCursedPreResetKey = "numberOfBlursesThatCursedPreReset";
 const numberOfBlursesThatBlessedPreResetKey = "numberOfBlursesThatBlessedPreReset";
-
-// for testing use only you can set this to true
-// don't use live or meter will change on every redeem of any type
-const matchAnyRedemptionName = false;
 
 const initialWidgetState = {
     current: {
@@ -72,6 +67,18 @@ function getBlessMeterFill() {
 
 function getCurseMeterFill() {
     return $("div.curse-container div.meter div.meter-fill");
+}
+
+function getBlessSvg() {
+    return $("svg.bless-svg");
+}
+
+function getCurseSvg() {
+    return $("svg.curse-svg");
+}
+
+function getBlurseSvg() {
+    return $("svg.blurse-svg");
 }
 
 function initializeLastWidgetState() {
@@ -321,26 +328,56 @@ function handleRedemption(detail) {
         console.log(`Redemption name is ${redemptionName}`);
         if (redemptionName == blessTheRun) {
             console.log(`Bless it: Verily let this run be bless-ed`);
+            showCharSvg(TYPE_BLESS);
             incrementState(numberOfBlessesKey, false);
             setTimeout(SE_API.resumeQueue, 1001);
         } else if (redemptionName == curseTheRun) {
             console.log(`Curse it: I say unto you Locke shall not steal this run.`);
+            showCharSvg(TYPE_CURSE);
             incrementState(numberOfCursesKey, false);
             setTimeout(SE_API.resumeQueue, 1001);
         } else if (redemptionName == blurseTheRun) {
             console.log(`Blurse it - who knows? Maybe gau, maybe no gau. Maybe black belt, maybe trench death.`);
+            showCharSvg(TYPE_BLURSE);
             incrementState(numberOfBlursesKey, false);
             setTimeout(SE_API.resumeQueue, 1001);
-        } else if (matchAnyRedemptionName) {
-            // This is for testing the widget -- can make a random function or just always curse/always bless or whatever
-            // Change 'matchAnyRedemptionName' variable at the top to one of true to use this, else should be false
-            // add if wanted for testing
-            incrementState(numberOfBlursesKey. false);
-            setTimeout(SE_API.resumeQueue, 1001);
+        } else {
+            console.log(`Not handling redemption ${redemptionName}`);
         }
     } else {
         // we fukt
         console.log(`Feels bad man. Redemption name not located in detail ${JSON.stringify(detail)}`);
+    }
+}
+
+function showCharSvg(type) {
+    let target = null;
+    let targets = [
+        getBlessSvg(),
+        getCurseSvg(),
+        getBlurseSvg()
+    ];
+    if (type === TYPE_BLESS) {
+        target = targets[0];
+    } else if (type === TYPE_CURSE) {
+        target = targets[1];
+    } else if (type === TYPE_BLURSE) {
+        target = targets[2];
+    } else {
+        console.log(`Unable to locate svg target for type '${type}'`);
+        return;
+    }
+    console.log(`For type '${type}' located target ${JSON.stringify(target.length > 0 ? target.get(0) : "None Found!")}`);
+    if (target && target.length > 0) {
+        console.log(`Showing ${JSON.stringify(target.get(0))}`);
+        target.show({
+            "duration": 0,
+            "queue": true,
+            "complete": function() {
+                console.log(`Animation complete: hiding ${JSON.stringify($(this))}`);
+                //const node = $(this);
+                setTimeout(() => $(this).hide(), 800);
+            }});
     }
 }
 
