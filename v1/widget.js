@@ -57,6 +57,7 @@ const animationDuration = 1000;
 const shortAnimationDuration = 1;
 
 let meterMaximum = 15;
+let showChars = true;
 
 var lastWidgetState = null;
 initializeLastWidgetState();
@@ -289,15 +290,19 @@ window.addEventListener('onEventReceived', eventReceivedHandler);
 function widgetLoadHandler(obj) {
     // since we initialize from stored state we don't need to re-process recents
     if (obj.detail != null
-        && obj.detail.fieldData != null
-        && obj.detail.fieldData.meterMaximum != null
-        && typeof obj.detail.fieldData.meterMaximum === 'number')
+        && obj.detail.fieldData != null)
     {
-        if (!Number.isInteger(meterMaximum)) {
-            meterMaximum = Math.floor(meterMaximum);
+        if (obj.detail.fieldData.meterMaximum != null && typeof obj.detail.fieldData.meterMaximum === 'number') {
+            if (!Number.isInteger(meterMaximum)) {
+                meterMaximum = Math.floor(meterMaximum);
+            }
+            if (Number.isInteger(meterMaximum)) {
+                meterMaximum = obj.detail.fieldData.meterMaximum;
+            }
         }
-        if (Number.isInteger(meterMaximum)) {
-            meterMaximum = obj.detail.fieldData.meterMaximum;
+
+        if (obj.detail.fieldData.showChars != null && typeof obj.detail.fieldData.showChars === 'boolean') {
+            showChars = obj.detail.fieldData.showChars;
         }
     }
     try {
@@ -352,6 +357,10 @@ function handleRedemption(detail) {
 }
 
 function showCharSvg(type) {
+    if (!showChars) {
+        console.log("Not running the showChars functionality");
+        return;
+    }
     let target = null;
     let targets = [
         getBlessSvg(),

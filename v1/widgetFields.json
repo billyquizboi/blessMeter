@@ -3,5 +3,10 @@
     "type": "number",
     "label": "Meter maximum count to be filled",
     "value": 15
+  },
+  "showChars": {
+    "type": "checkbox",
+    "label": "Show chars for redeems?",
+    "value": true
   }
 }
