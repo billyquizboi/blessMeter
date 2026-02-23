@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "module": "commonjs",
+    "lib": ["ES6", "DOM"],
+    "strict": true,
+    "esModuleInterop": true,
+    "types": ["jest", "node", "jquery"],
+    "sourceMap": false,
+    "declaration": false
+  },
+  "include": ["v1/se-api.d.ts", "v1/widget.test.ts"]
+}
