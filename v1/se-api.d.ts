@@ -109,34 +109,18 @@ interface SECustomEvent extends Event {
 // ============================================================
 
 // DOM helpers — return jQuery-wrapped elements
-type GetBlessMeterFillFn  = () => JQuery<HTMLElement>;
-type GetCurseMeterFillFn  = () => JQuery<HTMLElement>;
-type GetBlessSvgFn        = () => JQuery<HTMLElement>;
-type GetCurseSvgFn        = () => JQuery<HTMLElement>;
-type GetBlurseSvgFn       = () => JQuery<HTMLElement>;
-type GetBlessInfoValueFn  = () => JQuery<HTMLElement>;
-type GetCurseInfoValueFn  = () => JQuery<HTMLElement>;
-type GetBlurseInfoValueFn = () => JQuery<HTMLElement>;
+type JQueryGetterFn  = () => JQuery<HTMLElement>;
 
 // Void state / side-effect functions
-type InitializeLastWidgetStateFn        = () => void;
-type ToggleShowAllStateFn               = () => void;
+type NoArgVoidFunction                  = () => void;
 type IncrementStateFn                   = (toIncrement: string) => void;
 type OptionallyInitializeNumericFieldFn = (obj: WidgetState, fieldName: string) => void;
-type EventReceivedHandlerFn             = (event: Event) => void;
-type WidgetLoadHandlerFn                = (event: Event) => void;
+type EventHandlerFn                     = (event: Event) => void;
 type HandleRedemptionFn                 = (detail: SEEventDetail) => void;
 type ShowCharSvgFn                      = (type: string) => void;
 type UpdateToggleButtonDisplayFn        = (showAll: boolean) => void;
-type AnimateGlowForeverFn               = (ele: HTMLElement, type: string) => void;
-type EndGlowForeverFn                   = (ele: HTMLElement, type: string) => void;
+type GlowFn                             = (ele: HTMLElement, type: string) => void;
 type UpdateDisplayFn                    = (widgetState: WidgetState | null, showAnimate: boolean) => void;
-type ResetCurrentStateFn                = () => void;
-type ResetAllTimeStateFn                = () => void;
-type ToggleAllTimeFn                    = () => void;
-type TestBlessFn                        = () => void;
-type TestCurseFn                        = () => void;
-type TestBlurseFn                       = () => void;
 
 // Predicate / boolean functions
 type StoreHasBeenInitializedFn = (obj: WidgetState | null) => obj is WidgetState;

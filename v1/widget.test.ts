@@ -45,34 +45,34 @@ declare global {
 declare global {
   interface Window {
     // DOM helpers
-    getBlessMeterFill: GetBlessMeterFillFn;
-    getCurseMeterFill: GetCurseMeterFillFn;
-    getBlessSvg: GetBlessSvgFn;
-    getCurseSvg: GetCurseSvgFn;
-    getBlurseSvg: GetBlurseSvgFn;
-    getBlessInfoValue: GetBlessInfoValueFn;
-    getCurseInfoValue: GetCurseInfoValueFn;
-    getBlurseInfoValue: GetBlurseInfoValueFn;
+    getBlessMeterFill: JQueryGetterFn;
+    getCurseMeterFill: JQueryGetterFn;
+    getBlessSvg: JQueryGetterFn;
+    getCurseSvg: JQueryGetterFn;
+    getBlurseSvg: JQueryGetterFn;
+    getBlessInfoValue: JQueryGetterFn;
+    getCurseInfoValue: JQueryGetterFn;
+    getBlurseInfoValue: JQueryGetterFn;
     // State management
-    initializeLastWidgetState: InitializeLastWidgetStateFn;
-    toggleShowAllState: ToggleShowAllStateFn;
+    initializeLastWidgetState: NoArgVoidFunction;
+    toggleShowAllState: NoArgVoidFunction;
     incrementState: IncrementStateFn;
     optionallyInitializeNumericField: OptionallyInitializeNumericFieldFn;
-    resetCurrentState: ResetCurrentStateFn;
-    resetAllTimeState: ResetAllTimeStateFn;
+    resetCurrentState: NoArgVoidFunction;
+    resetAllTimeState: NoArgVoidFunction;
     resetMetersButKeepCurrentState: ResetMetersButKeepCurrentStateFn;
     // Event handlers
-    eventReceivedHandler: EventReceivedHandlerFn;
-    widgetLoadHandler: WidgetLoadHandlerFn;
+    eventReceivedHandler: EventHandlerFn;
+    widgetLoadHandler: EventHandlerFn;
     handleRedemption: HandleRedemptionFn;
     // Display
     updateDisplay: UpdateDisplayFn;
     updateToggleButtonDisplay: UpdateToggleButtonDisplayFn;
     showCharSvg: ShowCharSvgFn;
     animateChange: AnimateChangeFn;
-    animateGlowForever: AnimateGlowForeverFn;
-    endGlowForever: EndGlowForeverFn;
-    toggleAllTime: ToggleAllTimeFn;
+    animateGlowForever: GlowFn;
+    endGlowForever: GlowFn;
+    toggleAllTime: NoArgVoidFunction;
     // Predicates
     storeHasBeenInitialized: StoreHasBeenInitializedFn;
     canIncrement: CanIncrementFn;
@@ -85,9 +85,9 @@ declare global {
     gletGlowForeverClass: GletGlowForeverClassFn;
     mockRedeemEvent: MockRedeemEventFn;
     // Test helpers
-    testBless: TestBlessFn;
-    testCurse: TestCurseFn;
-    testBlurse: TestBlurseFn;
+    testBless: NoArgVoidFunction;
+    testCurse: NoArgVoidFunction;
+    testBlurse: NoArgVoidFunction;
   }
 }
 
