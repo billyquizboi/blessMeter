@@ -7,16 +7,18 @@ const curseGlowForeverClass = "animated-curse-glow";
 const TYPE_BLESS = "bless";
 const TYPE_CURSE = "curse";
 const TYPE_BLURSE = "blurse";
-const numberOfBlessesKey = "numberOfBlesses";
-const numberOfCursesKey = "numberOfCurses";
-const numberOfBlursesKey = "numberOfBlurses";
-const numberOfBlursesThatCursedKey = "numberOfBlursesThatCursed";
-const numberOfBlursesThatBlessedKey = "numberOfBlursesThatBlessed";
-const numberOfBlessesPreResetKey = "numberOfBlessesPreReset";
-const numberOfCursesPreResetKey = "numberOfCursesPreReset";
-const numberOfBlursesPreResetKey = "numberOfBlursesPreReset";
-const numberOfBlursesThatCursedPreResetKey = "numberOfBlursesThatCursedPreReset";
-const numberOfBlursesThatBlessedPreResetKey = "numberOfBlursesThatBlessedPreReset";
+const CurrentStateKeys = {
+    numberOfBlesses: "numberOfBlesses",
+    numberOfCurses: "numberOfCurses",
+    numberOfBlurses: "numberOfBlurses",
+    numberOfBlursesThatCursed: "numberOfBlursesThatCursed",
+    numberOfBlursesThatBlessed: "numberOfBlursesThatBlessed",
+    numberOfBlessesPreReset: "numberOfBlessesPreReset",
+    numberOfCursesPreReset: "numberOfCursesPreReset",
+    numberOfBlursesPreReset: "numberOfBlursesPreReset",
+    numberOfBlursesThatCursedPreReset: "numberOfBlursesThatCursedPreReset",
+    numberOfBlursesThatBlessedPreReset: "numberOfBlursesThatBlessedPreReset",
+};
 // Lines 25–50 in original: object literal + separate lastUpdated assignment merged here
 const initialWidgetState = {
     current: {
@@ -118,18 +120,18 @@ function incrementState(toIncrement) {
             obj = initialWidgetState;
         }
         // hanldes blurses
-        if (toIncrement == numberOfBlursesKey) {
+        if (toIncrement == CurrentStateKeys.numberOfBlurses) {
             if (Math.random() < 0.5) {
                 // blessed af
-                optionallyInitializeNumericField(obj, numberOfBlursesThatBlessedKey);
-                obj.current[numberOfBlursesThatBlessedKey] += 1;
-                obj.allTime[numberOfBlursesThatBlessedKey] += 1;
+                optionallyInitializeNumericField(obj, CurrentStateKeys.numberOfBlursesThatBlessed);
+                obj.current[CurrentStateKeys.numberOfBlursesThatBlessed] += 1;
+                obj.allTime[CurrentStateKeys.numberOfBlursesThatBlessed] += 1;
             }
             else {
                 // curse it bby
-                optionallyInitializeNumericField(obj, numberOfBlursesThatCursedKey);
-                obj.current[numberOfBlursesThatCursedKey] += 1;
-                obj.allTime[numberOfBlursesThatCursedKey] += 1;
+                optionallyInitializeNumericField(obj, CurrentStateKeys.numberOfBlursesThatCursed);
+                obj.current[CurrentStateKeys.numberOfBlursesThatCursed] += 1;
+                obj.allTime[CurrentStateKeys.numberOfBlursesThatCursed] += 1;
             }
         }
         obj.current[toIncrement] += 1;
@@ -155,16 +157,16 @@ function resetMetersButKeepCurrentState(widgetState) {
         console.log(`Passed invalid widget state! Cannot reset meters and keep state ${widgetState}`);
         return;
     }
-    const numberOfBlesses = getOrDefaultCount(widgetState.current[numberOfBlessesKey]);
-    const numberOfCurses = getOrDefaultCount(widgetState.current[numberOfCursesKey]);
-    const numberOfBlurses = getOrDefaultCount(widgetState.current[numberOfBlursesKey]);
-    const numberOfBlursesThatBlessed = getOrDefaultCount(widgetState.current[numberOfBlursesThatBlessedKey]);
-    const numberOfBlursesThatCursed = getOrDefaultCount(widgetState.current[numberOfBlursesThatCursedKey]);
-    const numberOfBlessesPreReset = getOrDefaultCount(widgetState.current[numberOfBlessesPreResetKey]) + numberOfBlesses;
-    const numberOfCursesPreReset = getOrDefaultCount(widgetState.current[numberOfCursesPreResetKey]) + numberOfCurses;
-    const numberOfBlursesPreReset = getOrDefaultCount(widgetState.current[numberOfBlursesPreResetKey]) + numberOfBlurses;
-    const numberOfBlursesThatBlessedPreReset = getOrDefaultCount(widgetState.current[numberOfBlursesThatBlessedPreResetKey]) + numberOfBlursesThatBlessed;
-    const numberOfBlursesThatCursedPreReset = getOrDefaultCount(widgetState.current[numberOfBlursesThatCursedPreResetKey]) + numberOfBlursesThatCursed;
+    const numberOfBlesses = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlesses]);
+    const numberOfCurses = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfCurses]);
+    const numberOfBlurses = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlurses]);
+    const numberOfBlursesThatBlessed = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlursesThatBlessed]);
+    const numberOfBlursesThatCursed = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlursesThatCursed]);
+    const numberOfBlessesPreReset = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlessesPreReset]) + numberOfBlesses;
+    const numberOfCursesPreReset = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfCursesPreReset]) + numberOfCurses;
+    const numberOfBlursesPreReset = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlursesPreReset]) + numberOfBlurses;
+    const numberOfBlursesThatBlessedPreReset = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlursesThatBlessedPreReset]) + numberOfBlursesThatBlessed;
+    const numberOfBlursesThatCursedPreReset = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlursesThatCursedPreReset]) + numberOfBlursesThatCursed;
     // Structured as a complete WidgetState literal for TypeScript type safety.
     // Original built this incrementally via property assignments.
     const newState = {
@@ -172,16 +174,16 @@ function resetMetersButKeepCurrentState(widgetState) {
         allTime: widgetState.allTime,
         showAll: widgetState.showAll,
         current: {
-            [numberOfBlessesKey]: 0,
-            [numberOfCursesKey]: 0,
-            [numberOfBlursesKey]: 0,
-            [numberOfBlursesThatBlessedKey]: 0,
-            [numberOfBlursesThatCursedKey]: 0,
-            [numberOfBlessesPreResetKey]: numberOfBlessesPreReset,
-            [numberOfCursesPreResetKey]: numberOfCursesPreReset,
-            [numberOfBlursesPreResetKey]: numberOfBlursesPreReset,
-            [numberOfBlursesThatBlessedPreResetKey]: numberOfBlursesThatBlessedPreReset,
-            [numberOfBlursesThatCursedPreResetKey]: numberOfBlursesThatCursedPreReset,
+            [CurrentStateKeys.numberOfBlesses]: 0,
+            [CurrentStateKeys.numberOfCurses]: 0,
+            [CurrentStateKeys.numberOfBlurses]: 0,
+            [CurrentStateKeys.numberOfBlursesThatBlessed]: 0,
+            [CurrentStateKeys.numberOfBlursesThatCursed]: 0,
+            [CurrentStateKeys.numberOfBlessesPreReset]: numberOfBlessesPreReset,
+            [CurrentStateKeys.numberOfCursesPreReset]: numberOfCursesPreReset,
+            [CurrentStateKeys.numberOfBlursesPreReset]: numberOfBlursesPreReset,
+            [CurrentStateKeys.numberOfBlursesThatBlessedPreReset]: numberOfBlursesThatBlessedPreReset,
+            [CurrentStateKeys.numberOfBlursesThatCursedPreReset]: numberOfBlursesThatCursedPreReset,
         },
     };
     return newState;
@@ -311,19 +313,19 @@ function handleRedemption(detail) {
         if (redemptionName == blessTheRun) {
             console.log(`Bless it: Verily let this run be bless-ed`);
             showCharSvg(TYPE_BLESS);
-            incrementState(numberOfBlessesKey);
+            incrementState(CurrentStateKeys.numberOfBlesses);
             setTimeout(SE_API.resumeQueue, 1001);
         }
         else if (redemptionName == curseTheRun) {
             console.log(`Curse it: I say unto you Locke shall not steal this run.`);
             showCharSvg(TYPE_CURSE);
-            incrementState(numberOfCursesKey);
+            incrementState(CurrentStateKeys.numberOfCurses);
             setTimeout(SE_API.resumeQueue, 1001);
         }
         else if (redemptionName == blurseTheRun) {
             console.log(`Blurse it - who knows? Maybe gau, maybe no gau. Maybe black belt, maybe trench death.`);
             showCharSvg(TYPE_BLURSE);
-            incrementState(numberOfBlursesKey);
+            incrementState(CurrentStateKeys.numberOfBlurses);
             setTimeout(SE_API.resumeQueue, 1001);
         }
         else {
@@ -373,10 +375,10 @@ function showCharSvg(type) {
     }
 }
 function bothMetersAreAtMax(widgetState) {
-    const numberOfBlesses = getOrDefaultCount(widgetState.current[numberOfBlessesKey]);
-    const numberOfCurses = getOrDefaultCount(widgetState.current[numberOfCursesKey]);
-    const numberOfBlursesThatBlessed = getOrDefaultCount(widgetState.current[numberOfBlursesThatBlessedKey]);
-    const numberOfBlursesThatCursed = getOrDefaultCount(widgetState.current[numberOfBlursesThatCursedKey]);
+    const numberOfBlesses = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlesses]);
+    const numberOfCurses = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfCurses]);
+    const numberOfBlursesThatBlessed = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlursesThatBlessed]);
+    const numberOfBlursesThatCursed = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlursesThatCursed]);
     const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
     const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
     return effectiveBlesses >= meterMaximum && effectiveCurses >= meterMaximum;
@@ -411,17 +413,17 @@ function getRedemptionName(detail) {
 function updateDisplay(widgetState, showAnimate) {
     if (widgetState != undefined && widgetState.current != undefined) {
         console.log(`Updating meter display ${JSON.stringify(widgetState)}`);
-        const numberOfBlesses = getCountFromState(widgetState, numberOfBlessesKey);
-        const numberOfCurses = getCountFromState(widgetState, numberOfCursesKey);
-        const numberOfBlurses = getCountFromState(widgetState, numberOfBlursesKey);
-        const numberOfBlursesThatBlessed = getCountFromState(widgetState, numberOfBlursesThatBlessedKey);
-        const numberOfBlursesThatCursed = getCountFromState(widgetState, numberOfBlursesThatCursedKey);
+        const numberOfBlesses = getCountFromState(widgetState, CurrentStateKeys.numberOfBlesses);
+        const numberOfCurses = getCountFromState(widgetState, CurrentStateKeys.numberOfCurses);
+        const numberOfBlurses = getCountFromState(widgetState, CurrentStateKeys.numberOfBlurses);
+        const numberOfBlursesThatBlessed = getCountFromState(widgetState, CurrentStateKeys.numberOfBlursesThatBlessed);
+        const numberOfBlursesThatCursed = getCountFromState(widgetState, CurrentStateKeys.numberOfBlursesThatCursed);
         const total = numberOfBlesses + numberOfCurses + numberOfBlurses;
         const animationTime = showAnimate ? animationDuration : shortAnimationDuration;
-        const preResetBlesses = getOrDefaultCount(widgetState.current[numberOfBlessesPreResetKey]);
-        const preResetCurses = getOrDefaultCount(widgetState.current[numberOfCursesPreResetKey]);
-        const preResetBlursesThatBlessed = getOrDefaultCount(widgetState.current[numberOfBlursesThatBlessedPreResetKey]);
-        const preResetBlursesThatCursed = getOrDefaultCount(widgetState.current[numberOfBlursesThatCursedPreResetKey]);
+        const preResetBlesses = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlessesPreReset]);
+        const preResetCurses = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfCursesPreReset]);
+        const preResetBlursesThatBlessed = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlursesThatBlessedPreReset]);
+        const preResetBlursesThatCursed = getOrDefaultCount(widgetState.current[CurrentStateKeys.numberOfBlursesThatCursedPreReset]);
         const blessMeterFill = getBlessMeterFill();
         const curseMeterFill = getCurseMeterFill();
         if (total === 0) {
