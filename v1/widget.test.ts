@@ -144,7 +144,10 @@ function setupTestDOM(initialState?: WidgetState): TestEnv {
 
   // JSDOM does not implement the Web Animations API (WAAPI); mock it so
   // animateChange() does not throw when calling ele.animate().
-  (dom.window.Element.prototype as any).animate = jest.fn();
+  // Returns { finished: Promise.resolve() } so the animation queue drains correctly.
+  (dom.window.Element.prototype as any).animate = jest.fn().mockReturnValue({
+    finished: Promise.resolve(),
+  });
 
   // SE_API must be on window BEFORE the widget script runs because
   // initializeLastWidgetState() is called immediately at module scope.

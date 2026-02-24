@@ -117,7 +117,7 @@ type IncrementStateFn                   = (toIncrement: string) => void;
 type OptionallyInitializeNumericFieldFn = (obj: WidgetState, fieldName: string) => void;
 type EventHandlerFn                     = (event: Event) => void;
 type HandleRedemptionFn                 = (detail: SEEventDetail) => void;
-type ShowCharSvgFn                      = (type: string) => void;
+type ShowCharSvgFn                      = (type: string) => Promise<void>;
 type UpdateToggleButtonDisplayFn        = (showAll: boolean) => void;
 type GlowFn                             = (ele: HTMLElement, type: string) => void;
 type UpdateDisplayFn                    = (widgetState: WidgetState | null, showAnimate: boolean) => void;
@@ -134,5 +134,5 @@ type GetRedemptionNameFn              = (detail: SEEventDetail | undefined) => s
 type GetOrDefaultCountFn              = (value: number | boolean | undefined) => number;
 type GetCountFromStateFn              = (widgetState: WidgetState, keyName: string) => number;
 type GletGlowForeverClassFn           = (type: string) => string;
-type AnimateChangeFn                  = (ele: HTMLElement | undefined, currentWidth: string, targetWidth: string, durationOfAnimation: number, type: string) => void;
+type AnimateChangeFn                  = (ele: HTMLElement | undefined, currentWidth: string, targetWidth: string, durationOfAnimation: number, type: string) => () => Promise<void>;
 type MockRedeemEventFn                = (redemptionName: string) => CustomEvent<SEEventDetail>;

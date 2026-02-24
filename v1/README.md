@@ -45,6 +45,21 @@ These two steps result in every test redeem being considered a blurse, curse, or
 - Click OK to add the source.
 - You can now position
 
+## Development
+
+### Source files
+
+[widget.js](./widget.js) is the file used by the StreamElements widget editor. It is generated from [widget.ts](./widget.ts) — do not edit `widget.js` directly. Edit `widget.ts` and rebuild using `npm run build`.
+
+### npm commands
+
+Run these from the repository root (the directory containing `package.json`):
+
+| Command | Description |
+|---------|-------------|
+| `npm run build` | Compiles `widget.ts` → `widget.js` via TypeScript |
+| `npm test` | Compiles TypeScript then runs the Jest test suite |
+
 ## How it works
 
 The widget has event listeners which are called and process when certain redemptions are redeemed in twitch chat. It uses the SE_API.store to persist and manage the widget state. The length of each meter in the widget display is calculated as a percentage of the total number of redeems of all types.

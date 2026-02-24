@@ -61,28 +61,45 @@ let showChars = true;
 
 let lastWidgetState: WidgetState | null = null;
 
+const animationQueue: (() => Promise<void>)[] = [];
+let animationRunning = false;
+let pendingCharType: string | null = null;
+
+/** Returns the jQuery-wrapped meter fill element for the bless meter. */
 function getBlessMeterFill(): JQuery<HTMLElement> {
     return $("div.bless-container div.meter div.meter-fill");
 }
 
+/** Returns the jQuery-wrapped meter fill element for the curse meter. */
 function getCurseMeterFill(): JQuery<HTMLElement> {
     return $("div.curse-container div.meter div.meter-fill");
 }
 
+/** Returns the jQuery-wrapped bless character SVG element. */
 function getBlessSvg(): JQuery<HTMLElement> {
     return $("svg.bless-svg");
 }
 
+/** Returns the jQuery-wrapped curse character SVG element. */
 function getCurseSvg(): JQuery<HTMLElement> {
     return $("svg.curse-svg");
 }
 
+/**
+ * Returns a jQuery-wrapped blurse character SVG element chosen at random
+ * from the 9 available blurse SVGs.
+ */
 function getBlurseSvg(): JQuery<HTMLElement> {
     // if number of blurse SVGs changes this '9' would have to change
     const randInt = Math.floor(Math.random() * 9) + 1;
     return $(`svg.blurse-svg-${randInt}`);
 }
 
+/**
+ * Attempts to load the last saved widget state from SE_API.store into
+ * {@link lastWidgetState}. Falls back to {@link initialWidgetState} if the
+ * store returns null. Called once at module load time.
+ */
 function initializeLastWidgetState(): void {
     console.log("Trying to initialize last widget state");
     try {
@@ -99,6 +116,12 @@ function initializeLastWidgetState(): void {
 
 initializeLastWidgetState();
 
+/**
+ * Toggles the {@link ATTRIBUTE_SHOW_ALL} flag in SE_API.store between true
+ * and false. Initializes state to {@link initialWidgetState} if the store has
+ * not yet been set up. SE_API.store.set emits a kvstore:update event which
+ * triggers {@link updateDisplay}.
+ */
 function toggleShowAllState(): void {
     console.log(`Toggling state showAll`);
     SE_API.store.get(STORE_KEY_NAME).then(obj => {
@@ -119,6 +142,17 @@ function toggleShowAllState(): void {
     });
 }
 
+/**
+ * Increments the named counter in both {@link WidgetState.current} and
+ * {@link WidgetState.allTime} and persists the updated state via SE_API.store.
+ * When {@link StateKeys.numberOfBlurses} is incremented, also randomly
+ * increments either {@link StateKeys.numberOfBlursesThatBlessed} or
+ * {@link StateKeys.numberOfBlursesThatCursed} (50/50 chance).
+ * If both meters have reached {@link meterMaximum}, the current counters are
+ * rolled into the preReset fields via {@link resetMetersButKeepCurrentState}
+ * before saving.
+ * @param toIncrement - A {@link StateKeys} value identifying the counter to increment.
+ */
 function incrementState(toIncrement: string): void {
     console.log(`Incrementing ${toIncrement}`);
     SE_API.store.get(STORE_KEY_NAME).then(obj => {
@@ -165,6 +199,14 @@ function incrementState(toIncrement: string): void {
     });
 }
 
+/**
+ * Builds a new {@link WidgetState} where all current counters are zeroed and
+ * the previous current counts are accumulated into the corresponding preReset
+ * fields. allTime counts and showAll are preserved unchanged.
+ * Returns undefined if the supplied state is invalid.
+ * @param widgetState - The state to reset.
+ * @returns The new zeroed state, or undefined if widgetState is invalid.
+ */
 function resetMetersButKeepCurrentState(widgetState: WidgetState): WidgetState | undefined {
     // Original used bitwise | (bug: should be ||). Behavior is identical for boolean
     // operands but || is required here for TypeScript strict mode compatibility.
@@ -213,12 +255,24 @@ function resetMetersButKeepCurrentState(widgetState: WidgetState): WidgetState |
     return newState;
 }
 
+/**
+ * Type predicate. Returns true when {@link obj} is a fully initialized
+ * {@link WidgetState} with both `current` and `allTime` properties present.
+ * @param obj - The value to test.
+ */
 function storeHasBeenInitialized(obj: WidgetState | null): obj is WidgetState {
     return obj != undefined
         && obj.current != undefined
         && obj.allTime != undefined;
 }
 
+/**
+ * Returns true when {@link obj} is a valid {@link WidgetState} and the named
+ * field exists in both `current` and `allTime`, meaning it is safe to
+ * increment without creating a NaN or undefined result.
+ * @param obj - The widget state to check.
+ * @param toIncrement - The field name to verify.
+ */
 function canIncrement(obj: WidgetState | null, toIncrement: string): boolean {
     return obj != undefined
         && obj.current != undefined
@@ -227,6 +281,14 @@ function canIncrement(obj: WidgetState | null, toIncrement: string): boolean {
         && obj.allTime[toIncrement] != undefined;
 }
 
+/**
+ * Ensures the named field exists as a numeric value in both
+ * {@link WidgetState.current} and {@link WidgetState.allTime}.
+ * If the field is missing or not a number it is set to 0.
+ * Used to initialize blurse sub-fields before incrementing them.
+ * @param obj - The widget state to mutate.
+ * @param fieldName - The field to initialize if absent or non-numeric.
+ */
 function optionallyInitializeNumericField(obj: WidgetState, fieldName: string): void {
     if (obj.current[fieldName] == undefined || typeof obj.current[fieldName] !== "number") {
         (obj.current as Record<string, number>)[fieldName] = 0;
@@ -236,6 +298,13 @@ function optionallyInitializeNumericField(obj: WidgetState, fieldName: string): 
     }
 }
 
+/**
+ * Handles the StreamElements `onEventReceived` window event.
+ * Routes the event to {@link handleRedemption} for channel point redemptions,
+ * or calls {@link updateDisplay} when a `kvstore:update` signals that the
+ * widget state has changed in the store.
+ * @param event - The raw DOM event emitted by StreamElements.
+ */
 function eventReceivedHandler(event: Event): void {
     const obj = event as SECustomEvent;
     console.log(`Received an event ${JSON.stringify(obj)}`);
@@ -295,6 +364,14 @@ function eventReceivedHandler(event: Event): void {
 
 window.addEventListener("onEventReceived", eventReceivedHandler);
 
+/**
+ * Handles the StreamElements `onWidgetLoad` window event.
+ * Reads field configuration ({@link meterMaximum}, {@link showChars}) from
+ * `fieldData`, then loads persisted state from SE_API.store to initialize the
+ * display. If no prior state exists, saves {@link initialWidgetState} to the
+ * store.
+ * @param event - The raw DOM event emitted by StreamElements.
+ */
 function widgetLoadHandler(event: Event): void {
     const obj = event as SECustomEvent;
     // since we initialize from stored state we don't need to re-process recents
@@ -333,6 +410,14 @@ function widgetLoadHandler(event: Event): void {
 
 window.addEventListener("onWidgetLoad", widgetLoadHandler);
 
+/**
+ * Processes a channel point redemption event detail.
+ * Sets {@link pendingCharType} to the appropriate type constant so
+ * {@link updateDisplay} can include the character SVG animation in the same
+ * queue slot as the meter animations, then calls {@link incrementState}.
+ * Unrecognized redemption names are ignored.
+ * @param detail - The event detail payload from the redemption event.
+ */
 function handleRedemption(detail: SEEventDetail): void {
     console.log("In redemption handling");
     const redemptionName = getRedemptionName(detail);
@@ -341,17 +426,17 @@ function handleRedemption(detail: SEEventDetail): void {
         console.log(`Redemption name is ${redemptionName}`);
         if (redemptionName == blessTheRun) {
             console.log(`Bless it: Verily let this run be bless-ed`);
-            showCharSvg(TYPE_BLESS);
+            pendingCharType = TYPE_BLESS;
             incrementState(StateKeys.numberOfBlesses);
             setTimeout(SE_API.resumeQueue, 1001);
         } else if (redemptionName == curseTheRun) {
             console.log(`Curse it: I say unto you Locke shall not steal this run.`);
-            showCharSvg(TYPE_CURSE);
+            pendingCharType = TYPE_CURSE;
             incrementState(StateKeys.numberOfCurses);
             setTimeout(SE_API.resumeQueue, 1001);
         } else if (redemptionName == blurseTheRun) {
             console.log(`Blurse it - who knows? Maybe gau, maybe no gau. Maybe black belt, maybe trench death.`);
-            showCharSvg(TYPE_BLURSE);
+            pendingCharType = TYPE_BLURSE;
             incrementState(StateKeys.numberOfBlurses);
             setTimeout(SE_API.resumeQueue, 1001);
         } else {
@@ -363,10 +448,21 @@ function handleRedemption(detail: SEEventDetail): void {
     }
 }
 
-function showCharSvg(type: string): void {
+/**
+ * Shows the character SVG corresponding to the given redemption type and
+ * returns a Promise that resolves when the show animation completes.
+ * The SVG is hidden automatically after 800 ms (fire-and-forget hide).
+ * Returns an already-resolved Promise if {@link showChars} is false or no
+ * matching SVG element is found in the DOM.
+ * Intended to be called inside an {@link enqueueAnimation} callback so it
+ * runs concurrently with the meter animations as a single queue item.
+ * @param type - One of `TYPE_BLESS`, `TYPE_CURSE`, or `TYPE_BLURSE`.
+ * @returns A Promise that resolves once the SVG has been shown.
+ */
+function showCharSvg(type: string): Promise<void> {
     if (!showChars) {
         console.log("Not running the showChars functionality");
-        return;
+        return Promise.resolve();
     }
     let target: JQuery<HTMLElement> | null = null;
     const targets: JQuery<HTMLElement>[] = [
@@ -382,22 +478,33 @@ function showCharSvg(type: string): void {
         target = targets[2];
     } else {
         console.log(`Unable to locate svg target for type '${type}'`);
-        return;
+        return Promise.resolve();
     }
     console.log(`For type '${type}' located target ${JSON.stringify(target.length > 0 ? target.get(0) : "None Found!")}`);
     if (target && target.length > 0) {
         console.log(`Showing ${JSON.stringify(target.get(0))}`);
-        target.show({
-            duration: 0,
-            queue: true,
-            complete: function () {
-                console.log(`Animation complete: hiding ${JSON.stringify($(this))}`);
-                setTimeout(() => $(this).hide(), 800);
-            },
+        const finalTarget = target;
+        return new Promise<void>(resolve => {
+            finalTarget.show({
+                duration: 0,
+                queue: true,
+                complete: function () {
+                    console.log(`Animation complete: hiding ${JSON.stringify($(this))}`);
+                    setTimeout(() => $(this).hide(), 800);
+                    resolve();
+                },
+            });
         });
     }
+    return Promise.resolve();
 }
 
+/**
+ * Returns true when the effective bless count and effective curse count both
+ * meet or exceed {@link meterMaximum}. Blurse-that-blessed contributes 2×
+ * toward blesses and blurse-that-cursed contributes 2× toward curses.
+ * @param widgetState - The state to evaluate.
+ */
 function bothMetersAreAtMax(widgetState: WidgetState): boolean {
     const numberOfBlesses = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlesses]);
     const numberOfCurses = getOrDefaultCount(widgetState.current[StateKeys.numberOfCurses]);
@@ -411,6 +518,15 @@ function bothMetersAreAtMax(widgetState: WidgetState): boolean {
     return effectiveBlesses >= meterMaximum && effectiveCurses >= meterMaximum;
 }
 
+/**
+ * Extracts the redemption name from a StreamElements event detail object.
+ * Checks three locations in priority order:
+ * 1. `detail.event.data.redemption` — live Twitch path
+ * 2. `detail.session.data["channel-points-latest"].redemption` — SE docs path
+ * 3. `detail.event.itemId` — SE emulator / in-editor test path
+ * @param detail - The event detail to inspect, or undefined.
+ * @returns The redemption name string, or null if not found in any location.
+ */
 function getRedemptionName(detail: SEEventDetail | undefined): string | null {
     let redemptionName: string | null = null;
     if (detail == undefined) {
@@ -439,7 +555,21 @@ function getRedemptionName(detail: SEEventDetail | undefined): string | null {
     return redemptionName;
 }
 
+/**
+ * Updates all DOM elements to reflect the supplied widget state.
+ * Clears {@link pendingCharType} and groups the bless meter animation, curse
+ * meter animation, and optional character SVG animation into a single
+ * {@link enqueueAnimation} entry so they run concurrently without overlapping
+ * animations from subsequent redemptions.
+ * @param widgetState - The state to render, or null to skip the update.
+ * @param showAnimate - When true uses the full {@link animationDuration};
+ *   when false uses {@link shortAnimationDuration} for an instant update.
+ */
 function updateDisplay(widgetState: WidgetState | null, showAnimate: boolean): void {
+    // Capture and clear before any async work so rapid redemptions don't bleed over.
+    const charType = pendingCharType;
+    pendingCharType = null;
+
     if (widgetState != undefined && widgetState.current != undefined) {
         console.log(`Updating meter display ${JSON.stringify(widgetState)}`);
         const numberOfBlesses = getCountFromState(widgetState, StateKeys.numberOfBlesses);
@@ -462,13 +592,18 @@ function updateDisplay(widgetState: WidgetState | null, showAnimate: boolean): v
 
         if (total === 0) {
             console.log("No blesses, curses, or blurses. Hopefully this is expected in this scenario...");
-            // trigger the display change
-            animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime, TYPE_BLESS);
-            animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime, TYPE_CURSE);
+            // Build factories now (captures current widths; glow class changes happen immediately).
+            const blessFactory = animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime, TYPE_BLESS);
+            const curseFactory = animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime, TYPE_CURSE);
             getBlessInfoValue().text(preResetBlesses);
             getCurseInfoValue().text(preResetCurses);
             getBlurseInfoValue().text(`${preResetBlursesThatBlessed} / ${preResetBlursesThatCursed}`);
             updateToggleButtonDisplay(isShowingAll(widgetState));
+            enqueueAnimation(async () => {
+                const animations: Promise<void>[] = [blessFactory(), curseFactory()];
+                if (charType !== null) { animations.push(showCharSvg(charType)); }
+                await Promise.all(animations);
+            });
         } else {
             const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
             const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
@@ -491,9 +626,10 @@ function updateDisplay(widgetState: WidgetState | null, showAnimate: boolean): v
             updateToggleButtonDisplay(isShowingAll(widgetState));
             console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}`);
 
-            // trigger the display change
-            animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime, TYPE_BLESS);
-            animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime, TYPE_CURSE);
+            // Build factories now (captures current widths; glow class changes happen immediately).
+            const blessFactory = animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime, TYPE_BLESS);
+            const curseFactory = animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime, TYPE_CURSE);
+
             // update lastCount attributes
             let blessCounterText = numberOfBlesses;
             let curseCounterText = numberOfCurses;
@@ -508,12 +644,23 @@ function updateDisplay(widgetState: WidgetState | null, showAnimate: boolean): v
             getBlessInfoValue().text(blessCounterText);
             getCurseInfoValue().text(curseCounterText);
             getBlurseInfoValue().text(`${blurseThatBlessedCounterText}/${blurseThatCursedCounterText}`);
+            enqueueAnimation(async () => {
+                const animations: Promise<void>[] = [blessFactory(), curseFactory()];
+                if (charType !== null) { animations.push(showCharSvg(charType)); }
+                await Promise.all(animations);
+            });
         }
     } else {
         console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
     }
 }
 
+/**
+ * Returns the count for the named key from the appropriate portion of state:
+ * `allTime` when {@link isShowingAll} is true, `current` otherwise.
+ * @param widgetState - The state to read from.
+ * @param keyName - A {@link StateKeys} value identifying the counter.
+ */
 function getCountFromState(widgetState: WidgetState, keyName: string): number {
     if (isShowingAll(widgetState)) {
         return getOrDefaultCount(widgetState.allTime[keyName]);
@@ -522,6 +669,12 @@ function getCountFromState(widgetState: WidgetState, keyName: string): number {
     }
 }
 
+/**
+ * Returns the numeric value clamped to a minimum of 0, or 0 if the value is
+ * undefined, NaN, or negative.
+ * @param value - The raw value from the widget state.
+ * @returns A non-negative number, or 0 for invalid input.
+ */
 function getOrDefaultCount(value: number | boolean | undefined): number {
     // Original used `value == NaN` which is always false (NaN !== NaN).
     // Replaced with Number.isNaN() so the check is actually meaningful.
@@ -534,18 +687,27 @@ function getOrDefaultCount(value: number | boolean | undefined): number {
     }
 }
 
+/** Returns the jQuery-wrapped span element that displays the bless count. */
 function getBlessInfoValue(): JQuery<HTMLElement> {
     return $("span.bless-info-value");
 }
 
+/** Returns the jQuery-wrapped span element that displays the curse count. */
 function getCurseInfoValue(): JQuery<HTMLElement> {
     return $("span.curse-info-value");
 }
 
+/** Returns the jQuery-wrapped span element that displays the blurse count. */
 function getBlurseInfoValue(): JQuery<HTMLElement> {
     return $("span.blurse-info-value");
 }
 
+/**
+ * Updates the all-time toggle button label.
+ * Sets the text to "Show run" when `showAll` is true (all-time view is active)
+ * or "Show all" when `showAll` is false (current-run view is active).
+ * @param showAll - The current value of the showAll flag.
+ */
 function updateToggleButtonDisplay(showAll: boolean): void {
     const toggleButton = $("#all-time-toggle");
     if (showAll) {
@@ -559,29 +721,81 @@ function updateToggleButtonDisplay(showAll: boolean): void {
     }
 }
 
-function animateChange(ele: HTMLElement | undefined, currentWidth: string, targetWidth: string, durationOfAnimation: number, type: string): void {
+/**
+ * Adds an animation function to {@link animationQueue} and starts draining
+ * the queue if no animation is currently running.
+ * @param animFn - An async function that starts one or more animations and
+ *   returns a Promise that resolves when all of them are complete.
+ */
+function enqueueAnimation(animFn: () => Promise<void>): void {
+    animationQueue.push(animFn);
+    if (!animationRunning) {
+        drainAnimationQueue();
+    }
+}
+
+/**
+ * Pulls the next animation function off {@link animationQueue} and runs it.
+ * Sets {@link animationRunning} to false and returns when the queue is empty.
+ * Chains itself via `.then()` so each animation runs to completion before the
+ * next one starts.
+ */
+function drainAnimationQueue(): void {
+    const next = animationQueue.shift();
+    if (!next) {
+        animationRunning = false;
+        return;
+    }
+    animationRunning = true;
+    next().then(() => drainAnimationQueue());
+}
+
+/**
+ * Handles glow state immediately (adds or removes the glow CSS class on the
+ * meter container) then returns a factory function that starts the WAAPI width
+ * animation when called.
+ * The returned factory is intended to be invoked inside an
+ * {@link enqueueAnimation} callback so the animation only starts when the
+ * queue processes the item, not at the point of the call.
+ * @param ele - The meter fill element to animate, or undefined (no-op).
+ * @param currentWidth - CSS width string representing the starting width.
+ * @param targetWidth - CSS width string representing the ending width.
+ * @param durationOfAnimation - Animation duration in milliseconds.
+ * @param type - `TYPE_BLESS` or `TYPE_CURSE`, used to select the glow class.
+ * @returns A factory that starts the animation and resolves when it finishes.
+ */
+function animateChange(ele: HTMLElement | undefined, currentWidth: string, targetWidth: string, durationOfAnimation: number, type: string): () => Promise<void> {
     // Guard added for TypeScript: jQuery's .get(0) returns HTMLElement | undefined
-    if (!ele) return;
+    if (!ele) return () => Promise.resolve();
 
     if ("100.00%" === targetWidth) {
         animateGlowForever(ele, type);
     } else {
         endGlowForever(ele, type);
     }
-    // animate the width
-    ele.animate(
-        [
-            { width: currentWidth }, // Start width & color
-            { width: targetWidth }, // End width
-        ],
-        {
-            duration: durationOfAnimation, // 1 second
-            easing: "ease-in-out", // Optional easing function
-            fill: "forwards", // Keep the final state after animation
-        }
-    );
+    return () => new Promise<void>(resolve => {
+        const animation = ele.animate(
+            [
+                { width: currentWidth }, // Start width & color
+                { width: targetWidth }, // End width
+            ],
+            {
+                duration: durationOfAnimation, // 1 second
+                easing: "ease-in-out", // Optional easing function
+                fill: "forwards", // Keep the final state after animation
+            }
+        );
+        animation.finished.then(() => resolve());
+    });
 }
 
+/**
+ * Adds the glow-forever CSS class to the parent container of the given meter
+ * fill element if the class is not already present. Called when a meter
+ * reaches 100% to start the persistent glow animation.
+ * @param ele - The meter fill element whose parent should receive the class.
+ * @param type - `TYPE_BLESS` or `TYPE_CURSE`, used to select the CSS class.
+ */
 function animateGlowForever(ele: HTMLElement, type: string): void {
     const classToUse = gletGlowForeverClass(type);
 
@@ -591,10 +805,22 @@ function animateGlowForever(ele: HTMLElement, type: string): void {
     }
 }
 
+/**
+ * Returns the CSS class name for the glow-forever animation matching the given
+ * type. `TYPE_BLESS` maps to {@link glowForeverClass}; all other types map to
+ * {@link curseGlowForeverClass}.
+ * @param type - `TYPE_BLESS` or `TYPE_CURSE`.
+ */
 function gletGlowForeverClass(type: string): string {
     return type == TYPE_BLESS ? glowForeverClass : curseGlowForeverClass;
 }
 
+/**
+ * Removes the glow-forever CSS class from the parent container of the given
+ * meter fill element. Called when a meter drops below 100%.
+ * @param ele - The meter fill element whose parent should lose the class.
+ * @param type - `TYPE_BLESS` or `TYPE_CURSE`, used to select the CSS class.
+ */
 function endGlowForever(ele: HTMLElement, type: string): void {
     if (ele.parentElement) {
         ele.parentElement.classList.remove(gletGlowForeverClass(type));
@@ -605,6 +831,11 @@ function endGlowForever(ele: HTMLElement, type: string): void {
 // RESET FUNCTIONS
 //////////////////
 
+/**
+ * Resets all current-run counters to zero and sets `showAll` to false, then
+ * persists the updated state to SE_API.store. All-time counters are preserved.
+ * Intended to be called between speedrun attempts via the reset button.
+ */
 function resetCurrentState(): void {
     SE_API.store.get(STORE_KEY_NAME).then(obj => {
         if (!obj) return;
@@ -627,6 +858,10 @@ function resetCurrentState(): void {
     });
 }
 
+/**
+ * Resets the entire widget state to {@link initialWidgetState} (all zeros) and
+ * persists it to SE_API.store. Clears both current-run and all-time counters.
+ */
 function resetAllTimeState(): void {
     initialWidgetState.lastUpdated = new Date();
     SE_API.store.set(STORE_KEY_NAME, initialWidgetState);
@@ -637,11 +872,20 @@ function resetAllTimeState(): void {
 // TOGGLE ALL TIME
 //////////////////
 
+/**
+ * Toggles the all-time display mode by delegating to {@link toggleShowAllState}.
+ * Intended to be wired to the all-time toggle button's onclick handler.
+ */
 function toggleAllTime(): void {
     console.log(`Toggling display ${JSON.stringify(lastWidgetState)}`);
     toggleShowAllState();
 }
 
+/**
+ * Returns true when the widget is currently displaying all-time counts
+ * (i.e. {@link ATTRIBUTE_SHOW_ALL} is present and truthy on `widgetState`).
+ * @param widgetState - The state to check, or null/undefined.
+ */
 function isShowingAll(widgetState: WidgetState | null | undefined): boolean {
     const result = widgetState != undefined
         && widgetState[ATTRIBUTE_SHOW_ALL] != undefined
@@ -653,18 +897,37 @@ function isShowingAll(widgetState: WidgetState | null | undefined): boolean {
 ///////////////
 // TESTING CODE
 ///////////////
+/**
+ * Dispatches a mock "Bless the Run" channel point redemption event on the
+ * window. Used for testing in the StreamElements widget editor.
+ */
 function testBless(): void {
     window.dispatchEvent(mockRedeemEvent(blessTheRun));
 }
 
+/**
+ * Dispatches a mock "Curse the Run" channel point redemption event on the
+ * window. Used for testing in the StreamElements widget editor.
+ */
 function testCurse(): void {
     window.dispatchEvent(mockRedeemEvent(curseTheRun));
 }
 
+/**
+ * Dispatches a mock "Blurse the Run" channel point redemption event on the
+ * window. Used for testing in the StreamElements widget editor.
+ */
 function testBlurse(): void {
     window.dispatchEvent(mockRedeemEvent(blurseTheRun));
 }
 
+/**
+ * Creates a synthetic StreamElements `onEventReceived` CustomEvent that mimics
+ * a channel point redemption. Used by {@link testBless}, {@link testCurse},
+ * and {@link testBlurse}.
+ * @param redemptionName - The channel point reward name to simulate.
+ * @returns A CustomEvent ready to be dispatched on the window.
+ */
 function mockRedeemEvent(redemptionName: string): CustomEvent<SEEventDetail> {
     return new CustomEvent<SEEventDetail>("onEventReceived", {
         detail: {
