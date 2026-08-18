@@ -1,3 +1,9 @@
+// TODO: Revert to commit e7d5013a2605f3fd846c7eacf57f649821f4abd5
+// TODO: Then, implement my own redemption queue
+//   + animation queue for each redemption queue item with sprite laugh & casting animations
+//   + the sprite animations should be longer for each redeem to be more enjoyable
+//   + add testing for the complex cases of many redeems occurring rapidly
+
 const blurseTheRun = "Blurse the Run";
 const blessTheRun = "Bless the Run";
 const curseTheRun = "Curse the Run";
@@ -61,9 +67,43 @@ let showChars = true;
 
 let lastWidgetState: WidgetState | null = null;
 
-const animationQueue: (() => Promise<void>)[] = [];
-let animationRunning = false;
+interface PendingDisplay {
+    widgetState: WidgetState;
+    charType: string | null;
+    showAnimate: boolean;
+}
+const displayQueue: PendingDisplay[] = [];
+let displayRunning = false;
 let pendingCharType: string | null = null;
+
+
+type Task<T> = () => Promise<T>;
+
+class SequentialQueue {
+  private tail: Promise<unknown> = Promise.resolve();
+
+  enqueue<T>(task: Task<T>): Promise<T> {
+    const result = this.tail.then(() => task());
+    this.tail = result.catch((err) => {
+      console.error("Task failed:", err);
+    });
+    return result;
+  }
+}
+
+// usage
+const queue = new SequentialQueue();
+
+// queue.enqueue(async () => {
+//   console.log("start A");
+//   throw new Error("boom");
+// });
+
+// queue.enqueue(async () => {
+//   console.log("start B");
+//   await new Promise((r) => setTimeout(r, 100));
+//   console.log("end B");
+// });
 
 /** Returns the jQuery-wrapped meter fill element for the bless meter. */
 function getBlessMeterFill(): JQuery<HTMLElement> {
@@ -428,17 +468,14 @@ function handleRedemption(detail: SEEventDetail): void {
             console.log(`Bless it: Verily let this run be bless-ed`);
             pendingCharType = TYPE_BLESS;
             incrementState(StateKeys.numberOfBlesses);
-            setTimeout(SE_API.resumeQueue, 1001);
         } else if (redemptionName == curseTheRun) {
             console.log(`Curse it: I say unto you Locke shall not steal this run.`);
             pendingCharType = TYPE_CURSE;
             incrementState(StateKeys.numberOfCurses);
-            setTimeout(SE_API.resumeQueue, 1001);
         } else if (redemptionName == blurseTheRun) {
             console.log(`Blurse it - who knows? Maybe gau, maybe no gau. Maybe black belt, maybe trench death.`);
             pendingCharType = TYPE_BLURSE;
             incrementState(StateKeys.numberOfBlurses);
-            setTimeout(SE_API.resumeQueue, 1001);
         } else {
             console.log(`Not handling redemption ${redemptionName}`);
         }
@@ -556,11 +593,11 @@ function getRedemptionName(detail: SEEventDetail | undefined): string | null {
 }
 
 /**
- * Updates all DOM elements to reflect the supplied widget state.
- * Clears {@link pendingCharType} and groups the bless meter animation, curse
- * meter animation, and optional character SVG animation into a single
- * {@link enqueueAnimation} entry so they run concurrently without overlapping
- * animations from subsequent redemptions.
+ * Entry point for display updates. Captures and clears {@link pendingCharType},
+ * then either processes the update immediately (via {@link processDisplay}) or
+ * enqueues it in {@link displayQueue} if a display cycle is already in
+ * progress. This ensures meter width is always read from the settled DOM state
+ * after the previous redemption's animations have fully completed.
  * @param widgetState - The state to render, or null to skip the update.
  * @param showAnimate - When true uses the full {@link animationDuration};
  *   when false uses {@link shortAnimationDuration} for an instant update.
@@ -570,89 +607,109 @@ function updateDisplay(widgetState: WidgetState | null, showAnimate: boolean): v
     const charType = pendingCharType;
     pendingCharType = null;
 
-    if (widgetState != undefined && widgetState.current != undefined) {
-        console.log(`Updating meter display ${JSON.stringify(widgetState)}`);
-        const numberOfBlesses = getCountFromState(widgetState, StateKeys.numberOfBlesses);
-        const numberOfCurses = getCountFromState(widgetState, StateKeys.numberOfCurses);
-        const numberOfBlurses = getCountFromState(widgetState, StateKeys.numberOfBlurses);
-
-        const numberOfBlursesThatBlessed = getCountFromState(widgetState, StateKeys.numberOfBlursesThatBlessed);
-        const numberOfBlursesThatCursed = getCountFromState(widgetState, StateKeys.numberOfBlursesThatCursed);
-
-        const total = numberOfBlesses + numberOfCurses + numberOfBlurses;
-        const animationTime = showAnimate ? animationDuration : shortAnimationDuration;
-
-        const preResetBlesses = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlessesPreReset]);
-        const preResetCurses = getOrDefaultCount(widgetState.current[StateKeys.numberOfCursesPreReset]);
-        const preResetBlursesThatBlessed = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatBlessedPreReset]);
-        const preResetBlursesThatCursed = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatCursedPreReset]);
-
-        const blessMeterFill = getBlessMeterFill();
-        const curseMeterFill = getCurseMeterFill();
-
-        if (total === 0) {
-            console.log("No blesses, curses, or blurses. Hopefully this is expected in this scenario...");
-            // Build factories now (captures current widths; glow class changes happen immediately).
-            const blessFactory = animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime, TYPE_BLESS);
-            const curseFactory = animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime, TYPE_CURSE);
-            getBlessInfoValue().text(preResetBlesses);
-            getCurseInfoValue().text(preResetCurses);
-            getBlurseInfoValue().text(`${preResetBlursesThatBlessed} / ${preResetBlursesThatCursed}`);
-            updateToggleButtonDisplay(isShowingAll(widgetState));
-            enqueueAnimation(async () => {
-                const animations: Promise<void>[] = [blessFactory(), curseFactory()];
-                if (charType !== null) { animations.push(showCharSvg(charType)); }
-                await Promise.all(animations);
-            });
-        } else {
-            const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
-            const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
-            const effectiveTotal = effectiveBlesses + effectiveCurses;
-
-            console.log("Computing widths for the meters");
-            console.log(`Current widths are bless: ${blessMeterFill.css("width")}, curse: ${curseMeterFill.css("width")}`);
-
-            let blessWidth: string;
-            let curseWidth: string;
-            if (isShowingAll(widgetState)) {
-                console.log(`Showing all so meter length is relative`);
-                blessWidth = ((effectiveBlesses / effectiveTotal) * 100).toFixed(2) + "%";
-                curseWidth = ((effectiveCurses / effectiveTotal) * 100).toFixed(2) + "%";
-            } else {
-                console.log(`Showing run so meter length is based on ${meterMaximum} max`);
-                blessWidth = ((effectiveBlesses >= meterMaximum ? 100 : (effectiveBlesses / meterMaximum) * 100)).toFixed(2) + "%";
-                curseWidth = ((effectiveCurses >= meterMaximum ? 100 : (effectiveCurses / meterMaximum) * 100)).toFixed(2) + "%";
-            }
-            updateToggleButtonDisplay(isShowingAll(widgetState));
-            console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}`);
-
-            // Build factories now (captures current widths; glow class changes happen immediately).
-            const blessFactory = animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime, TYPE_BLESS);
-            const curseFactory = animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime, TYPE_CURSE);
-
-            // update lastCount attributes
-            let blessCounterText = numberOfBlesses;
-            let curseCounterText = numberOfCurses;
-            let blurseThatBlessedCounterText = numberOfBlursesThatBlessed;
-            let blurseThatCursedCounterText = numberOfBlursesThatCursed;
-            if (!isShowingAll(widgetState)) {
-                blessCounterText += preResetBlesses;
-                curseCounterText += preResetCurses;
-                blurseThatBlessedCounterText += preResetBlursesThatBlessed;
-                blurseThatCursedCounterText += preResetBlursesThatCursed;
-            }
-            getBlessInfoValue().text(blessCounterText);
-            getCurseInfoValue().text(curseCounterText);
-            getBlurseInfoValue().text(`${blurseThatBlessedCounterText}/${blurseThatCursedCounterText}`);
-            enqueueAnimation(async () => {
-                const animations: Promise<void>[] = [blessFactory(), curseFactory()];
-                if (charType !== null) { animations.push(showCharSvg(charType)); }
-                await Promise.all(animations);
-            });
-        }
-    } else {
+    if (widgetState == null || widgetState.current == undefined) {
         console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
+        return;
     }
+
+    if (displayRunning) {
+        displayQueue.push({ widgetState, charType, showAnimate });
+        return;
+    }
+
+    processDisplay(widgetState, charType, showAnimate);
+}
+
+/**
+ * Performs the actual DOM update and starts the meter and character SVG
+ * animations for one redemption cycle. Sets {@link displayRunning} to true
+ * for the duration and calls {@link drainDisplayQueue} when all animations
+ * resolve, triggering the next queued entry if one is present.
+ * Only called by {@link updateDisplay} and {@link drainDisplayQueue}.
+ * @param widgetState - The validated, non-null state to render.
+ * @param charType - The character SVG type to show, or null if none.
+ * @param showAnimate - When true uses the full {@link animationDuration};
+ *   when false uses {@link shortAnimationDuration} for an instant update.
+ */
+function processDisplay(widgetState: WidgetState, charType: string | null, showAnimate: boolean): void {
+    displayRunning = true;
+
+    console.log(`Updating meter display ${JSON.stringify(widgetState)}`);
+    const numberOfBlesses = getCountFromState(widgetState, StateKeys.numberOfBlesses);
+    const numberOfCurses = getCountFromState(widgetState, StateKeys.numberOfCurses);
+    const numberOfBlurses = getCountFromState(widgetState, StateKeys.numberOfBlurses);
+
+    const numberOfBlursesThatBlessed = getCountFromState(widgetState, StateKeys.numberOfBlursesThatBlessed);
+    const numberOfBlursesThatCursed = getCountFromState(widgetState, StateKeys.numberOfBlursesThatCursed);
+
+    const total = numberOfBlesses + numberOfCurses + numberOfBlurses;
+    const animationTime = showAnimate ? animationDuration : shortAnimationDuration;
+
+    const preResetBlesses = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlessesPreReset]);
+    const preResetCurses = getOrDefaultCount(widgetState.current[StateKeys.numberOfCursesPreReset]);
+    const preResetBlursesThatBlessed = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatBlessedPreReset]);
+    const preResetBlursesThatCursed = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatCursedPreReset]);
+
+    const blessMeterFill = getBlessMeterFill();
+    const curseMeterFill = getCurseMeterFill();
+
+    let blessFactory: () => Promise<void>;
+    let curseFactory: () => Promise<void>;
+
+    if (total === 0) {
+        console.log("No blesses, curses, or blurses. Hopefully this is expected in this scenario...");
+        // Build factories now (captures current widths; glow class changes happen immediately).
+        blessFactory = animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime, TYPE_BLESS);
+        curseFactory = animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime, TYPE_CURSE);
+        getBlessInfoValue().text(preResetBlesses);
+        getCurseInfoValue().text(preResetCurses);
+        getBlurseInfoValue().text(`${preResetBlursesThatBlessed} / ${preResetBlursesThatCursed}`);
+        updateToggleButtonDisplay(isShowingAll(widgetState));
+    } else {
+        const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
+        const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
+        const effectiveTotal = effectiveBlesses + effectiveCurses;
+
+        console.log("Computing widths for the meters");
+        console.log(`Current widths are bless: ${blessMeterFill.css("width")}, curse: ${curseMeterFill.css("width")}`);
+
+        let blessWidth: string;
+        let curseWidth: string;
+        if (isShowingAll(widgetState)) {
+            console.log(`Showing all so meter length is relative`);
+            blessWidth = ((effectiveBlesses / effectiveTotal) * 100).toFixed(2) + "%";
+            curseWidth = ((effectiveCurses / effectiveTotal) * 100).toFixed(2) + "%";
+        } else {
+            console.log(`Showing run so meter length is based on ${meterMaximum} max`);
+            blessWidth = ((effectiveBlesses >= meterMaximum ? 100 : (effectiveBlesses / meterMaximum) * 100)).toFixed(2) + "%";
+            curseWidth = ((effectiveCurses >= meterMaximum ? 100 : (effectiveCurses / meterMaximum) * 100)).toFixed(2) + "%";
+        }
+        updateToggleButtonDisplay(isShowingAll(widgetState));
+        console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}`);
+
+        // Build factories now (captures current widths; glow class changes happen immediately).
+        blessFactory = animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime, TYPE_BLESS);
+        curseFactory = animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime, TYPE_CURSE);
+
+        // update lastCount attributes
+        let blessCounterText = numberOfBlesses;
+        let curseCounterText = numberOfCurses;
+        let blurseThatBlessedCounterText = numberOfBlursesThatBlessed;
+        let blurseThatCursedCounterText = numberOfBlursesThatCursed;
+        if (!isShowingAll(widgetState)) {
+            blessCounterText += preResetBlesses;
+            curseCounterText += preResetCurses;
+            blurseThatBlessedCounterText += preResetBlursesThatBlessed;
+            blurseThatCursedCounterText += preResetBlursesThatCursed;
+        }
+        getBlessInfoValue().text(blessCounterText);
+        getCurseInfoValue().text(curseCounterText);
+        getBlurseInfoValue().text(`${blurseThatBlessedCounterText}/${blurseThatCursedCounterText}`);
+    }
+
+    const animations: Promise<void>[] = [blessFactory(), curseFactory()];
+    if (charType !== null) { animations.push(showCharSvg(charType)); }
+    Promise.all(animations).then(() => drainDisplayQueue());
 }
 
 /**
@@ -722,41 +779,27 @@ function updateToggleButtonDisplay(showAll: boolean): void {
 }
 
 /**
- * Adds an animation function to {@link animationQueue} and starts draining
- * the queue if no animation is currently running.
- * @param animFn - An async function that starts one or more animations and
- *   returns a Promise that resolves when all of them are complete.
+ * Processes the next entry in {@link displayQueue} by calling
+ * {@link processDisplay} with the queued state. Sets {@link displayRunning}
+ * to false and returns when the queue is empty, allowing the next
+ * {@link updateDisplay} call to proceed immediately.
  */
-function enqueueAnimation(animFn: () => Promise<void>): void {
-    animationQueue.push(animFn);
-    if (!animationRunning) {
-        drainAnimationQueue();
-    }
-}
-
-/**
- * Pulls the next animation function off {@link animationQueue} and runs it.
- * Sets {@link animationRunning} to false and returns when the queue is empty.
- * Chains itself via `.then()` so each animation runs to completion before the
- * next one starts.
- */
-function drainAnimationQueue(): void {
-    const next = animationQueue.shift();
+function drainDisplayQueue(): void {
+    const next = displayQueue.shift();
     if (!next) {
-        animationRunning = false;
+        displayRunning = false;
         return;
     }
-    animationRunning = true;
-    next().then(() => drainAnimationQueue());
+    processDisplay(next.widgetState, next.charType, next.showAnimate);
 }
 
 /**
  * Handles glow state immediately (adds or removes the glow CSS class on the
  * meter container) then returns a factory function that starts the WAAPI width
  * animation when called.
- * The returned factory is intended to be invoked inside an
- * {@link enqueueAnimation} callback so the animation only starts when the
- * queue processes the item, not at the point of the call.
+ * The returned factory is invoked immediately inside {@link processDisplay}
+ * so the animation only starts once the previous redemption's display cycle
+ * has fully completed.
  * @param ele - The meter fill element to animate, or undefined (no-op).
  * @param currentWidth - CSS width string representing the starting width.
  * @param targetWidth - CSS width string representing the ending width.
