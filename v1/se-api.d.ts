@@ -36,15 +36,39 @@ interface AllTimeState {
 }
 
 /**
+ * Per-user redemption counts, tracked for the lifetime of the run.
+ */
+interface RedemptionHistoryEntry {
+  numberOfBlesses: number;
+  numberOfCurses: number;
+  numberOfBlurses: number;
+}
+
+/**
+ * Maps a redeeming user's name to their {@link RedemptionHistoryEntry}.
+ */
+interface RedemptionHistory {
+  [userName: string]: RedemptionHistoryEntry;
+}
+
+interface LastRedemption {
+  redeemingUser: string,
+  charType: string,
+  impact: number
+}
+
+/**
  * The full widget state object persisted via SE_API.store.
- * showAll is optional because older persisted states may
- * pre-date the field being introduced.
+ * showAll and redemptionHistory are optional because older persisted
+ * states may pre-date those fields being introduced.
  */
 interface WidgetState {
   current: CurrentState;
   allTime: AllTimeState;
   showAll?: boolean;
   lastUpdated: Date;
+  redemptionHistory?: RedemptionHistory;
+  lastRedemption?: LastRedemption;
 }
 
 // ============================================================
@@ -73,6 +97,7 @@ interface SEEvent {
   type?: string;
   itemId?: string;
   data?: SEEventData;
+  name?: string;
 }
 
 interface SESession {
