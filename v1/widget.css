@@ -29,7 +29,10 @@
     --blurse-color: #5eb8ff;
 
     --text-color: #ecedee;
-    --bless-glow: #f2c019;
+    --bless-glow: #ffe566;
+    --bless-glow-strong: #fff9b8;
+    --curse-glow: #ff6eb4;
+    --curse-glow-strong: #ffc8e8;
   }
   
 * {
@@ -245,6 +248,9 @@ h1,h2,h3,h4,h5{
     margin-top: 0px;
     border: 2px solid var(--outer-battle-window-color-4);
     border-radius: 7px;
+    overflow: visible;
+    position: relative;
+    transition: border-color 0.35s ease, box-shadow 0.35s ease;
 }
 
 .meter-fill {
@@ -293,34 +299,72 @@ h1,h2,h3,h4,h5{
   width: 50%;
 }
 
-/* #00D1FF */
-@keyframes pulse {
-  from { box-shadow: 0 0px 0px var(--bless-glow); }
-  to { box-shadow: 0 0 10px var(--bless-glow); }
+/* Full-meter glow: layered outer bloom + border brightening */
+@keyframes pulse-bless-meter {
+  0% {
+    border-color: #9aa86a;
+    box-shadow:
+      0 0 4px 1px rgba(255, 229, 102, 0.55),
+      0 0 10px 2px rgba(242, 192, 25, 0.35);
+  }
+  100% {
+    border-color: #e8f08a;
+    box-shadow:
+      0 0 6px 2px var(--bless-glow-strong),
+      0 0 14px 4px var(--bless-glow),
+      0 0 26px 8px rgba(15, 255, 0, 0.45),
+      0 0 40px 12px rgba(255, 229, 102, 0.25);
+  }
 }
 
-@keyframes pulse-curse {
-  from { box-shadow: 0 0px 0px var(--curse-color); }
-  to { box-shadow: 0 0 10px var(--curse-color); }
+@keyframes pulse-curse-meter {
+  0% {
+    border-color: #a86a88;
+    box-shadow:
+      0 0 4px 1px rgba(255, 110, 180, 0.55),
+      0 0 10px 2px rgba(255, 56, 134, 0.35);
+  }
+  100% {
+    border-color: #f0a8cc;
+    box-shadow:
+      0 0 6px 2px var(--curse-glow-strong),
+      0 0 14px 4px var(--curse-glow),
+      0 0 26px 8px rgba(255, 56, 134, 0.45),
+      0 0 40px 12px rgba(255, 140, 200, 0.25);
+  }
 }
 
 /* meter glows */
 .animated-glow {
-  animation: pulse 1s infinite alternate;
+  animation: pulse-bless-meter 1.35s ease-in-out infinite alternate;
+  z-index: 1;
+}
+
+.animated-glow .meter-fill {
+  filter:
+    brightness(1.2)
+    drop-shadow(0 0 3px var(--bless-color))
+    drop-shadow(0 0 8px var(--bless-glow));
 }
 
 .animated-curse-glow {
-  animation: pulse-curse 1s infinite alternate;
+  animation: pulse-curse-meter 1.35s ease-in-out infinite alternate;
+  z-index: 1;
+}
+
+.animated-curse-glow .meter-fill {
+  filter:
+    brightness(1.15)
+    drop-shadow(0 0 3px var(--curse-color))
+    drop-shadow(0 0 8px var(--curse-glow));
 }
 
 .animated-glow-once {
-  animation: 1s ease-in-out 0s 1 alternate running pulse-once;
-  animation-iteration-count: 1;
+  animation: pulse-bless-meter 1s ease-in-out 0s 1 alternate;
 }
-    
+
 .animated-curse-glow-once {
-  animation: 1s ease-in-out 0s 1 alternate running pulse-curse-once;
-  animation-iteration-count: 1;
+  animation: pulse-curse-meter 1s ease-in-out 0s 1 alternate;
 }
 
 
