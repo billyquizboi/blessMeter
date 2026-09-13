@@ -64,6 +64,8 @@ const ATTRIBUTE_SHOW_ALL = "showAll" as const;
 
 const animationDuration = 1000;
 const shortAnimationDuration = 1;
+const redemptionLetterDelayMs = 45;
+const redemptionHoldAfterTypeMs = 600;
 
 let meterMaximum = 15;
 let showChars = true;
@@ -236,12 +238,12 @@ function incrementState(toIncrement: string, name: string | null): void {
         obj.lastUpdated = new Date();
 
         if (name != null && name !== "" && obj[redemptionHistoryKey][name] != null) {
-            if (toIncrement == TYPE_BLESS) {
+            if (toIncrement == StateKeys.numberOfBlesses) {
                 console.log("Incrementing blesses for user " + name);
                 obj[redemptionHistoryKey][name][StateKeys.numberOfBlesses] = obj[redemptionHistoryKey][name]["numberOfBlesses"] + 1;
                 charType = TYPE_BLESS;
                 impact = 1;
-            } else if (toIncrement == TYPE_CURSE) {
+            } else if (toIncrement == StateKeys.numberOfCurses) {
                 console.log("Incrementing curses for user " + name);
                 obj[redemptionHistoryKey][name][StateKeys.numberOfCurses] = obj[redemptionHistoryKey][name]["numberOfCurses"] + 1;
                 charType = TYPE_CURSE;
@@ -311,6 +313,7 @@ function resetMetersButKeepCurrentState(widgetState: WidgetState): WidgetState |
         allTime: widgetState.allTime,
         showAll: widgetState.showAll,
         redemptionHistory: widgetState.redemptionHistory,
+        lastRedemption: widgetState.lastRedemption,
         current: {
             [StateKeys.numberOfBlesses]: 0,
             [StateKeys.numberOfCurses]: 0,
@@ -659,7 +662,12 @@ function updateDisplay(widgetState: WidgetState | null, showAnimate: boolean): v
         return;
     }
 
-    displayQueue.enqueue(() => processDisplay(widgetState, showAnimate));
+    displayQueue.enqueue(async () => {
+        if (showAnimate && hasValidLastRedemption(widgetState.lastRedemption)) {
+            await animateRedemptionAnnouncement(widgetState.lastRedemption);
+        }
+        await processDisplay(widgetState, showAnimate);
+    });
 }
 
 /**
@@ -749,9 +757,6 @@ function processDisplay(widgetState: WidgetState, showAnimate: boolean): Promise
     }
 
     const animations: Promise<void>[] = [];
-    if (hasValidLastRedemption(widgetState["lastRedemption"])) {
-        // TODO: push an animation to animations for the user who redeemed, impact, and svg
-    } 
     animations.push(blessFactory());
     animations.push(curseFactory());
     return Promise.all(animations).then(() => {
@@ -768,6 +773,211 @@ function hasValidLastRedemption(lastRedemption: any): lastRedemption is LastRede
         && typeof lastRedemption["redeemingUser"] === "string"    
         && typeof lastRedemption["charType"] === "string" 
         && typeof lastRedemption["impact"] === "number";
+}
+
+/**
+ * Hides the meter panel, types a redemption summary letter-by-letter into the
+ * main dialogue window, holds briefly, then restores the meter panel.
+ * @param redemption - The most recent redemption recorded in widget state.
+ */
+async function animateRedemptionAnnouncement(redemption: LastRedemption): Promise<void> {
+    const meterPanel = getMeterPanelContent();
+    const announcement = getRedemptionAnnouncement();
+    const announcementElement = announcement.get(0);
+    if (!announcementElement) {
+        return;
+    }
+
+    const segments = buildRedemptionAnnouncementSegments(redemption);
+    const textContainer = document.createElement("div");
+    textContainer.className = "redemption-announcement-text";
+    announcement
+        .addClass("visible")
+        .attr("aria-hidden", "false")
+        .empty()
+        .append(textContainer);
+
+    meterPanel.addClass("hidden");
+
+    await typewriterSegments(textContainer, segments, redemptionLetterDelayMs);
+    await waitMs(redemptionHoldAfterTypeMs);
+
+    announcement
+        .removeClass("visible")
+        .attr("aria-hidden", "true")
+        .empty();
+    meterPanel.removeClass("hidden");
+}
+
+interface AnnouncementSegment {
+    text: string;
+    colorClass?: string;
+}
+
+/**
+ * Builds the redemption summary as colored segments for the typewriter animation.
+ * All text is white except {@link formatRedemptionTypeLabel} and
+ * {@link formatRedemptionImpactLabel}, which receive type/impact colors.
+ * @param redemption - The redemption to describe.
+ */
+function buildRedemptionAnnouncementSegments(redemption: LastRedemption): AnnouncementSegment[] {
+    const typeLabel = formatRedemptionTypeLabel(redemption.charType);
+    const impactLabel = formatRedemptionImpactLabel(redemption.impact);
+    return [
+        { text: `${redemption.redeemingUser}\n` },
+        { text: typeLabel, colorClass: getTypeColorClass(redemption.charType) },
+        { text: " the run\nImpact: " },
+        { text: impactLabel, colorClass: getImpactColorClass(redemption.impact) },
+    ];
+}
+
+/**
+ * @param charType - One of {@link TYPE_BLESS}, {@link TYPE_CURSE}, or {@link TYPE_BLURSE}.
+ */
+function getTypeColorClass(charType: string): string {
+    if (charType === TYPE_BLESS) {
+        return "redemption-text-bless";
+    }
+    if (charType === TYPE_CURSE) {
+        return "redemption-text-curse";
+    }
+    if (charType === TYPE_BLURSE) {
+        return "redemption-text-blurse";
+    }
+    return "";
+}
+
+/**
+ * Impact text is green when the redeem moved the bless meter, red for curse.
+ * @param impact - Meter impact from the redemption.
+ */
+function getImpactColorClass(impact: number): string {
+    if (impact === 1 || impact === -2) {
+        return "redemption-text-bless";
+    }
+    if (impact === -1 || impact === 2) {
+        return "redemption-text-curse";
+    }
+    if (impact > 0) {
+        return "redemption-text-curse";
+    }
+    if (impact < 0) {
+        return "redemption-text-bless";
+    }
+    return "";
+}
+
+/**
+ * @param charType - One of {@link TYPE_BLESS}, {@link TYPE_CURSE}, or {@link TYPE_BLURSE}.
+ */
+function formatRedemptionTypeLabel(charType: string): string {
+    if (charType === TYPE_BLESS) {
+        return "BLESSED";
+    }
+    if (charType === TYPE_CURSE) {
+        return "CURSED";
+    }
+    if (charType === TYPE_BLURSE) {
+        return "BLURSED";
+    }
+    return charType.toUpperCase();
+}
+
+/**
+ * Turns the signed impact value stored on lastRedemption into viewer-facing text.
+ * @param impact - Meter impact from the redemption (e.g. 1 bless, -1 curse).
+ */
+function formatRedemptionImpactLabel(impact: number): string {
+    if (impact === 1) {
+        return "+1 BLESS";
+    }
+    if (impact === -1) {
+        return "+1 CURSE";
+    }
+    if (impact === -2) {
+        return "+2 BLESS";
+    }
+    if (impact === 2) {
+        return "+2 CURSE";
+    }
+    if (impact > 0) {
+        return `+${impact}`;
+    }
+    return String(impact);
+}
+
+/**
+ * Reveals announcement segments one character at a time, left to right, preserving
+ * per-segment colors via span elements.
+ * @param element - The container whose child spans are updated.
+ * @param segments - Text chunks and optional color classes.
+ * @param letterDelayMs - Delay between characters; 0 reveals the full string immediately.
+ */
+function typewriterSegments(element: HTMLElement, segments: AnnouncementSegment[], letterDelayMs: number): Promise<void> {
+    const flatChars: { char: string; colorClass?: string }[] = [];
+    for (const segment of segments) {
+        for (const char of segment.text) {
+            flatChars.push({ char: char, colorClass: segment.colorClass });
+        }
+    }
+
+    return new Promise(resolve => {
+        element.innerHTML = "";
+        if (flatChars.length === 0) {
+            resolve();
+            return;
+        }
+        if (letterDelayMs <= 0) {
+            renderTypewriterChars(element, flatChars, flatChars.length);
+            resolve();
+            return;
+        }
+        let index = 0;
+        const revealNext = () => {
+            index += 1;
+            renderTypewriterChars(element, flatChars, index);
+            if (index >= flatChars.length) {
+                resolve();
+            } else {
+                window.setTimeout(revealNext, letterDelayMs);
+            }
+        };
+        revealNext();
+    });
+}
+
+/**
+ * Renders the first {@link visibleCount} characters of a flattened typewriter stream.
+ * @param element - The container to populate with colored spans.
+ * @param flatChars - Characters paired with optional color classes.
+ * @param visibleCount - How many characters from the start to show.
+ */
+function renderTypewriterChars(
+    element: HTMLElement,
+    flatChars: { char: string; colorClass?: string }[],
+    visibleCount: number
+): void {
+    element.innerHTML = "";
+    let index = 0;
+    while (index < visibleCount) {
+        const colorClass = flatChars[index].colorClass;
+        let end = index + 1;
+        while (end < visibleCount && flatChars[end].colorClass === colorClass) {
+            end += 1;
+        }
+        const span = document.createElement("span");
+        if (colorClass) {
+            span.className = colorClass;
+        }
+        span.textContent = flatChars.slice(index, end).map(entry => entry.char).join("");
+        element.appendChild(span);
+        index = end;
+    }
+}
+
+/** @param durationMs - How long to wait before resolving. */
+function waitMs(durationMs: number): Promise<void> {
+    return new Promise(resolve => window.setTimeout(resolve, durationMs));
 }
 
 /**
@@ -815,6 +1025,21 @@ function getCurseInfoValue(): JQuery<HTMLElement> {
 /** Returns the jQuery-wrapped span element that displays the blurse count. */
 function getBlurseInfoValue(): JQuery<HTMLElement> {
     return $("span.blurse-info-value");
+}
+
+/** Returns the meter panel inside the main dialogue window (not the sprite window). */
+function getMainMeterInnerWindow(): JQuery<HTMLElement> {
+    return $("div.outer-dialogue-window-main > div.inner-dialogue-window").not(".user-redeem-window");
+}
+
+/** Returns the jQuery-wrapped meter readout content hidden during redemption announcements. */
+function getMeterPanelContent(): JQuery<HTMLElement> {
+    return getMainMeterInnerWindow().find(".meter-panel-content");
+}
+
+/** Returns the jQuery-wrapped element used for the redemption typewriter text. */
+function getRedemptionAnnouncement(): JQuery<HTMLElement> {
+    return getMainMeterInnerWindow().find(".redemption-announcement");
 }
 
 /**

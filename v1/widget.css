@@ -26,6 +26,7 @@
   
     --bless-color: #0f0;
     --curse-color: #FF3886;
+    --blurse-color: #5eb8ff;
 
     --text-color: #ecedee;
     --bless-glow: #f2c019;
@@ -150,6 +151,70 @@ h1,h2,h3,h4,h5{
     justify-content: space-evenly;
     width: 100%;
     height: 100%;
+}
+
+.outer-dialogue-window-main > .inner-dialogue-window:not(.user-redeem-window) {
+    position: relative;
+}
+
+.meter-panel-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    width: 100%;
+    height: 100%;
+}
+
+.meter-panel-content.hidden {
+    display: none;
+}
+
+.redemption-announcement {
+    display: none;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
+    box-sizing: border-box;
+    padding: 2px 4px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    color: var(--text-color);
+}
+
+.redemption-announcement.visible {
+    display: flex;
+    align-items: center;
+}
+
+.redemption-announcement-text {
+    width: 100%;
+    font-size: 10px;
+    line-height: 1.5;
+    text-align: left;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow: visible;
+}
+
+.redemption-announcement-text span {
+    font-size: inherit;
+    overflow: visible;
+    display: inline;
+}
+
+.redemption-text-bless {
+    color: var(--bless-color);
+}
+
+.redemption-text-curse {
+    color: var(--curse-color);
+}
+
+.redemption-text-blurse {
+    color: var(--blurse-color);
 }
 
 .bless-container,.curse-container,.blurse-container,.info-container {
