@@ -413,7 +413,8 @@
        * @typedef {Object} LastRedemption
        * @property {string} redeemingUser
        * @property {string} charType
-       * @property {number} impact
+       * @property {string} meterTarget
+       * @property {number} meterAmount
        */
 
       /**
@@ -1013,7 +1014,7 @@
             redemptionHistory: {
               testUserName: { numberOfBlesses: 4, numberOfCurses: 2, numberOfBlurses: 3 },
             },
-            lastRedemption: { redeemingUser: "testUserName", charType: "blurse", impact: 2 },
+            lastRedemption: { redeemingUser: "testUserName", charType: "blurse", meterTarget: "curse", meterAmount: 2 },
           });
         }
         if (name === "blessMaxed") {

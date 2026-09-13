@@ -87,9 +87,9 @@ declare global {
     // Redemption announcement
     hasValidLastRedemption: (lastRedemption: unknown) => boolean;
     formatRedemptionTypeLabel: (charType: string) => string;
-    formatRedemptionImpactLabel: (impact: number) => string;
+    formatRedemptionImpactLabel: (meterTarget: string, meterAmount: number) => string;
     getTypeColorClass: (charType: string) => string;
-    getImpactColorClass: (impact: number) => string;
+    getMeterTargetColorClass: (meterTarget: string) => string;
     buildRedemptionAnnouncementSegments: (redemption: LastRedemption) => { text: string; colorClass?: string }[];
     typewriterSegments: (element: HTMLElement, segments: { text: string; colorClass?: string }[], letterDelayMs: number) => Promise<void>;
     animateRedemptionAnnouncement: (redemption: LastRedemption) => Promise<void>;
@@ -193,7 +193,8 @@ function makeLastRedemption(overrides?: Partial<LastRedemption>): LastRedemption
   return {
     redeemingUser: "testUserName",
     charType: "bless",
-    impact: 1,
+    meterTarget: "bless",
+    meterAmount: 1,
     ...overrides,
   };
 }
@@ -675,7 +676,7 @@ describe("hasValidLastRedemption", () => {
   });
 
   it("returns false when redeemingUser is missing", () => {
-    expect(w.hasValidLastRedemption({ charType: "bless", impact: 1 })).toBe(false);
+    expect(w.hasValidLastRedemption({ charType: "bless", meterTarget: "bless", meterAmount: 1 })).toBe(false);
   });
 
   it("returns true for a complete lastRedemption", () => {
@@ -713,16 +714,16 @@ describe("formatRedemptionImpactLabel", () => {
     ({ w } = setupTestDOM());
   });
 
-  it("formats bless, curse, and blurse impacts", () => {
-    expect(w.formatRedemptionImpactLabel(1)).toBe("+1 BLESS");
-    expect(w.formatRedemptionImpactLabel(-1)).toBe("+1 CURSE");
-    expect(w.formatRedemptionImpactLabel(-2)).toBe("+2 BLESS");
-    expect(w.formatRedemptionImpactLabel(2)).toBe("+2 CURSE");
+  it("formats bless, curse, and blurse meter movements", () => {
+    expect(w.formatRedemptionImpactLabel("bless", 1)).toBe("+1 BLESS");
+    expect(w.formatRedemptionImpactLabel("curse", 1)).toBe("+1 CURSE");
+    expect(w.formatRedemptionImpactLabel("bless", 2)).toBe("+2 BLESS");
+    expect(w.formatRedemptionImpactLabel("curse", 2)).toBe("+2 CURSE");
   });
 });
 
 // ===========================================================================
-// getTypeColorClass / getImpactColorClass
+// getTypeColorClass / getMeterTargetColorClass
 // ===========================================================================
 describe("getTypeColorClass", () => {
   let w: Window;
@@ -738,18 +739,16 @@ describe("getTypeColorClass", () => {
   });
 });
 
-describe("getImpactColorClass", () => {
+describe("getMeterTargetColorClass", () => {
   let w: Window;
 
   beforeEach(() => {
     ({ w } = setupTestDOM());
   });
 
-  it("maps bless-direction impacts to green and curse-direction to red", () => {
-    expect(w.getImpactColorClass(1)).toBe("redemption-text-bless");
-    expect(w.getImpactColorClass(-2)).toBe("redemption-text-bless");
-    expect(w.getImpactColorClass(-1)).toBe("redemption-text-curse");
-    expect(w.getImpactColorClass(2)).toBe("redemption-text-curse");
+  it("maps bless and curse meter targets to color classes", () => {
+    expect(w.getMeterTargetColorClass("bless")).toBe("redemption-text-bless");
+    expect(w.getMeterTargetColorClass("curse")).toBe("redemption-text-curse");
   });
 });
 
@@ -772,15 +771,15 @@ describe("buildRedemptionAnnouncementSegments", () => {
     expect(segments[3]).toEqual({ text: "+1 BLESS", colorClass: "redemption-text-bless" });
   });
 
-  it("colors blurse impact by bless vs curse outcome", () => {
+  it("colors blurse meter movement by bless vs curse outcome", () => {
     const blessed = w.buildRedemptionAnnouncementSegments(
-      makeLastRedemption({ charType: "blurse", impact: -2 })
+      makeLastRedemption({ charType: "blurse", meterTarget: "bless", meterAmount: 2 })
     );
     expect(blessed[1].colorClass).toBe("redemption-text-blurse");
     expect(blessed[3]).toEqual({ text: "+2 BLESS", colorClass: "redemption-text-bless" });
 
     const cursed = w.buildRedemptionAnnouncementSegments(
-      makeLastRedemption({ charType: "blurse", impact: 2 })
+      makeLastRedemption({ charType: "blurse", meterTarget: "curse", meterAmount: 2 })
     );
     expect(cursed[3]).toEqual({ text: "+2 CURSE", colorClass: "redemption-text-curse" });
   });
@@ -863,7 +862,7 @@ describe("animateRedemptionAnnouncement", () => {
   it("leaves type and impact labels in colored spans after typing completes", async () => {
     const container = w.document.createElement("div");
     const segments = w.buildRedemptionAnnouncementSegments(
-      makeLastRedemption({ charType: "curse", impact: -1 })
+      makeLastRedemption({ charType: "curse", meterTarget: "curse", meterAmount: 1 })
     );
     await w.typewriterSegments(container, segments, 0);
     const spans = Array.from(container.querySelectorAll("span"));

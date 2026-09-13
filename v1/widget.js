@@ -201,7 +201,8 @@ function incrementState(toIncrement, name) {
         }
         // stores info on the user who redeemed
         let charType = undefined;
-        let impact = undefined;
+        let meterTarget = undefined;
+        let meterAmount = undefined;
         // handles blurses
         if (toIncrement == StateKeys.numberOfBlurses) {
             charType = TYPE_BLURSE;
@@ -210,14 +211,16 @@ function incrementState(toIncrement, name) {
                 optionallyInitializeNumericField(obj, StateKeys.numberOfBlursesThatBlessed);
                 obj.current[StateKeys.numberOfBlursesThatBlessed] += 1;
                 obj.allTime[StateKeys.numberOfBlursesThatBlessed] += 1;
-                impact = -2;
+                meterTarget = TYPE_BLESS;
+                meterAmount = 2;
             }
             else {
                 // curse it bby
                 optionallyInitializeNumericField(obj, StateKeys.numberOfBlursesThatCursed);
                 obj.current[StateKeys.numberOfBlursesThatCursed] += 1;
                 obj.allTime[StateKeys.numberOfBlursesThatCursed] += 1;
-                impact = 2;
+                meterTarget = TYPE_CURSE;
+                meterAmount = 2;
             }
             if (name != null && name !== "" && obj[redemptionHistoryKey][name] != null) {
                 console.log("Incrementing blurses for user " + name);
@@ -232,20 +235,23 @@ function incrementState(toIncrement, name) {
                 console.log("Incrementing blesses for user " + name);
                 obj[redemptionHistoryKey][name][StateKeys.numberOfBlesses] = obj[redemptionHistoryKey][name]["numberOfBlesses"] + 1;
                 charType = TYPE_BLESS;
-                impact = 1;
+                meterTarget = TYPE_BLESS;
+                meterAmount = 1;
             }
             else if (toIncrement == StateKeys.numberOfCurses) {
                 console.log("Incrementing curses for user " + name);
                 obj[redemptionHistoryKey][name][StateKeys.numberOfCurses] = obj[redemptionHistoryKey][name]["numberOfCurses"] + 1;
                 charType = TYPE_CURSE;
-                impact = -1;
+                meterTarget = TYPE_CURSE;
+                meterAmount = 1;
             }
         }
-        if (name != null && name !== "" && impact != undefined && charType != undefined) {
+        if (name != null && name !== "" && meterTarget != undefined && meterAmount != undefined && charType != undefined) {
             obj["lastRedemption"] = {
                 "redeemingUser": name,
                 "charType": charType,
-                "impact": impact
+                "meterTarget": meterTarget,
+                "meterAmount": meterAmount,
             };
         }
         if (bothMetersAreAtMax(obj)) {
@@ -732,7 +738,8 @@ function hasValidLastRedemption(lastRedemption) {
     return lastRedemption != undefined
         && typeof lastRedemption["redeemingUser"] === "string"
         && typeof lastRedemption["charType"] === "string"
-        && typeof lastRedemption["impact"] === "number";
+        && typeof lastRedemption["meterTarget"] === "string"
+        && typeof lastRedemption["meterAmount"] === "number";
 }
 /**
  * Hides the meter panel, types a redemption summary letter-by-letter into the
@@ -768,17 +775,17 @@ function animateRedemptionAnnouncement(redemption) {
 /**
  * Builds the redemption summary as colored segments for the typewriter animation.
  * All text is white except {@link formatRedemptionTypeLabel} and
- * {@link formatRedemptionImpactLabel}, which receive type/impact colors.
+ * {@link formatRedemptionImpactLabel}, which receive type/meter-target colors.
  * @param redemption - The redemption to describe.
  */
 function buildRedemptionAnnouncementSegments(redemption) {
     const typeLabel = formatRedemptionTypeLabel(redemption.charType);
-    const impactLabel = formatRedemptionImpactLabel(redemption.impact);
+    const impactLabel = formatRedemptionImpactLabel(redemption.meterTarget, redemption.meterAmount);
     return [
         { text: `${redemption.redeemingUser}\n` },
         { text: typeLabel, colorClass: getTypeColorClass(redemption.charType) },
         { text: " the run\nImpact: " },
-        { text: impactLabel, colorClass: getImpactColorClass(redemption.impact) },
+        { text: impactLabel, colorClass: getMeterTargetColorClass(redemption.meterTarget) },
     ];
 }
 /**
@@ -797,21 +804,14 @@ function getTypeColorClass(charType) {
     return "";
 }
 /**
- * Impact text is green when the redeem moved the bless meter, red for curse.
- * @param impact - Meter impact from the redemption.
+ * @param meterTarget - {@link TYPE_BLESS} or {@link TYPE_CURSE}: which meter moved.
  */
-function getImpactColorClass(impact) {
-    if (impact === 1 || impact === -2) {
+function getMeterTargetColorClass(meterTarget) {
+    if (meterTarget === TYPE_BLESS) {
         return "redemption-text-bless";
     }
-    if (impact === -1 || impact === 2) {
+    if (meterTarget === TYPE_CURSE) {
         return "redemption-text-curse";
-    }
-    if (impact > 0) {
-        return "redemption-text-curse";
-    }
-    if (impact < 0) {
-        return "redemption-text-bless";
     }
     return "";
 }
@@ -831,26 +831,13 @@ function formatRedemptionTypeLabel(charType) {
     return charType.toUpperCase();
 }
 /**
- * Turns the signed impact value stored on lastRedemption into viewer-facing text.
- * @param impact - Meter impact from the redemption (e.g. 1 bless, -1 curse).
+ * Formats the meter movement stored on lastRedemption for the announcement.
+ * @param meterTarget - {@link TYPE_BLESS} or {@link TYPE_CURSE}.
+ * @param meterAmount - How many points the target meter gained.
  */
-function formatRedemptionImpactLabel(impact) {
-    if (impact === 1) {
-        return "+1 BLESS";
-    }
-    if (impact === -1) {
-        return "+1 CURSE";
-    }
-    if (impact === -2) {
-        return "+2 BLESS";
-    }
-    if (impact === 2) {
-        return "+2 CURSE";
-    }
-    if (impact > 0) {
-        return `+${impact}`;
-    }
-    return String(impact);
+function formatRedemptionImpactLabel(meterTarget, meterAmount) {
+    const targetLabel = meterTarget === TYPE_BLESS ? "BLESS" : "CURSE";
+    return `+${meterAmount} ${targetLabel}`;
 }
 /**
  * Reveals announcement segments one character at a time, left to right, preserving

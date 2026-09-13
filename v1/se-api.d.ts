@@ -54,7 +54,8 @@ interface RedemptionHistory {
 interface LastRedemption {
   redeemingUser: string,
   charType: string,
-  impact: number
+  meterTarget: string,
+  meterAmount: number,
 }
 
 /**
