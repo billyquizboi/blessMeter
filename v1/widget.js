@@ -23,7 +23,8 @@ const StateKeys = {
     numberOfBlursesPreReset: "numberOfBlursesPreReset",
     numberOfBlursesThatCursedPreReset: "numberOfBlursesThatCursedPreReset",
     numberOfBlursesThatBlessedPreReset: "numberOfBlursesThatBlessedPreReset",
-    redemptionHistory: "redemptionHistory"
+    redemptionHistory: "redemptionHistory",
+    lastRedemption: "lastRedemption"
 };
 // Lines 25–50 in original: object literal + separate lastUpdated assignment merged here
 const initialWidgetState = {
@@ -77,7 +78,6 @@ class SequentialQueue {
     }
 }
 const displayQueue = new SequentialQueue();
-let pendingCharType = null;
 /** Returns the jQuery-wrapped meter fill element for the bless meter. */
 function getBlessMeterFill() {
     return $("div.bless-container div.meter div.meter-fill");
@@ -188,19 +188,25 @@ function incrementState(toIncrement, name) {
                 "numberOfCurses": 0
             };
         }
+        // stores info on the user who redeemed
+        let charType = undefined;
+        let impact = undefined;
         // handles blurses
         if (toIncrement == StateKeys.numberOfBlurses) {
+            charType = TYPE_BLURSE;
             if (Math.random() < 0.5) {
                 // blessed af
                 optionallyInitializeNumericField(obj, StateKeys.numberOfBlursesThatBlessed);
                 obj.current[StateKeys.numberOfBlursesThatBlessed] += 1;
                 obj.allTime[StateKeys.numberOfBlursesThatBlessed] += 1;
+                impact = -2;
             }
             else {
                 // curse it bby
                 optionallyInitializeNumericField(obj, StateKeys.numberOfBlursesThatCursed);
                 obj.current[StateKeys.numberOfBlursesThatCursed] += 1;
                 obj.allTime[StateKeys.numberOfBlursesThatCursed] += 1;
+                impact = 2;
             }
             if (name != null && name !== "" && obj[redemptionHistoryKey][name] != null) {
                 console.log("Incrementing blurses for user " + name);
@@ -214,11 +220,22 @@ function incrementState(toIncrement, name) {
             if (toIncrement == TYPE_BLESS) {
                 console.log("Incrementing blesses for user " + name);
                 obj[redemptionHistoryKey][name][StateKeys.numberOfBlesses] = obj[redemptionHistoryKey][name]["numberOfBlesses"] + 1;
+                charType = TYPE_BLESS;
+                impact = 1;
             }
             else if (toIncrement == TYPE_CURSE) {
                 console.log("Incrementing curses for user " + name);
                 obj[redemptionHistoryKey][name][StateKeys.numberOfCurses] = obj[redemptionHistoryKey][name]["numberOfCurses"] + 1;
+                charType = TYPE_CURSE;
+                impact = -1;
             }
+        }
+        if (name != null && name !== "" && impact != undefined && charType != undefined) {
+            obj["lastRedemption"] = {
+                "redeemingUser": name,
+                "charType": charType,
+                "impact": impact
+            };
         }
         if (bothMetersAreAtMax(obj)) {
             const newState = resetMetersButKeepCurrentState(obj);
@@ -444,21 +461,17 @@ function handleRedemption(detail) {
     const redemptionName = getRedemptionName(detail);
     const redeemingUserName = getRedeemingUserName(detail);
     if (redemptionName != undefined && redemptionName != null) {
-        // we can do something
         console.log(`Redemption name is ${redemptionName}`);
         if (redemptionName == blessTheRun) {
             console.log(`Bless it: Verily let this run be bless-ed`);
-            pendingCharType = TYPE_BLESS;
             incrementState(StateKeys.numberOfBlesses, redeemingUserName);
         }
         else if (redemptionName == curseTheRun) {
             console.log(`Curse it: I say unto you Locke shall not steal this run.`);
-            pendingCharType = TYPE_CURSE;
             incrementState(StateKeys.numberOfCurses, redeemingUserName);
         }
         else if (redemptionName == blurseTheRun) {
             console.log(`Blurse it - who knows? Maybe gau, maybe no gau. Maybe black belt, maybe trench death.`);
-            pendingCharType = TYPE_BLURSE;
             incrementState(StateKeys.numberOfBlurses, redeemingUserName);
         }
         else {
@@ -604,13 +617,11 @@ function getRedeemingUserName(detail) {
  */
 function updateDisplay(widgetState, showAnimate) {
     // Capture and clear before any async work so rapid redemptions don't bleed over.
-    const charType = pendingCharType;
-    pendingCharType = null;
     if (widgetState == null || widgetState.current == undefined) {
         console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
         return;
     }
-    displayQueue.enqueue(() => processDisplay(widgetState, charType, showAnimate));
+    displayQueue.enqueue(() => processDisplay(widgetState, showAnimate));
 }
 /**
  * Performs the actual DOM update and starts the meter and character SVG
@@ -618,11 +629,10 @@ function updateDisplay(widgetState, showAnimate) {
  * all animations for this cycle complete, so {@link displayQueue} knows when
  * it's safe to start the next queued entry. Only called via {@link updateDisplay}.
  * @param widgetState - The validated, non-null state to render.
- * @param charType - The character SVG type to show, or null if none.
  * @param showAnimate - When true uses the full {@link animationDuration};
  *   when false uses {@link shortAnimationDuration} for an instant update.
  */
-function processDisplay(widgetState, charType, showAnimate) {
+function processDisplay(widgetState, showAnimate) {
     console.log(`Updating meter display ${JSON.stringify(widgetState)}`);
     const numberOfBlesses = getCountFromState(widgetState, StateKeys.numberOfBlesses);
     const numberOfCurses = getCountFromState(widgetState, StateKeys.numberOfCurses);
@@ -690,10 +700,12 @@ function processDisplay(widgetState, charType, showAnimate) {
         curseCountText = curseCounterText;
         blurseCountText = `${blurseThatBlessedCounterText}/${blurseThatCursedCounterText}`;
     }
-    const animations = [blessFactory(), curseFactory()];
-    if (charType !== null) {
-        animations.push(showCharSvg(charType));
+    const animations = [];
+    if (hasValidLastRedemption(widgetState["lastRedemption"])) {
+        // TODO: push an animation to animations for the user who redeemed, impact, and svg
     }
+    animations.push(blessFactory());
+    animations.push(curseFactory());
     return Promise.all(animations).then(() => {
         // Counter text updates only once the animations for this queue entry
         // have fully settled, so the number and the meter width change together.
@@ -701,6 +713,12 @@ function processDisplay(widgetState, charType, showAnimate) {
         getCurseInfoValue().text(curseCountText);
         getBlurseInfoValue().text(blurseCountText);
     });
+}
+function hasValidLastRedemption(lastRedemption) {
+    return lastRedemption != undefined
+        && typeof lastRedemption["redeemingUser"] === "string"
+        && typeof lastRedemption["charType"] === "string"
+        && typeof lastRedemption["impact"] === "number";
 }
 /**
  * Returns the count for the named key from the appropriate portion of state:
@@ -937,6 +955,7 @@ function mockRedeemEvent(redemptionName) {
                 data: {
                     redemption: redemptionName,
                 },
+                name: "testUserName"
             },
         },
     });
