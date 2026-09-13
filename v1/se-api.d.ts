@@ -42,6 +42,8 @@ interface RedemptionHistoryEntry {
   numberOfBlesses: number;
   numberOfCurses: number;
   numberOfBlurses: number;
+  numberOfBlursesThatBlessed: number;
+  numberOfBlursesThatCursed: number;
 }
 
 /**
@@ -112,6 +114,9 @@ interface SESession {
 interface FieldData {
   meterMaximum?: number;
   showChars?: boolean;
+  showRedemptionAnnouncements?: boolean;
+  numberOfSecondsBetweenReports?: number;
+  reportsShouldDisplay?: boolean;
 }
 
 interface SEEventDetail {

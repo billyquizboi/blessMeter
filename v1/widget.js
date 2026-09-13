@@ -1,9 +1,4 @@
 "use strict";
-// TODO: Revert to commit e7d5013a2605f3fd846c7eacf57f649821f4abd5
-// TODO: Then, implement my own redemption queue
-//   + animation queue for each redemption queue item with sprite laugh & casting animations
-//   + the sprite animations should be longer for each redeem to be more enjoyable
-//   + add testing for the complex cases of many redeems occurring rapidly
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -68,11 +63,17 @@ const animationDuration = 1000;
 const shortAnimationDuration = 1;
 const redemptionLetterDelayMs = 45;
 const redemptionHoldAfterTypeMs = 600;
+const reportAllTimeHoldMs = 2000;
+const topRedeemerLimit = 3;
 let meterMaximum = 15;
 let showChars = true;
+let showRedemptionAnnouncements = true;
+let numberOfSecondsBetweenReports = 90;
+let reportsShouldDisplay = true;
 let lastWidgetState = null;
 /** Set by {@link incrementState} so only fresh redemptions trigger the announcement. */
 let shouldAnnounceRedemption = false;
+let periodicReportTimerId = null;
 /**
  * Runs enqueued async tasks one at a time, in order — each task completes
  * before the next one starts. Errors are caught and logged so a failed task
@@ -193,13 +194,14 @@ function incrementState(toIncrement, name) {
             console.log("Initializing redemptionHistory  object");
             obj[redemptionHistoryKey] = {};
         }
-        if (name != null && name !== "" && obj[redemptionHistoryKey][name] == null) {
-            console.log("Initializing redemptionHistory for user " + name);
-            obj[redemptionHistoryKey][name] = {
-                "numberOfBlesses": 0,
-                "numberOfBlurses": 0,
-                "numberOfCurses": 0
-            };
+        if (name != null && name !== "") {
+            if (obj[redemptionHistoryKey][name] == null) {
+                console.log("Initializing redemptionHistory for user " + name);
+                obj[redemptionHistoryKey][name] = createEmptyRedemptionHistoryEntry();
+            }
+            else {
+                obj[redemptionHistoryKey][name] = normalizeRedemptionHistoryEntry(obj[redemptionHistoryKey][name]);
+            }
         }
         // stores info on the user who redeemed
         let charType = undefined;
@@ -226,7 +228,14 @@ function incrementState(toIncrement, name) {
             }
             if (name != null && name !== "" && obj[redemptionHistoryKey][name] != null) {
                 console.log("Incrementing blurses for user " + name);
-                obj[redemptionHistoryKey][name].numberOfBlurses = obj[redemptionHistoryKey][name].numberOfBlurses + 1;
+                const userEntry = obj[redemptionHistoryKey][name];
+                userEntry.numberOfBlurses = getOrDefaultCount(userEntry.numberOfBlurses) + 1;
+                if (meterTarget === TYPE_BLESS) {
+                    userEntry.numberOfBlursesThatBlessed = getOrDefaultCount(userEntry.numberOfBlursesThatBlessed) + 1;
+                }
+                else {
+                    userEntry.numberOfBlursesThatCursed = getOrDefaultCount(userEntry.numberOfBlursesThatCursed) + 1;
+                }
             }
         }
         obj.current[toIncrement] += 1;
@@ -437,17 +446,7 @@ function widgetLoadHandler(event) {
     const obj = event;
     // since we initialize from stored state we don't need to re-process recents
     if (obj.detail != null && obj.detail.fieldData != null) {
-        if (obj.detail.fieldData.meterMaximum != null && typeof obj.detail.fieldData.meterMaximum === "number") {
-            if (!Number.isInteger(meterMaximum)) {
-                meterMaximum = Math.floor(meterMaximum);
-            }
-            if (Number.isInteger(meterMaximum)) {
-                meterMaximum = obj.detail.fieldData.meterMaximum;
-            }
-        }
-        if (obj.detail.fieldData.showChars != null && typeof obj.detail.fieldData.showChars === "boolean") {
-            showChars = obj.detail.fieldData.showChars;
-        }
+        applyFieldData(obj.detail.fieldData);
     }
     try {
         SE_API.store.get(STORE_KEY_NAME).then(retrieved => {
@@ -648,10 +647,86 @@ function updateDisplay(widgetState, showAnimate, announceRedemption) {
         return;
     }
     displayQueue.enqueue(() => __awaiter(this, void 0, void 0, function* () {
-        if (showAnimate && announce && hasValidLastRedemption(widgetState.lastRedemption)) {
+        if (showAnimate && announce && showRedemptionAnnouncements && hasValidLastRedemption(widgetState.lastRedemption)) {
             yield animateRedemptionAnnouncement(widgetState.lastRedemption);
         }
         yield processDisplay(widgetState, showAnimate);
+    }));
+}
+/**
+ * Applies StreamElements widget field configuration to module-level settings.
+ * @param fieldData - Field values from the widget editor or test harness.
+ */
+function applyFieldData(fieldData) {
+    if (fieldData == undefined) {
+        return;
+    }
+    if (fieldData.meterMaximum != null && typeof fieldData.meterMaximum === "number") {
+        if (!Number.isInteger(meterMaximum)) {
+            meterMaximum = Math.floor(meterMaximum);
+        }
+        if (Number.isInteger(meterMaximum)) {
+            meterMaximum = fieldData.meterMaximum;
+        }
+    }
+    if (fieldData.showChars != null && typeof fieldData.showChars === "boolean") {
+        showChars = fieldData.showChars;
+    }
+    if (fieldData.showRedemptionAnnouncements != null && typeof fieldData.showRedemptionAnnouncements === "boolean") {
+        showRedemptionAnnouncements = fieldData.showRedemptionAnnouncements;
+    }
+    if (fieldData.numberOfSecondsBetweenReports != null && typeof fieldData.numberOfSecondsBetweenReports === "number") {
+        numberOfSecondsBetweenReports = Math.max(0, Math.floor(fieldData.numberOfSecondsBetweenReports));
+    }
+    if (fieldData.reportsShouldDisplay != null && typeof fieldData.reportsShouldDisplay === "boolean") {
+        reportsShouldDisplay = fieldData.reportsShouldDisplay;
+    }
+    configurePeriodicReports();
+}
+/** Starts or stops the interval that enqueues top-redeemer report cycles. */
+function configurePeriodicReports() {
+    if (periodicReportTimerId != null) {
+        window.clearInterval(periodicReportTimerId);
+        periodicReportTimerId = null;
+    }
+    if (!reportsShouldDisplay || numberOfSecondsBetweenReports <= 0) {
+        return;
+    }
+    periodicReportTimerId = window.setInterval(() => {
+        enqueuePeriodicReportCycle();
+    }, numberOfSecondsBetweenReports * 1000);
+}
+/** Clears the periodic report interval without changing field settings. */
+function stopPeriodicReports() {
+    if (periodicReportTimerId != null) {
+        window.clearInterval(periodicReportTimerId);
+        periodicReportTimerId = null;
+    }
+}
+/**
+ * Enqueues the top-redeemer report sequence followed by a temporary all-time view.
+ * Does nothing when {@link reportsShouldDisplay} is false (unless {@link force} is true)
+ * or when state is unavailable.
+ * @param force - When true, enqueues even if periodic reports are disabled in field data.
+ */
+function enqueuePeriodicReportCycle(force = false) {
+    if (!force && !reportsShouldDisplay) {
+        return;
+    }
+    const widgetState = lastWidgetState;
+    if (widgetState == null || widgetState.current == undefined) {
+        return;
+    }
+    displayQueue.enqueue(() => __awaiter(this, void 0, void 0, function* () {
+        const history = widgetState.redemptionHistory;
+        yield animateOverlayTypewriter(buildTopRedeemersReportSegments("TOP BLESS REDEEMERS", getTopRedeemers(history, "bless"), "redemption-text-bless"));
+        yield animateOverlayTypewriter(buildTopRedeemersReportSegments("TOP CURSE REDEEMERS", getTopRedeemers(history, "curse"), "redemption-text-curse"));
+        yield animateOverlayTypewriter(buildTopRedeemersReportSegments("TOP BLURSE REDEEMERS", getTopRedeemers(history, "blurse"), "redemption-text-blurse"));
+        yield animateOverlayTypewriter([{ "text": "ALL TIME" }]);
+        yield processDisplay(Object.assign(Object.assign({}, widgetState), { showAll: true }), true);
+        yield waitMs(reportAllTimeHoldMs);
+        yield animateOverlayTypewriter([{ "text": "CURRENT RUN" }]);
+        yield processDisplay(Object.assign(Object.assign({}, widgetState), { showAll: false }), true);
     }));
 }
 /**
@@ -756,13 +831,22 @@ function hasValidLastRedemption(lastRedemption) {
  */
 function animateRedemptionAnnouncement(redemption) {
     return __awaiter(this, void 0, void 0, function* () {
+        yield animateOverlayTypewriter(buildRedemptionAnnouncementSegments(redemption));
+    });
+}
+/**
+ * Hides the meter panel, runs a typewriter animation in the announcement overlay,
+ * holds briefly, then restores the meter panel.
+ * @param segments - Colored text segments to type out.
+ */
+function animateOverlayTypewriter(segments) {
+    return __awaiter(this, void 0, void 0, function* () {
         const meterPanel = getMeterPanelContent();
         const announcement = getRedemptionAnnouncement();
         const announcementElement = announcement.get(0);
         if (!announcementElement) {
             return;
         }
-        const segments = buildRedemptionAnnouncementSegments(redemption);
         const textContainer = document.createElement("div");
         textContainer.className = "redemption-announcement-text";
         announcement
@@ -779,6 +863,87 @@ function animateRedemptionAnnouncement(redemption) {
             .empty();
         meterPanel.removeClass("hidden");
     });
+}
+/** @returns A zeroed per-user redemption history entry. */
+function createEmptyRedemptionHistoryEntry() {
+    return {
+        numberOfBlesses: 0,
+        numberOfCurses: 0,
+        numberOfBlurses: 0,
+        numberOfBlursesThatBlessed: 0,
+        numberOfBlursesThatCursed: 0,
+    };
+}
+/**
+ * Fills in missing per-user redemption fields for entries saved before blurse
+ * outcome tracking was added.
+ * @param entry - A stored redemption history entry.
+ */
+function normalizeRedemptionHistoryEntry(entry) {
+    return {
+        numberOfBlesses: getOrDefaultCount(entry.numberOfBlesses),
+        numberOfCurses: getOrDefaultCount(entry.numberOfCurses),
+        numberOfBlurses: getOrDefaultCount(entry.numberOfBlurses),
+        numberOfBlursesThatBlessed: getOrDefaultCount(entry.numberOfBlursesThatBlessed),
+        numberOfBlursesThatCursed: getOrDefaultCount(entry.numberOfBlursesThatCursed),
+    };
+}
+/**
+ * @param entry - A per-user redemption history entry.
+ * @param category - Which redeem type to count.
+ */
+function getRedemptionHistoryCount(entry, category) {
+    if (category === "bless") {
+        return getOrDefaultCount(entry.numberOfBlesses);
+    }
+    if (category === "curse") {
+        return getOrDefaultCount(entry.numberOfCurses);
+    }
+    return getOrDefaultCount(entry.numberOfBlurses);
+}
+/**
+ * Returns the highest-ranked redeemers for a category, sorted by count descending.
+ * @param redemptionHistory - Per-user redemption totals from widget state.
+ * @param category - bless, curse, or blurse leaderboard to build.
+ * @param limit - Maximum number of rows to return (default {@link topRedeemerLimit}).
+ */
+function getTopRedeemers(redemptionHistory, category, limit = topRedeemerLimit) {
+    if (redemptionHistory == undefined) {
+        return [];
+    }
+    const ranked = [];
+    for (const userName in redemptionHistory) {
+        if (!Object.prototype.hasOwnProperty.call(redemptionHistory, userName)) {
+            continue;
+        }
+        const count = getRedemptionHistoryCount(normalizeRedemptionHistoryEntry(redemptionHistory[userName]), category);
+        if (count > 0) {
+            ranked.push({ userName, count });
+        }
+    }
+    ranked.sort((left, right) => right.count - left.count || left.userName.localeCompare(right.userName));
+    return ranked.slice(0, limit);
+}
+/**
+ * Builds typewriter segments for a top-redeemers leaderboard overlay.
+ * @param title - Heading shown at the top of the report.
+ * @param redeemers - Ranked rows from {@link getTopRedeemers}.
+ * @param titleColorClass - CSS class for the heading color.
+ */
+function buildTopRedeemersReportSegments(title, redeemers, titleColorClass) {
+    const segments = [
+        { text: `${title}\n`, colorClass: titleColorClass },
+    ];
+    if (redeemers.length === 0) {
+        segments.push({ text: "No redeems yet" });
+        return segments;
+    }
+    segments.push({
+        text: redeemers
+            .map((row, index) => `${index + 1}. ${row.userName} - ${row.count}`)
+            .join("\n"),
+    });
+    return segments;
 }
 /**
  * Builds the redemption summary as colored segments for the typewriter animation.

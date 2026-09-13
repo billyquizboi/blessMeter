@@ -307,9 +307,16 @@
           <input id="field-meter-maximum" type="number" min="1" value="15" />
           <label for="field-show-chars">showChars</label>
           <input id="field-show-chars" type="checkbox" checked />
+          <label for="field-show-redemption-announcements">showRedemptionAnnouncements</label>
+          <input id="field-show-redemption-announcements" type="checkbox" checked />
+          <label for="field-seconds-between-reports">numberOfSecondsBetweenReports</label>
+          <input id="field-seconds-between-reports" type="number" min="0" value="90" />
+          <label for="field-reports-should-display">reportsShouldDisplay</label>
+          <input id="field-reports-should-display" type="checkbox" checked />
         </div>
         <div class="row">
           <button id="fire-widget-load">Fire onWidgetLoad</button>
+          <button id="fire-report">Fire report</button>
         </div>
       </fieldset>
 
@@ -405,6 +412,8 @@
        * @property {number} numberOfBlesses
        * @property {number} numberOfCurses
        * @property {number} numberOfBlurses
+       * @property {number} numberOfBlursesThatBlessed
+       * @property {number} numberOfBlursesThatCursed
        */
 
       /** @typedef {Object.<string, RedemptionHistoryEntry>} RedemptionHistory */
@@ -451,6 +460,9 @@
        * @typedef {Object} FieldData
        * @property {number} [meterMaximum]
        * @property {boolean} [showChars]
+       * @property {boolean} [showRedemptionAnnouncements]
+       * @property {number} [numberOfSecondsBetweenReports]
+       * @property {boolean} [reportsShouldDisplay]
        */
 
       /**
@@ -483,6 +495,7 @@
       const LOCAL_STORAGE_KEY = "blessMeter.v1.localTest.store";
 
       const WIDGET_HTML_URL = "widget.html";
+      const WIDGET_CSS_URL = "widget.css";
       const WIDGET_JS_URL = "widget.js";
       const WIDGET_FIELDS_URL = "widgetFields.json";
       const JQUERY_LOCAL_URL = "../node_modules/jquery/dist/jquery.js";
@@ -798,11 +811,26 @@
         dispatchToWidget(win, "onWidgetLoad", makeWidgetLoadDetail(fieldData));
       }
 
+      /** Enqueues the top-redeemer report animations on the widget display queue. */
+      function fireReport() {
+        const win = widgetWindow();
+        if (!win) return;
+        if (typeof win.enqueuePeriodicReportCycle !== "function") {
+          log("enqueuePeriodicReportCycle is not available on the widget yet", "error");
+          return;
+        }
+        log("enqueue top-redeemer report cycle (forced)", "event");
+        win.enqueuePeriodicReportCycle(true);
+      }
+
       /** @returns {FieldData} */
       function readFieldDataInputs() {
         return {
           meterMaximum: Number(document.getElementById("field-meter-maximum").value),
           showChars: document.getElementById("field-show-chars").checked,
+          showRedemptionAnnouncements: document.getElementById("field-show-redemption-announcements").checked,
+          numberOfSecondsBetweenReports: Number(document.getElementById("field-seconds-between-reports").value),
+          reportsShouldDisplay: document.getElementById("field-reports-should-display").checked,
         };
       }
 
@@ -847,6 +875,23 @@
       }
 
       /**
+       * Injects a stylesheet into the widget iframe, mirroring how StreamElements
+       * attaches widget.css when hosting the overlay.
+       * @param {Document} doc
+       * @param {string} href
+       */
+      function injectStylesheet(doc, href) {
+        return new Promise((resolve, reject) => {
+          const link = doc.createElement("link");
+          link.rel = "stylesheet";
+          link.href = href;
+          link.addEventListener("load", () => resolve(), { once: true });
+          link.addEventListener("error", () => reject(new Error(`Failed to load ${href}`)), { once: true });
+          doc.head.appendChild(link);
+        });
+      }
+
+      /**
        * StreamElements provides jQuery globally. Prefer the copy from
        * node_modules (matches the version the Jest suite runs against) and fall
        * back to the CDN when dependencies are not installed.
@@ -882,9 +927,10 @@
 
       /**
        * Recreates the widget iframe and injects everything it needs:
-       * the mocked SE_API first (widget.js reads the store at script scope),
-       * then jQuery, then the compiled widget. Both script URLs are
-       * cache-busted so a rebuild is always picked up.
+       * widget.css (StreamElements injects this separately in production),
+       * the mocked SE_API (widget.js reads the store at script scope),
+       * jQuery, then the compiled widget. Asset URLs are cache-busted so a
+       * rebuild is always picked up.
        */
       async function bootWidget() {
         const stage = document.getElementById("stage");
@@ -909,6 +955,9 @@
           const doc = frame.contentDocument;
 
           mirrorConsole(win);
+          setStatus("injecting widget.css...");
+          await injectStylesheet(doc, `${WIDGET_CSS_URL}?t=${cacheBust}`);
+
           // Must exist before widget.js runs: initializeLastWidgetState() calls
           // SE_API.store.get() at script scope.
           win.SE_API = createMockSeApi(win);
@@ -956,6 +1005,15 @@
           }
           if (fields.showChars && typeof fields.showChars.value === "boolean") {
             document.getElementById("field-show-chars").checked = fields.showChars.value;
+          }
+          if (fields.showRedemptionAnnouncements && typeof fields.showRedemptionAnnouncements.value === "boolean") {
+            document.getElementById("field-show-redemption-announcements").checked = fields.showRedemptionAnnouncements.value;
+          }
+          if (fields.numberOfSecondsBetweenReports && typeof fields.numberOfSecondsBetweenReports.value === "number") {
+            document.getElementById("field-seconds-between-reports").value = String(fields.numberOfSecondsBetweenReports.value);
+          }
+          if (fields.reportsShouldDisplay && typeof fields.reportsShouldDisplay.value === "boolean") {
+            document.getElementById("field-reports-should-display").checked = fields.reportsShouldDisplay.value;
           }
           log("Loaded field defaults from widgetFields.json");
         } catch (error) {
@@ -1088,6 +1146,7 @@
 
       document.getElementById("fire-burst").addEventListener("click", fireBurst);
       document.getElementById("fire-widget-load").addEventListener("click", fireWidgetLoad);
+      document.getElementById("fire-report").addEventListener("click", fireReport);
 
       document.getElementById("apply-preset").addEventListener("click", () => {
         const preset = document.getElementById("preset").value;
