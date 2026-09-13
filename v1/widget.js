@@ -677,7 +677,7 @@ function processDisplay(widgetState, showAnimate) {
         blessCountText = preResetBlesses;
         curseCountText = preResetCurses;
         blurseCountText = `${preResetBlursesThatBlessed} / ${preResetBlursesThatCursed}`;
-        //updateToggleButtonDisplay(isShowingAll(widgetState));
+        updateToggleButtonDisplay(isShowingAll(widgetState));
     }
     else {
         const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
@@ -697,7 +697,7 @@ function processDisplay(widgetState, showAnimate) {
             blessWidth = ((effectiveBlesses >= meterMaximum ? 100 : (effectiveBlesses / meterMaximum) * 100)).toFixed(2) + "%";
             curseWidth = ((effectiveCurses >= meterMaximum ? 100 : (effectiveCurses / meterMaximum) * 100)).toFixed(2) + "%";
         }
-        //updateToggleButtonDisplay(isShowingAll(widgetState));
+        updateToggleButtonDisplay(isShowingAll(widgetState));
         console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}`);
         // Build factories now (captures current widths; glow class changes happen immediately).
         blessFactory = animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime, TYPE_BLESS);

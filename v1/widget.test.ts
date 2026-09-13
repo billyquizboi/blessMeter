@@ -84,6 +84,15 @@ declare global {
     getCountFromState: GetCountFromStateFn;
     gletGlowForeverClass: GletGlowForeverClassFn;
     mockRedeemEvent: MockRedeemEventFn;
+    // Redemption announcement
+    hasValidLastRedemption: (lastRedemption: unknown) => boolean;
+    formatRedemptionTypeLabel: (charType: string) => string;
+    formatRedemptionImpactLabel: (impact: number) => string;
+    getTypeColorClass: (charType: string) => string;
+    getImpactColorClass: (impact: number) => string;
+    buildRedemptionAnnouncementSegments: (redemption: LastRedemption) => { text: string; colorClass?: string }[];
+    typewriterSegments: (element: HTMLElement, segments: { text: string; colorClass?: string }[], letterDelayMs: number) => Promise<void>;
+    animateRedemptionAnnouncement: (redemption: LastRedemption) => Promise<void>;
     // Test helpers
     testBless: NoArgVoidFunction;
     testCurse: NoArgVoidFunction;
@@ -171,9 +180,24 @@ function setupTestDOM(initialState?: WidgetState): TestEnv {
 /** Flush the microtask queue so Promise .then() callbacks have run. */
 const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** Use instead of flushPromises while fake timers are active. */
+const flushMicrotasks = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
+
 // ---------------------------------------------------------------------------
 // Shared initial state fixture
 // ---------------------------------------------------------------------------
+function makeLastRedemption(overrides?: Partial<LastRedemption>): LastRedemption {
+  return {
+    redeemingUser: "testUserName",
+    charType: "bless",
+    impact: 1,
+    ...overrides,
+  };
+}
+
 function makeState(overrides?: Partial<WidgetState>): WidgetState {
   return {
     current: {
@@ -633,6 +657,258 @@ describe("updateDisplay", () => {
     const span = w.document.querySelector("span.bless-info-value");
     expect(span).not.toBeNull();
     expect(span!.textContent).toBe("4");
+  });
+});
+
+// ===========================================================================
+// hasValidLastRedemption
+// ===========================================================================
+describe("hasValidLastRedemption", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("returns false for undefined", () => {
+    expect(w.hasValidLastRedemption(undefined)).toBe(false);
+  });
+
+  it("returns false when redeemingUser is missing", () => {
+    expect(w.hasValidLastRedemption({ charType: "bless", impact: 1 })).toBe(false);
+  });
+
+  it("returns true for a complete lastRedemption", () => {
+    expect(w.hasValidLastRedemption(makeLastRedemption())).toBe(true);
+  });
+});
+
+// ===========================================================================
+// formatRedemptionTypeLabel / formatRedemptionImpactLabel
+// ===========================================================================
+describe("formatRedemptionTypeLabel", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("returns BLESSED for bless", () => {
+    expect(w.formatRedemptionTypeLabel("bless")).toBe("BLESSED");
+  });
+
+  it("returns CURSED for curse", () => {
+    expect(w.formatRedemptionTypeLabel("curse")).toBe("CURSED");
+  });
+
+  it("returns BLURSED for blurse", () => {
+    expect(w.formatRedemptionTypeLabel("blurse")).toBe("BLURSED");
+  });
+});
+
+describe("formatRedemptionImpactLabel", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("formats bless, curse, and blurse impacts", () => {
+    expect(w.formatRedemptionImpactLabel(1)).toBe("+1 BLESS");
+    expect(w.formatRedemptionImpactLabel(-1)).toBe("+1 CURSE");
+    expect(w.formatRedemptionImpactLabel(-2)).toBe("+2 BLESS");
+    expect(w.formatRedemptionImpactLabel(2)).toBe("+2 CURSE");
+  });
+});
+
+// ===========================================================================
+// getTypeColorClass / getImpactColorClass
+// ===========================================================================
+describe("getTypeColorClass", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("maps bless, curse, and blurse to color classes", () => {
+    expect(w.getTypeColorClass("bless")).toBe("redemption-text-bless");
+    expect(w.getTypeColorClass("curse")).toBe("redemption-text-curse");
+    expect(w.getTypeColorClass("blurse")).toBe("redemption-text-blurse");
+  });
+});
+
+describe("getImpactColorClass", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("maps bless-direction impacts to green and curse-direction to red", () => {
+    expect(w.getImpactColorClass(1)).toBe("redemption-text-bless");
+    expect(w.getImpactColorClass(-2)).toBe("redemption-text-bless");
+    expect(w.getImpactColorClass(-1)).toBe("redemption-text-curse");
+    expect(w.getImpactColorClass(2)).toBe("redemption-text-curse");
+  });
+});
+
+// ===========================================================================
+// buildRedemptionAnnouncementSegments
+// ===========================================================================
+describe("buildRedemptionAnnouncementSegments", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("builds four segments with colored type and impact labels", () => {
+    const segments = w.buildRedemptionAnnouncementSegments(makeLastRedemption());
+    expect(segments).toHaveLength(4);
+    expect(segments[0]).toEqual({ text: "testUserName\n" });
+    expect(segments[1]).toEqual({ text: "BLESSED", colorClass: "redemption-text-bless" });
+    expect(segments[2]).toEqual({ text: " the run\nImpact: " });
+    expect(segments[3]).toEqual({ text: "+1 BLESS", colorClass: "redemption-text-bless" });
+  });
+
+  it("colors blurse impact by bless vs curse outcome", () => {
+    const blessed = w.buildRedemptionAnnouncementSegments(
+      makeLastRedemption({ charType: "blurse", impact: -2 })
+    );
+    expect(blessed[1].colorClass).toBe("redemption-text-blurse");
+    expect(blessed[3]).toEqual({ text: "+2 BLESS", colorClass: "redemption-text-bless" });
+
+    const cursed = w.buildRedemptionAnnouncementSegments(
+      makeLastRedemption({ charType: "blurse", impact: 2 })
+    );
+    expect(cursed[3]).toEqual({ text: "+2 CURSE", colorClass: "redemption-text-curse" });
+  });
+});
+
+// ===========================================================================
+// typewriterSegments
+// ===========================================================================
+describe("typewriterSegments", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    ({ w } = setupTestDOM());
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("renders the full message immediately when delay is 0", async () => {
+    const container = w.document.createElement("div");
+    const segments = w.buildRedemptionAnnouncementSegments(makeLastRedemption());
+    await w.typewriterSegments(container, segments, 0);
+    expect(container.textContent).toBe("testUserName\nBLESSED the run\nImpact: +1 BLESS");
+    const colored = Array.from(container.querySelectorAll("span")).map((span) => span.className);
+    expect(colored).toContain("redemption-text-bless");
+  });
+
+  it("reveals text one character at a time", async () => {
+    const container = w.document.createElement("div");
+    const promise = w.typewriterSegments(container, [{ text: "abc" }], 10);
+    await flushMicrotasks();
+    expect(container.textContent).toBe("a");
+    jest.advanceTimersByTime(10);
+    await flushMicrotasks();
+    expect(container.textContent).toBe("ab");
+    await jest.runAllTimersAsync();
+    await promise;
+    expect(container.textContent).toBe("abc");
+  });
+});
+
+// ===========================================================================
+// animateRedemptionAnnouncement
+// ===========================================================================
+describe("animateRedemptionAnnouncement", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    ({ w } = setupTestDOM());
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("hides the meter panel during the announcement and restores it afterward", async () => {
+    const meterPanel = w.document.querySelector(".meter-panel-content");
+    const announcement = w.document.querySelector(".redemption-announcement");
+    expect(meterPanel).not.toBeNull();
+    expect(announcement).not.toBeNull();
+
+    const promise = w.animateRedemptionAnnouncement(makeLastRedemption());
+    await flushMicrotasks();
+
+    expect(meterPanel!.classList.contains("hidden")).toBe(true);
+    expect(announcement!.classList.contains("visible")).toBe(true);
+    expect(w.document.querySelector(".redemption-announcement-text")?.textContent).toBe("t");
+
+    await jest.runAllTimersAsync();
+    await promise;
+
+    expect(meterPanel!.classList.contains("hidden")).toBe(false);
+    expect(announcement!.classList.contains("visible")).toBe(false);
+    expect(announcement!.textContent).toBe("");
+  });
+
+  it("leaves type and impact labels in colored spans after typing completes", async () => {
+    const container = w.document.createElement("div");
+    const segments = w.buildRedemptionAnnouncementSegments(
+      makeLastRedemption({ charType: "curse", impact: -1 })
+    );
+    await w.typewriterSegments(container, segments, 0);
+    const spans = Array.from(container.querySelectorAll("span"));
+    expect(spans.some((span) => span.className === "redemption-text-curse" && span.textContent === "CURSED")).toBe(true);
+    expect(spans.some((span) => span.className === "redemption-text-curse" && span.textContent === "+1 CURSE")).toBe(true);
+  });
+});
+
+// ===========================================================================
+// updateDisplay — redemption announcement integration
+// ===========================================================================
+describe("updateDisplay redemption announcement", () => {
+  it("skips the announcement when showAnimate is false", async () => {
+    const { w } = setupTestDOM(makeState());
+    const state = makeState({ lastRedemption: makeLastRedemption() });
+    state.current.numberOfBlesses = 2;
+    state.allTime.numberOfBlesses = 2;
+    w.updateDisplay(state, false);
+    await flushPromises();
+
+    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(false);
+    expect(w.document.querySelector("span.bless-info-value")?.textContent).toBe("2");
+  });
+
+  it("runs the announcement before updating meters when showAnimate is true", async () => {
+    jest.useFakeTimers();
+    try {
+      const { w } = setupTestDOM(makeState());
+      const state = makeState({ lastRedemption: makeLastRedemption() });
+      state.current.numberOfBlesses = 2;
+      state.allTime.numberOfBlesses = 2;
+      w.updateDisplay(state, true);
+      await flushMicrotasks();
+
+      expect(w.document.querySelector(".meter-panel-content")?.classList.contains("hidden")).toBe(true);
+      expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(true);
+
+      await jest.runAllTimersAsync();
+      await flushMicrotasks();
+
+      expect(w.document.querySelector(".meter-panel-content")?.classList.contains("hidden")).toBe(false);
+      expect(w.document.querySelector("span.bless-info-value")?.textContent).toBe("2");
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 
