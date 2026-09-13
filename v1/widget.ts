@@ -72,6 +72,9 @@ let showChars = true;
 
 let lastWidgetState: WidgetState | null = null;
 
+/** Set by {@link incrementState} so only fresh redemptions trigger the announcement. */
+let shouldAnnounceRedemption = false;
+
 /**
  * Runs enqueued async tasks one at a time, in order — each task completes
  * before the next one starts. Errors are caught and logged so a failed task
@@ -266,11 +269,13 @@ function incrementState(toIncrement: string, name: string | null): void {
         }
 
         if (bothMetersAreAtMax(obj)) {
+            shouldAnnounceRedemption = false;
             const newState = resetMetersButKeepCurrentState(obj);
             if (newState) {
                 SE_API.store.set(STORE_KEY_NAME, newState);
             }
         } else {
+            shouldAnnounceRedemption = true;
             SE_API.store.set(STORE_KEY_NAME, obj);
         }
 
@@ -659,9 +664,13 @@ function getRedeemingUserName(detail: SEEventDetail | undefined): string | null 
  * @param widgetState - The state to render, or null to skip the update.
  * @param showAnimate - When true uses the full {@link animationDuration};
  *   when false uses {@link shortAnimationDuration} for an instant update.
+ * @param announceRedemption - When omitted, uses {@link shouldAnnounceRedemption}
+ *   (set by {@link incrementState}). Pass explicitly in tests.
  */
-function updateDisplay(widgetState: WidgetState | null, showAnimate: boolean): void {
+function updateDisplay(widgetState: WidgetState | null, showAnimate: boolean, announceRedemption?: boolean): void {
     // Capture and clear before any async work so rapid redemptions don't bleed over.
+    const announce = announceRedemption ?? shouldAnnounceRedemption;
+    shouldAnnounceRedemption = false;
 
     if (widgetState == null || widgetState.current == undefined) {
         console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
@@ -669,7 +678,7 @@ function updateDisplay(widgetState: WidgetState | null, showAnimate: boolean): v
     }
 
     displayQueue.enqueue(async () => {
-        if (showAnimate && hasValidLastRedemption(widgetState.lastRedemption)) {
+        if (showAnimate && announce && hasValidLastRedemption(widgetState.lastRedemption)) {
             await animateRedemptionAnnouncement(widgetState.lastRedemption);
         }
         await processDisplay(widgetState, showAnimate);

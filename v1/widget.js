@@ -71,6 +71,8 @@ const redemptionHoldAfterTypeMs = 600;
 let meterMaximum = 15;
 let showChars = true;
 let lastWidgetState = null;
+/** Set by {@link incrementState} so only fresh redemptions trigger the announcement. */
+let shouldAnnounceRedemption = false;
 /**
  * Runs enqueued async tasks one at a time, in order — each task completes
  * before the next one starts. Errors are caught and logged so a failed task
@@ -255,12 +257,14 @@ function incrementState(toIncrement, name) {
             };
         }
         if (bothMetersAreAtMax(obj)) {
+            shouldAnnounceRedemption = false;
             const newState = resetMetersButKeepCurrentState(obj);
             if (newState) {
                 SE_API.store.set(STORE_KEY_NAME, newState);
             }
         }
         else {
+            shouldAnnounceRedemption = true;
             SE_API.store.set(STORE_KEY_NAME, obj);
         }
         // the SE.store.set function emits an onEventReceived for every custom widget
@@ -632,15 +636,19 @@ function getRedeemingUserName(detail) {
  * @param widgetState - The state to render, or null to skip the update.
  * @param showAnimate - When true uses the full {@link animationDuration};
  *   when false uses {@link shortAnimationDuration} for an instant update.
+ * @param announceRedemption - When omitted, uses {@link shouldAnnounceRedemption}
+ *   (set by {@link incrementState}). Pass explicitly in tests.
  */
-function updateDisplay(widgetState, showAnimate) {
+function updateDisplay(widgetState, showAnimate, announceRedemption) {
     // Capture and clear before any async work so rapid redemptions don't bleed over.
+    const announce = announceRedemption !== null && announceRedemption !== void 0 ? announceRedemption : shouldAnnounceRedemption;
+    shouldAnnounceRedemption = false;
     if (widgetState == null || widgetState.current == undefined) {
         console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
         return;
     }
     displayQueue.enqueue(() => __awaiter(this, void 0, void 0, function* () {
-        if (showAnimate && hasValidLastRedemption(widgetState.lastRedemption)) {
+        if (showAnimate && announce && hasValidLastRedemption(widgetState.lastRedemption)) {
             yield animateRedemptionAnnouncement(widgetState.lastRedemption);
         }
         yield processDisplay(widgetState, showAnimate);

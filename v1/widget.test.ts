@@ -887,14 +887,23 @@ describe("updateDisplay redemption announcement", () => {
     expect(w.document.querySelector("span.bless-info-value")?.textContent).toBe("2");
   });
 
-  it("runs the announcement before updating meters when showAnimate is true", async () => {
+  it("skips the announcement on load even when lastRedemption is present", async () => {
+    const state = makeState({ lastRedemption: makeLastRedemption() });
+    const { w } = setupTestDOM(state);
+    w.updateDisplay(state, true);
+    await flushPromises();
+
+    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(false);
+  });
+
+  it("runs the announcement before updating meters for a fresh redemption", async () => {
     jest.useFakeTimers();
     try {
       const { w } = setupTestDOM(makeState());
       const state = makeState({ lastRedemption: makeLastRedemption() });
       state.current.numberOfBlesses = 2;
       state.allTime.numberOfBlesses = 2;
-      w.updateDisplay(state, true);
+      w.updateDisplay(state, true, true);
       await flushMicrotasks();
 
       expect(w.document.querySelector(".meter-panel-content")?.classList.contains("hidden")).toBe(true);
@@ -950,6 +959,39 @@ describe("incrementState", () => {
     expect(mockSEAPI.store.set).toHaveBeenCalled();
   });
 
+  it("arms the announcement only when incrementing without a meter reset", async () => {
+    const state = makeState();
+    const { w, mockSEAPI } = setupTestDOM(state);
+
+    w.incrementState("numberOfBlesses", "testUserName");
+    await flushPromises();
+
+    jest.useFakeTimers();
+    try {
+      w.updateDisplay(mockSEAPI.store._data["blessCurseMeterState"]!, true);
+      await flushMicrotasks();
+      expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(true);
+      await jest.runAllTimersAsync();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("does not arm the announcement when increment triggers a meter reset", async () => {
+    const state = makeState({ lastRedemption: makeLastRedemption() });
+    state.current.numberOfBlesses = 15;
+    state.current.numberOfCurses = 15;
+    const { w, mockSEAPI } = setupTestDOM(state);
+
+    w.incrementState("numberOfBlesses", "testUserName");
+    await flushPromises();
+
+    w.updateDisplay(mockSEAPI.store._data["blessCurseMeterState"]!, true);
+    await flushPromises();
+
+    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(false);
+  });
+
   it("resets meters when both are at max and calls set with reset state", async () => {
     const state = makeState();
     // Put both meters at max (15 each)
@@ -1002,6 +1044,19 @@ describe("toggleShowAllState", () => {
 // resetCurrentState — async SE_API interaction
 // ===========================================================================
 describe("resetCurrentState", () => {
+  it("does not run the redemption announcement", async () => {
+    const state = makeState({ lastRedemption: makeLastRedemption() });
+    state.current.numberOfBlesses = 10;
+    const { w, mockSEAPI } = setupTestDOM(state);
+
+    w.resetCurrentState();
+    await flushPromises();
+    w.updateDisplay(mockSEAPI.store._data["blessCurseMeterState"]!, true);
+    await flushPromises();
+
+    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(false);
+  });
+
   it("zeroes all current counters but preserves allTime", async () => {
     const state = makeState();
     state.current.numberOfBlesses = 10;
