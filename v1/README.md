@@ -45,6 +45,46 @@ These two steps result in every test redeem being considered a blurse, curse, or
 - Click OK to add the source.
 - You can now position
 
+## Development
+
+### Source files
+
+[widget.js](./widget.js) is the file used by the StreamElements widget editor. It is generated from [widget.ts](./widget.ts) — do not edit `widget.js` directly. Edit `widget.ts` and rebuild using `npm run build`.
+
+### npm commands
+
+Run these from the repository root (the directory containing `package.json`):
+
+| Command | Description |
+|---------|-------------|
+| `npm run build` | Compiles `widget.ts` → `widget.js` via TypeScript |
+| `npm test` | Compiles TypeScript then runs the Jest test suite |
+| `npm run dev` | Compiles TypeScript then serves the repository for the local test harness |
+| `npm run serve` | Serves the repository without rebuilding first |
+
+### Testing locally in a browser
+
+[localTest.html](./localTest.html) runs the widget in a browser without touching StreamElements. It loads the real [widget.html](./widget.html) in an iframe and injects jQuery, a mocked `SE_API`, and the compiled [widget.js](./widget.js) into it, so it always exercises the current files on disk. Nothing in the harness is pasted into the StreamElements editor.
+
+- Run `npm run dev`
+- Open <http://localhost:8080/v1/localTest.html>
+
+A local server is required because a `file://` page gets an opaque origin, which blocks both `fetch()` and scripting into the iframe. Pass `--port` to use a different port: `npm run serve -- --port 8090`.
+
+The dev panel on the right can:
+
+- Fire `Bless the Run` / `Curse the Run` / `Blurse the Run` redemptions, or any custom reward name, as a chosen user
+- Put the reward name in any of the three payload locations `getRedemptionName` reads: `event.data.redemption` (live Twitch), `session.data["channel-points-latest"].redemption` (SE docs), or `event.itemId` (SE emulator)
+- Fire a burst of redemptions to see how the display queue behaves under rapid redeems
+- Edit `meterMaximum` and `showChars` (seeded from [widgetFields.json](./widgetFields.json)) and re-fire `onWidgetLoad`
+- Read, edit, and overwrite the persisted widget state as JSON, or apply presets such as a maxed bless meter or both meters at max
+- Add artificial latency to `SE_API.store` calls, resize the widget frame, and reload the widget after a rebuild
+- Log every `SE_API` call and dispatched event, optionally mirroring the widget's own `console.log` output
+
+The mocked store is kept in `localStorage`, so state survives a reload; use "Clear store" to start over. Because the widget only redraws in response to the `kvstore:update` event that StreamElements broadcasts after `SE_API.store.set`, the mock re-emits that event too.
+
+Two things behave the same locally as they do on StreamElements and are not harness problems: the "Show all" button text never changes, because the `updateToggleButtonDisplay` calls in [widget.ts](./widget.ts) are commented out, and the character sprites never appear, because `showCharSvg` is currently unused and the `.user-redeem-window` container keeps its `hidden` class.
+
 ## How it works
 
 The widget has event listeners which are called and process when certain redemptions are redeemed in twitch chat. It uses the SE_API.store to persist and manage the widget state. The length of each meter in the widget display is calculated as a percentage of the total number of redeems of all types.
