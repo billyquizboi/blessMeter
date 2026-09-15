@@ -1,0 +1,6 @@
+{
+  "rulesetName": "Protect main and develop",
+  "branches": ["main", "develop"],
+  "requiredStatusCheckContext": "test",
+  "requiredApprovingReviewCount": 1
+}

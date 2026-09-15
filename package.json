@@ -8,7 +8,8 @@
     "dev": "tsc && node scripts/devServer.js",
     "serve": "node scripts/devServer.js",
     "pretest": "tsc",
-    "test": "jest"
+    "test": "jest",
+    "rulesets:apply": "node scripts/apply-github-rulesets.mjs"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
