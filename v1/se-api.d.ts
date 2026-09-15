@@ -42,6 +42,8 @@ interface RedemptionHistoryEntry {
   numberOfBlesses: number;
   numberOfCurses: number;
   numberOfBlurses: number;
+  numberOfBlursesThatBlessed: number;
+  numberOfBlursesThatCursed: number;
 }
 
 /**
@@ -54,7 +56,8 @@ interface RedemptionHistory {
 interface LastRedemption {
   redeemingUser: string,
   charType: string,
-  impact: number
+  meterTarget: string,
+  meterAmount: number,
 }
 
 /**
@@ -111,6 +114,9 @@ interface SESession {
 interface FieldData {
   meterMaximum?: number;
   showChars?: boolean;
+  showRedemptionAnnouncements?: boolean;
+  numberOfSecondsBetweenReports?: number;
+  reportsShouldDisplay?: boolean;
 }
 
 interface SEEventDetail {
@@ -138,14 +144,14 @@ type JQueryGetterFn  = () => JQuery<HTMLElement>;
 
 // Void state / side-effect functions
 type NoArgVoidFunction                  = () => void;
-type IncrementStateFn                   = (toIncrement: string) => void;
+type IncrementStateFn                   = (toIncrement: string, name?: string | null) => void;
 type OptionallyInitializeNumericFieldFn = (obj: WidgetState, fieldName: string) => void;
 type EventHandlerFn                     = (event: Event) => void;
 type HandleRedemptionFn                 = (detail: SEEventDetail) => void;
 type ShowCharSvgFn                      = (type: string) => Promise<void>;
 type UpdateToggleButtonDisplayFn        = (showAll: boolean) => void;
 type GlowFn                             = (ele: HTMLElement, type: string) => void;
-type UpdateDisplayFn                    = (widgetState: WidgetState | null, showAnimate: boolean) => void;
+type UpdateDisplayFn                    = (widgetState: WidgetState | null, showAnimate: boolean, announceRedemption?: boolean) => void;
 
 // Predicate / boolean functions
 type StoreHasBeenInitializedFn = (obj: WidgetState | null) => obj is WidgetState;

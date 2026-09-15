@@ -84,6 +84,24 @@ declare global {
     getCountFromState: GetCountFromStateFn;
     gletGlowForeverClass: GletGlowForeverClassFn;
     mockRedeemEvent: MockRedeemEventFn;
+    // Redemption announcement
+    hasValidLastRedemption: (lastRedemption: unknown) => boolean;
+    formatRedemptionTypeLabel: (charType: string) => string;
+    formatRedemptionImpactLabel: (meterTarget: string, meterAmount: number) => string;
+    getTypeColorClass: (charType: string) => string;
+    getMeterTargetColorClass: (meterTarget: string) => string;
+    buildRedemptionAnnouncementSegments: (redemption: LastRedemption) => { text: string; colorClass?: string }[];
+    typewriterSegments: (element: HTMLElement, segments: { text: string; colorClass?: string }[], letterDelayMs: number) => Promise<void>;
+    animateRedemptionAnnouncement: (redemption: LastRedemption) => Promise<void>;
+    animateOverlayTypewriter: (segments: { text: string; colorClass?: string }[]) => Promise<void>;
+    createEmptyRedemptionHistoryEntry: () => RedemptionHistoryEntry;
+    normalizeRedemptionHistoryEntry: (entry: RedemptionHistoryEntry) => RedemptionHistoryEntry;
+    getTopRedeemers: (history: RedemptionHistory | undefined, category: "bless" | "curse" | "blurse", limit?: number) => { userName: string; count: number }[];
+    buildTopRedeemersReportSegments: (title: string, redeemers: { userName: string; count: number }[], titleColorClass: string) => { text: string; colorClass?: string }[];
+    applyFieldData: (fieldData: FieldData) => void;
+    configurePeriodicReports: () => void;
+    stopPeriodicReports: () => void;
+    enqueuePeriodicReportCycle: (force?: boolean) => void;
     // Test helpers
     testBless: NoArgVoidFunction;
     testCurse: NoArgVoidFunction;
@@ -171,9 +189,36 @@ function setupTestDOM(initialState?: WidgetState): TestEnv {
 /** Flush the microtask queue so Promise .then() callbacks have run. */
 const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** Use instead of flushPromises while fake timers are active. */
+const flushMicrotasks = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
+
 // ---------------------------------------------------------------------------
 // Shared initial state fixture
 // ---------------------------------------------------------------------------
+function makeRedemptionHistoryEntry(overrides?: Partial<RedemptionHistoryEntry>): RedemptionHistoryEntry {
+  return {
+    numberOfBlesses: 0,
+    numberOfCurses: 0,
+    numberOfBlurses: 0,
+    numberOfBlursesThatBlessed: 0,
+    numberOfBlursesThatCursed: 0,
+    ...overrides,
+  };
+}
+
+function makeLastRedemption(overrides?: Partial<LastRedemption>): LastRedemption {
+  return {
+    redeemingUser: "testUserName",
+    charType: "bless",
+    meterTarget: "bless",
+    meterAmount: 1,
+    ...overrides,
+  };
+}
+
 function makeState(overrides?: Partial<WidgetState>): WidgetState {
   return {
     current: {
@@ -637,6 +682,283 @@ describe("updateDisplay", () => {
 });
 
 // ===========================================================================
+// hasValidLastRedemption
+// ===========================================================================
+describe("hasValidLastRedemption", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("returns false for undefined", () => {
+    expect(w.hasValidLastRedemption(undefined)).toBe(false);
+  });
+
+  it("returns false when redeemingUser is missing", () => {
+    expect(w.hasValidLastRedemption({ charType: "bless", meterTarget: "bless", meterAmount: 1 })).toBe(false);
+  });
+
+  it("returns true for a complete lastRedemption", () => {
+    expect(w.hasValidLastRedemption(makeLastRedemption())).toBe(true);
+  });
+});
+
+// ===========================================================================
+// formatRedemptionTypeLabel / formatRedemptionImpactLabel
+// ===========================================================================
+describe("formatRedemptionTypeLabel", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("returns BLESSED for bless", () => {
+    expect(w.formatRedemptionTypeLabel("bless")).toBe("BLESSED");
+  });
+
+  it("returns CURSED for curse", () => {
+    expect(w.formatRedemptionTypeLabel("curse")).toBe("CURSED");
+  });
+
+  it("returns BLURSED for blurse", () => {
+    expect(w.formatRedemptionTypeLabel("blurse")).toBe("BLURSED");
+  });
+});
+
+describe("formatRedemptionImpactLabel", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("formats bless, curse, and blurse meter movements", () => {
+    expect(w.formatRedemptionImpactLabel("bless", 1)).toBe("+1 BLESS");
+    expect(w.formatRedemptionImpactLabel("curse", 1)).toBe("+1 CURSE");
+    expect(w.formatRedemptionImpactLabel("bless", 2)).toBe("+2 BLESS");
+    expect(w.formatRedemptionImpactLabel("curse", 2)).toBe("+2 CURSE");
+  });
+});
+
+// ===========================================================================
+// getTypeColorClass / getMeterTargetColorClass
+// ===========================================================================
+describe("getTypeColorClass", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("maps bless, curse, and blurse to color classes", () => {
+    expect(w.getTypeColorClass("bless")).toBe("redemption-text-bless");
+    expect(w.getTypeColorClass("curse")).toBe("redemption-text-curse");
+    expect(w.getTypeColorClass("blurse")).toBe("redemption-text-blurse");
+  });
+});
+
+describe("getMeterTargetColorClass", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("maps bless and curse meter targets to color classes", () => {
+    expect(w.getMeterTargetColorClass("bless")).toBe("redemption-text-bless");
+    expect(w.getMeterTargetColorClass("curse")).toBe("redemption-text-curse");
+  });
+});
+
+// ===========================================================================
+// buildRedemptionAnnouncementSegments
+// ===========================================================================
+describe("buildRedemptionAnnouncementSegments", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("builds four segments with colored type and impact labels", () => {
+    const segments = w.buildRedemptionAnnouncementSegments(makeLastRedemption());
+    expect(segments).toHaveLength(4);
+    expect(segments[0]).toEqual({ text: "testUserName\n" });
+    expect(segments[1]).toEqual({ text: "BLESSED", colorClass: "redemption-text-bless" });
+    expect(segments[2]).toEqual({ text: " the run\nImpact: " });
+    expect(segments[3]).toEqual({ text: "+1 BLESS", colorClass: "redemption-text-bless" });
+  });
+
+  it("colors blurse meter movement by bless vs curse outcome", () => {
+    const blessed = w.buildRedemptionAnnouncementSegments(
+      makeLastRedemption({ charType: "blurse", meterTarget: "bless", meterAmount: 2 })
+    );
+    expect(blessed[1].colorClass).toBe("redemption-text-blurse");
+    expect(blessed[3]).toEqual({ text: "+2 BLESS", colorClass: "redemption-text-bless" });
+
+    const cursed = w.buildRedemptionAnnouncementSegments(
+      makeLastRedemption({ charType: "blurse", meterTarget: "curse", meterAmount: 2 })
+    );
+    expect(cursed[3]).toEqual({ text: "+2 CURSE", colorClass: "redemption-text-curse" });
+  });
+});
+
+// ===========================================================================
+// typewriterSegments
+// ===========================================================================
+describe("typewriterSegments", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    ({ w } = setupTestDOM());
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("renders the full message immediately when delay is 0", async () => {
+    const container = w.document.createElement("div");
+    const segments = w.buildRedemptionAnnouncementSegments(makeLastRedemption());
+    await w.typewriterSegments(container, segments, 0);
+    expect(container.textContent).toBe("testUserName\nBLESSED the run\nImpact: +1 BLESS");
+    const colored = Array.from(container.querySelectorAll("span")).map((span) => span.className);
+    expect(colored).toContain("redemption-text-bless");
+  });
+
+  it("reveals text one character at a time", async () => {
+    const container = w.document.createElement("div");
+    const promise = w.typewriterSegments(container, [{ text: "abc" }], 10);
+    await flushMicrotasks();
+    expect(container.textContent).toBe("a");
+    jest.advanceTimersByTime(10);
+    await flushMicrotasks();
+    expect(container.textContent).toBe("ab");
+    await jest.runAllTimersAsync();
+    await promise;
+    expect(container.textContent).toBe("abc");
+  });
+});
+
+// ===========================================================================
+// animateRedemptionAnnouncement
+// ===========================================================================
+describe("animateRedemptionAnnouncement", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    ({ w } = setupTestDOM());
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("hides the meter panel during the announcement and restores it afterward", async () => {
+    const meterPanel = w.document.querySelector(".meter-panel-content");
+    const announcement = w.document.querySelector(".redemption-announcement");
+    expect(meterPanel).not.toBeNull();
+    expect(announcement).not.toBeNull();
+
+    const promise = w.animateRedemptionAnnouncement(makeLastRedemption());
+    await flushMicrotasks();
+
+    expect(meterPanel!.classList.contains("hidden")).toBe(true);
+    expect(announcement!.classList.contains("visible")).toBe(true);
+    expect(w.document.querySelector(".redemption-announcement-text")?.textContent).toBe("t");
+
+    await jest.runAllTimersAsync();
+    await promise;
+
+    expect(meterPanel!.classList.contains("hidden")).toBe(false);
+    expect(announcement!.classList.contains("visible")).toBe(false);
+    expect(announcement!.textContent).toBe("");
+  });
+
+  it("leaves type and impact labels in colored spans after typing completes", async () => {
+    const container = w.document.createElement("div");
+    const segments = w.buildRedemptionAnnouncementSegments(
+      makeLastRedemption({ charType: "curse", meterTarget: "curse", meterAmount: 1 })
+    );
+    await w.typewriterSegments(container, segments, 0);
+    const spans = Array.from(container.querySelectorAll("span"));
+    expect(spans.some((span) => span.className === "redemption-text-curse" && span.textContent === "CURSED")).toBe(true);
+    expect(spans.some((span) => span.className === "redemption-text-curse" && span.textContent === "+1 CURSE")).toBe(true);
+  });
+});
+
+// ===========================================================================
+// updateDisplay — redemption announcement integration
+// ===========================================================================
+describe("updateDisplay redemption announcement", () => {
+  it("skips the announcement when showAnimate is false", async () => {
+    const { w } = setupTestDOM(makeState());
+    const state = makeState({ lastRedemption: makeLastRedemption() });
+    state.current.numberOfBlesses = 2;
+    state.allTime.numberOfBlesses = 2;
+    w.updateDisplay(state, false);
+    await flushPromises();
+
+    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(false);
+    expect(w.document.querySelector("span.bless-info-value")?.textContent).toBe("2");
+  });
+
+  it("skips the announcement on load even when lastRedemption is present", async () => {
+    const state = makeState({ lastRedemption: makeLastRedemption() });
+    const { w } = setupTestDOM(state);
+    w.updateDisplay(state, true);
+    await flushPromises();
+
+    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(false);
+  });
+
+  it("skips the announcement when showRedemptionAnnouncements is false", async () => {
+    const { w } = setupTestDOM(makeState());
+    w.applyFieldData({
+      showRedemptionAnnouncements: false,
+      reportsShouldDisplay: false,
+      numberOfSecondsBetweenReports: 0,
+    });
+    const state = makeState({ lastRedemption: makeLastRedemption() });
+    state.current.numberOfBlesses = 2;
+    state.allTime.numberOfBlesses = 2;
+    w.updateDisplay(state, true, true);
+    await flushPromises();
+
+    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(false);
+    expect(w.document.querySelector("span.bless-info-value")?.textContent).toBe("2");
+    w.stopPeriodicReports();
+  });
+
+  it("runs the announcement before updating meters for a fresh redemption", async () => {
+    jest.useFakeTimers();
+    try {
+      const { w } = setupTestDOM(makeState());
+      const state = makeState({ lastRedemption: makeLastRedemption() });
+      state.current.numberOfBlesses = 2;
+      state.allTime.numberOfBlesses = 2;
+      w.updateDisplay(state, true, true);
+      await flushMicrotasks();
+
+      expect(w.document.querySelector(".meter-panel-content")?.classList.contains("hidden")).toBe(true);
+      expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(true);
+
+      await jest.runAllTimersAsync();
+      await flushMicrotasks();
+
+      expect(w.document.querySelector(".meter-panel-content")?.classList.contains("hidden")).toBe(false);
+      expect(w.document.querySelector("span.bless-info-value")?.textContent).toBe("2");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+// ===========================================================================
 // incrementState — async SE_API interaction
 // ===========================================================================
 describe("incrementState", () => {
@@ -673,6 +995,68 @@ describe("incrementState", () => {
     await flushPromises();
 
     expect(mockSEAPI.store.set).toHaveBeenCalled();
+  });
+
+  it("arms the announcement only when incrementing without a meter reset", async () => {
+    const state = makeState();
+    const { w, mockSEAPI } = setupTestDOM(state);
+
+    w.incrementState("numberOfBlesses", "testUserName");
+    await flushPromises();
+
+    jest.useFakeTimers();
+    try {
+      w.updateDisplay(mockSEAPI.store._data["blessCurseMeterState"]!, true);
+      await flushMicrotasks();
+      expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(true);
+      await jest.runAllTimersAsync();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("does not arm the announcement when increment triggers a meter reset", async () => {
+    const state = makeState({ lastRedemption: makeLastRedemption() });
+    state.current.numberOfBlesses = 15;
+    state.current.numberOfCurses = 15;
+    const { w, mockSEAPI } = setupTestDOM(state);
+
+    w.incrementState("numberOfBlesses", "testUserName");
+    await flushPromises();
+
+    w.updateDisplay(mockSEAPI.store._data["blessCurseMeterState"]!, true);
+    await flushPromises();
+
+    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(false);
+  });
+
+  it("tracks per-user bless, curse, and blurse outcome counts in redemptionHistory", async () => {
+    const state = makeState();
+    const { w, mockSEAPI, dom } = setupTestDOM(state);
+
+    w.incrementState("numberOfBlesses", "alice");
+    await flushPromises();
+    w.incrementState("numberOfCurses", "bob");
+    await flushPromises();
+
+    const blurseOutcomes = [0.1, 0.9];
+    const randomSpy = jest
+      .spyOn(dom.window.Math, "random")
+      .mockImplementation(() => blurseOutcomes.shift() ?? 0.5);
+    w.incrementState("numberOfBlurses", "carol");
+    await flushPromises();
+    w.incrementState("numberOfBlurses", "carol");
+    await flushPromises();
+    randomSpy.mockRestore();
+
+    const saved = mockSEAPI.store._data["blessCurseMeterState"];
+    expect(saved?.redemptionHistory?.alice).toEqual(makeRedemptionHistoryEntry({ numberOfBlesses: 1 }));
+    expect(saved?.redemptionHistory?.bob).toEqual(makeRedemptionHistoryEntry({ numberOfCurses: 1 }));
+    expect(saved?.redemptionHistory?.carol).toEqual(makeRedemptionHistoryEntry({
+      numberOfBlurses: 2,
+      numberOfBlursesThatBlessed: 1,
+      numberOfBlursesThatCursed: 1,
+    }));
   });
 
   it("resets meters when both are at max and calls set with reset state", async () => {
@@ -727,6 +1111,19 @@ describe("toggleShowAllState", () => {
 // resetCurrentState — async SE_API interaction
 // ===========================================================================
 describe("resetCurrentState", () => {
+  it("does not run the redemption announcement", async () => {
+    const state = makeState({ lastRedemption: makeLastRedemption() });
+    state.current.numberOfBlesses = 10;
+    const { w, mockSEAPI } = setupTestDOM(state);
+
+    w.resetCurrentState();
+    await flushPromises();
+    w.updateDisplay(mockSEAPI.store._data["blessCurseMeterState"]!, true);
+    await flushPromises();
+
+    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(false);
+  });
+
   it("zeroes all current counters but preserves allTime", async () => {
     const state = makeState();
     state.current.numberOfBlesses = 10;
@@ -894,5 +1291,240 @@ describe("mockRedeemEvent", () => {
   it("sets event type to channelPointsRedemption", () => {
     const event = w.mockRedeemEvent("Blurse the Run");
     expect(event.detail.event.type).toBe("channelPointsRedemption");
+  });
+});
+
+// ===========================================================================
+// getTopRedeemers / buildTopRedeemersReportSegments
+// ===========================================================================
+describe("getTopRedeemers", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("returns the top bless redeemers sorted by count", () => {
+    const history: RedemptionHistory = {
+      alice: makeRedemptionHistoryEntry({ numberOfBlesses: 10 }),
+      bob: makeRedemptionHistoryEntry({ numberOfBlesses: 5 }),
+      carol: makeRedemptionHistoryEntry({ numberOfBlesses: 7 }),
+      zero: makeRedemptionHistoryEntry({ numberOfBlesses: 0 }),
+    };
+    expect(w.getTopRedeemers(history, "bless")).toEqual([
+      { userName: "alice", count: 10 },
+      { userName: "carol", count: 7 },
+      { userName: "bob", count: 5 },
+    ]);
+  });
+
+  it("limits results to three redeemers", () => {
+    const history: RedemptionHistory = {
+      u1: makeRedemptionHistoryEntry({ numberOfCurses: 6 }),
+      u2: makeRedemptionHistoryEntry({ numberOfCurses: 5 }),
+      u3: makeRedemptionHistoryEntry({ numberOfCurses: 4 }),
+      u4: makeRedemptionHistoryEntry({ numberOfCurses: 3 }),
+      u5: makeRedemptionHistoryEntry({ numberOfCurses: 2 }),
+      u6: makeRedemptionHistoryEntry({ numberOfCurses: 1 }),
+    };
+    expect(w.getTopRedeemers(history, "curse")).toHaveLength(3);
+    expect(w.getTopRedeemers(history, "curse").map((row) => row.userName)).toContain("u1");
+    expect(w.getTopRedeemers(history, "curse").map((row) => row.userName)).toContain("u2");
+    expect(w.getTopRedeemers(history, "curse").map((row) => row.userName)).toContain("u3");
+    expect(w.getTopRedeemers(history, "curse").map((row) => row.userName)).not.toContain("u4");
+    expect(w.getTopRedeemers(history, "curse").map((row) => row.userName)).not.toContain("u5");
+    expect(w.getTopRedeemers(history, "curse").map((row) => row.userName)).not.toContain("u6");
+  });
+
+  it("normalizes legacy redemption history entries missing blurse outcome fields", () => {
+    const history: RedemptionHistory = {
+      legacy: {
+        numberOfBlesses: 2,
+        numberOfCurses: 0,
+        numberOfBlurses: 3,
+        numberOfBlursesThatBlessed: undefined as unknown as number,
+        numberOfBlursesThatCursed: undefined as unknown as number,
+      },
+    };
+    expect(w.getTopRedeemers(history, "blurse")).toEqual([{ userName: "legacy", count: 3 }]);
+  });
+});
+
+describe("buildTopRedeemersReportSegments", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("builds a colored title and ranked rows", () => {
+    const segments = w.buildTopRedeemersReportSegments(
+      "TOP BLESS REDEEMERS",
+      [{ userName: "alice", count: 3 }, { userName: "bob", count: 1 }],
+      "redemption-text-bless"
+    );
+    expect(segments[0]).toEqual({ text: "TOP BLESS REDEEMERS\n", colorClass: "redemption-text-bless" });
+    expect(segments[1].text).toBe("1. alice - 3\n2. bob - 1");
+  });
+
+  it("shows a fallback when there are no redeems", () => {
+    const segments = w.buildTopRedeemersReportSegments("TOP CURSE REDEEMERS", [], "redemption-text-curse");
+    expect(segments[1]).toEqual({ text: "No redeems yet" });
+  });
+});
+
+// ===========================================================================
+// applyFieldData / periodic reports
+// ===========================================================================
+describe("applyFieldData", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+    w.stopPeriodicReports();
+  });
+
+  afterEach(() => {
+    w.stopPeriodicReports();
+  });
+
+  it("applies showRedemptionAnnouncements and report timing settings", async () => {
+    w.applyFieldData({
+      showRedemptionAnnouncements: false,
+      numberOfSecondsBetweenReports: 45,
+      reportsShouldDisplay: false,
+    });
+    const state = makeState({ lastRedemption: makeLastRedemption() });
+    w.updateDisplay(state, true, true);
+    await flushPromises();
+    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(false);
+  });
+});
+
+describe("periodic top-redeemer reports", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("does not enqueue reports when reportsShouldDisplay is false", async () => {
+    jest.useFakeTimers();
+    try {
+      const state = makeState({
+        redemptionHistory: { alice: makeRedemptionHistoryEntry({ numberOfBlesses: 1 }) },
+      });
+      const { w } = setupTestDOM(state);
+      w.applyFieldData({ reportsShouldDisplay: false, numberOfSecondsBetweenReports: 10 });
+      w.incrementState("numberOfBlesses", "alice");
+      await flushMicrotasks();
+
+      jest.advanceTimersByTime(10_000);
+      await flushMicrotasks();
+
+      expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(false);
+      w.stopPeriodicReports();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("enqueues a forced report even when reportsShouldDisplay is false", async () => {
+    const state = makeState({
+      redemptionHistory: { alice: makeRedemptionHistoryEntry({ numberOfBlesses: 2 }) },
+    });
+    const { w } = setupTestDOM(state);
+    w.stopPeriodicReports();
+    w.applyFieldData({ reportsShouldDisplay: false, numberOfSecondsBetweenReports: 0 });
+    w.incrementState("numberOfBlesses", "alice");
+    await flushPromises();
+
+    w.enqueuePeriodicReportCycle(true);
+    await flushMicrotasks();
+
+    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(true);
+    w.stopPeriodicReports();
+  });
+
+  it("enqueues the first top-redeemer overlay when a report cycle starts", async () => {
+    const state = makeState({
+      redemptionHistory: {
+        alice: makeRedemptionHistoryEntry({ numberOfBlesses: 5 }),
+        bob: makeRedemptionHistoryEntry({ numberOfCurses: 3 }),
+        carol: makeRedemptionHistoryEntry({ numberOfBlurses: 2 }),
+      },
+    });
+    const { w } = setupTestDOM(state);
+    w.stopPeriodicReports();
+    w.incrementState("numberOfBlesses", "alice");
+    await flushPromises();
+
+    w.enqueuePeriodicReportCycle();
+    await flushMicrotasks();
+
+    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(true);
+    expect(w.document.querySelector(".meter-panel-content")?.classList.contains("hidden")).toBe(true);
+    w.stopPeriodicReports();
+  });
+
+  it("temporarily shows all-time meters during a report cycle without persisting showAll", async () => {
+    jest.useFakeTimers();
+    try {
+      const state = makeState({
+        current: {
+          numberOfBlesses: 2,
+          numberOfCurses: 1,
+          numberOfBlurses: 0,
+          numberOfBlursesThatCursed: 0,
+          numberOfBlursesThatBlessed: 0,
+          numberOfBlessesPreReset: 0,
+          numberOfCursesPreReset: 0,
+          numberOfBlursesPreReset: 0,
+          numberOfBlursesThatCursedPreReset: 0,
+          numberOfBlursesThatBlessedPreReset: 0,
+        },
+        allTime: {
+          numberOfBlesses: 20,
+          numberOfCurses: 10,
+          numberOfBlurses: 0,
+          numberOfBlursesThatCursed: 0,
+          numberOfBlursesThatBlessed: 0,
+        },
+        showAll: false,
+      });
+      const { w, mockSEAPI } = setupTestDOM(state);
+      w.stopPeriodicReports();
+      w.incrementState("numberOfBlesses", "alice");
+      await flushMicrotasks();
+
+      w.enqueuePeriodicReportCycle();
+      await jest.runAllTimersAsync();
+      await flushMicrotasks();
+
+      expect(w.document.querySelector("#all-time-toggle")?.textContent).toBe("Show all");
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.showAll).not.toBe(true);
+      w.stopPeriodicReports();
+    } finally {
+      jest.useRealTimers();
+    }
+  }, 30_000);
+
+  it("runs the report cycle on the configured interval", async () => {
+    jest.useFakeTimers();
+    try {
+      const state = makeState({
+        redemptionHistory: { alice: makeRedemptionHistoryEntry({ numberOfBlesses: 2 }) },
+      });
+      const { w } = setupTestDOM(state);
+      w.stopPeriodicReports();
+      w.applyFieldData({ reportsShouldDisplay: true, numberOfSecondsBetweenReports: 30 });
+      w.incrementState("numberOfBlesses", "alice");
+      await flushMicrotasks();
+
+      jest.advanceTimersByTime(30_000);
+      await flushMicrotasks();
+      expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(true);
+      w.stopPeriodicReports();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

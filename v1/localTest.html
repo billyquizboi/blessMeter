@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BlessMeter v1 - local test harness</title>
+
+    <!--
+    Local development harness for the v1 widget. It is not part of the widget:
+    nothing in this file is pasted into the StreamElements editor.
+
+    It hosts the real widget.html in an iframe and injects jQuery, a mocked
+    SE_API, and the compiled widget.js into it, so the page always exercises the
+    latest widget.html / widget.css / widget.js from disk.
+
+    Run `npm run dev` and open http://localhost:8080/v1/localTest.html.
+    An http origin is required: a file:// page has an opaque origin, which blocks
+    both fetch() and same-origin scripting into the iframe.
+    -->
+
+    <style>
+      :root {
+        --panel-bg: #1b1b23;
+        --panel-bg-alt: #23232e;
+        --panel-border: #3a3a49;
+        --text: #e6e6ef;
+        --text-dim: #9c9cb0;
+        --accent: #7c9cf7;
+        --bless: #8fd18f;
+        --curse: #e08585;
+        --blurse: #c8a2f7;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        font-size: 13px;
+        color: var(--text);
+        background: #12121a;
+      }
+
+      /* ---------- widget stage ---------- */
+
+      #stage-column {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: auto;
+      }
+
+      #stage-header {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--panel-border);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 0 0 auto;
+      }
+
+      #stage-header h1 {
+        font-size: 14px;
+        margin: 0;
+        font-weight: 600;
+      }
+
+      #stage-status {
+        color: var(--text-dim);
+        font-family: Consolas, monospace;
+        font-size: 12px;
+      }
+
+      #stage {
+        flex: 1 1 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        /* checkerboard so transparent widget regions are obvious, like OBS */
+        background-color: #2a2a33;
+        background-image:
+          linear-gradient(45deg, #23232b 25%, transparent 25%),
+          linear-gradient(-45deg, #23232b 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #23232b 75%),
+          linear-gradient(-45deg, transparent 75%, #23232b 75%);
+        background-size: 24px 24px;
+        background-position: 0 0, 0 12px, 12px -12px, -12px 0px;
+      }
+
+      #stage iframe {
+        border: 1px dashed #55556a;
+        background: transparent;
+      }
+
+      /* ---------- dev panel ---------- */
+
+      #panel {
+        flex: 0 0 380px;
+        border-left: 1px solid var(--panel-border);
+        background: var(--panel-bg);
+        overflow-y: auto;
+        padding: 12px;
+      }
+
+      fieldset {
+        border: 1px solid var(--panel-border);
+        border-radius: 4px;
+        margin: 0 0 12px 0;
+        padding: 10px;
+        background: var(--panel-bg-alt);
+      }
+
+      legend {
+        padding: 0 6px;
+        font-weight: 600;
+        color: var(--accent);
+        text-transform: uppercase;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+      }
+
+      .row:last-child {
+        margin-bottom: 0;
+      }
+
+      .row label {
+        color: var(--text-dim);
+        flex: 0 0 auto;
+      }
+
+      button {
+        font: inherit;
+        color: var(--text);
+        background: #33334a;
+        border: 1px solid var(--panel-border);
+        border-radius: 3px;
+        padding: 5px 9px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #3f3f5c;
+      }
+
+      button.bless {
+        border-color: var(--bless);
+        color: var(--bless);
+      }
+
+      button.curse {
+        border-color: var(--curse);
+        color: var(--curse);
+      }
+
+      button.blurse {
+        border-color: var(--blurse);
+        color: var(--blurse);
+      }
+
+      input,
+      select,
+      textarea {
+        font: inherit;
+        color: var(--text);
+        background: #16161e;
+        border: 1px solid var(--panel-border);
+        border-radius: 3px;
+        padding: 4px 6px;
+      }
+
+      input[type="number"] {
+        width: 72px;
+      }
+
+      input.grow,
+      select.grow {
+        flex: 1 1 90px;
+        min-width: 0;
+      }
+
+      textarea {
+        width: 100%;
+        font-family: Consolas, monospace;
+        font-size: 12px;
+        min-height: 150px;
+        resize: vertical;
+      }
+
+      .hint {
+        color: var(--text-dim);
+        font-size: 11px;
+        margin: 0 0 8px 0;
+        line-height: 1.4;
+      }
+
+      #log {
+        font-family: Consolas, monospace;
+        font-size: 11px;
+        line-height: 1.5;
+        max-height: 220px;
+        overflow-y: auto;
+        background: #12121a;
+        border: 1px solid var(--panel-border);
+        border-radius: 3px;
+        padding: 6px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      #log .time {
+        color: #5f5f78;
+      }
+
+      #log .call {
+        color: var(--accent);
+      }
+
+      #log .event {
+        color: var(--blurse);
+      }
+
+      #log .console {
+        color: var(--text-dim);
+      }
+
+      #log .error {
+        color: var(--curse);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="stage-column">
+      <div id="stage-header">
+        <h1>BlessMeter v1 harness</h1>
+        <span id="stage-status">booting...</span>
+      </div>
+      <div id="stage"></div>
+    </div>
+
+    <div id="panel">
+      <fieldset>
+        <legend>Redeem</legend>
+        <p class="hint">
+          Dispatches an <code>onEventReceived</code> event on the widget window, the same way
+          StreamElements delivers a channel point redemption.
+        </p>
+        <div class="row">
+          <button class="bless" data-redeem="Bless the Run">Bless the Run</button>
+          <button class="curse" data-redeem="Curse the Run">Curse the Run</button>
+          <button class="blurse" data-redeem="Blurse the Run">Blurse the Run</button>
+        </div>
+        <div class="row">
+          <label for="redeem-user">User</label>
+          <input id="redeem-user" class="grow" type="text" value="testUserName" />
+        </div>
+        <div class="row">
+          <label for="payload-path">Payload</label>
+          <select id="payload-path" class="grow">
+            <option value="eventData">event.data.redemption (Twitch)</option>
+            <option value="session">session channel-points-latest (SE docs)</option>
+            <option value="itemId">event.itemId (SE emulator)</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="custom-redeem">Custom</label>
+          <input id="custom-redeem" class="grow" type="text" placeholder="Some Other Reward" />
+          <button id="fire-custom">Fire</button>
+        </div>
+        <div class="row">
+          <label for="burst-count">Burst</label>
+          <input id="burst-count" type="number" min="1" max="100" value="10" />
+          <select id="burst-type">
+            <option value="random">random</option>
+            <option value="Bless the Run">bless</option>
+            <option value="Curse the Run">curse</option>
+            <option value="Blurse the Run">blurse</option>
+          </select>
+          <label for="burst-gap">gap ms</label>
+          <input id="burst-gap" type="number" min="0" max="5000" value="0" />
+          <button id="fire-burst">Fire burst</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Field data</legend>
+        <p class="hint">
+          Defaults come from <code>widgetFields.json</code>. Firing
+          <code>onWidgetLoad</code> re-applies them, as StreamElements does when the overlay loads.
+        </p>
+        <div class="row">
+          <label for="field-meter-maximum">meterMaximum</label>
+          <input id="field-meter-maximum" type="number" min="1" value="15" />
+          <label for="field-show-chars">showChars</label>
+          <input id="field-show-chars" type="checkbox" checked />
+          <label for="field-show-redemption-announcements">showRedemptionAnnouncements</label>
+          <input id="field-show-redemption-announcements" type="checkbox" checked />
+          <label for="field-seconds-between-reports">numberOfSecondsBetweenReports</label>
+          <input id="field-seconds-between-reports" type="number" min="0" value="90" />
+          <label for="field-reports-should-display">reportsShouldDisplay</label>
+          <input id="field-reports-should-display" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <button id="fire-widget-load">Fire onWidgetLoad</button>
+          <button id="fire-report">Fire report</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Store</legend>
+        <p class="hint">
+          The mocked <code>SE_API.store</code> is backed by localStorage, so state survives reloads.
+        </p>
+        <div class="row">
+          <select id="preset" class="grow">
+            <option value="empty">Empty (all zeros)</option>
+            <option value="midRun">Mid run</option>
+            <option value="blessMaxed">Bless meter at max (glow)</option>
+            <option value="nearMax">Both meters one short of max</option>
+            <option value="bothAtMax">Both meters at max (next redeem resets)</option>
+            <option value="postReset">After a reset (preReset counts)</option>
+            <option value="allTime">All-time view populated</option>
+          </select>
+          <button id="apply-preset">Apply</button>
+        </div>
+        <div class="row">
+          <textarea id="store-json" spellcheck="false"></textarea>
+        </div>
+        <div class="row">
+          <button id="store-refresh">Refresh</button>
+          <button id="store-write">Write to store</button>
+          <button id="store-clear">Clear store</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Frame</legend>
+        <div class="row">
+          <label for="frame-width">W</label>
+          <input id="frame-width" type="number" min="100" max="1920" value="420" />
+          <label for="frame-height">H</label>
+          <input id="frame-height" type="number" min="100" max="1080" value="330" />
+          <button id="frame-apply">Resize</button>
+        </div>
+        <div class="row">
+          <label for="store-latency">Store latency ms</label>
+          <input id="store-latency" type="number" min="0" max="5000" value="0" />
+          <button id="frame-reload">Reload widget</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Log</legend>
+        <div class="row">
+          <label><input id="log-console" type="checkbox" /> mirror widget console</label>
+          <button id="log-clear">Clear</button>
+        </div>
+        <div id="log"></div>
+      </fieldset>
+    </div>
+
+    <script>
+      "use strict";
+
+      // =====================================================================
+      // Types mirrored from se-api.d.ts
+      //
+      // The widget is compiled from TypeScript against v1/se-api.d.ts. These
+      // typedefs mirror those declarations so the mocks and builders below stay
+      // in step with what the widget actually reads.
+      // =====================================================================
+
+      /**
+       * @typedef {Object} CurrentState
+       * @property {number} numberOfBlesses
+       * @property {number} numberOfCurses
+       * @property {number} numberOfBlurses
+       * @property {number} numberOfBlursesThatCursed
+       * @property {number} numberOfBlursesThatBlessed
+       * @property {number} numberOfBlessesPreReset
+       * @property {number} numberOfCursesPreReset
+       * @property {number} numberOfBlursesPreReset
+       * @property {number} numberOfBlursesThatCursedPreReset
+       * @property {number} numberOfBlursesThatBlessedPreReset
+       */
+
+      /**
+       * @typedef {Object} AllTimeState
+       * @property {number} numberOfBlesses
+       * @property {number} numberOfCurses
+       * @property {number} numberOfBlurses
+       * @property {number} numberOfBlursesThatCursed
+       * @property {number} numberOfBlursesThatBlessed
+       */
+
+      /**
+       * @typedef {Object} RedemptionHistoryEntry
+       * @property {number} numberOfBlesses
+       * @property {number} numberOfCurses
+       * @property {number} numberOfBlurses
+       * @property {number} numberOfBlursesThatBlessed
+       * @property {number} numberOfBlursesThatCursed
+       */
+
+      /** @typedef {Object.<string, RedemptionHistoryEntry>} RedemptionHistory */
+
+      /**
+       * @typedef {Object} LastRedemption
+       * @property {string} redeemingUser
+       * @property {string} charType
+       * @property {string} meterTarget
+       * @property {number} meterAmount
+       */
+
+      /**
+       * @typedef {Object} WidgetState
+       * @property {CurrentState} current
+       * @property {AllTimeState} allTime
+       * @property {boolean} [showAll]
+       * @property {Date|string} lastUpdated
+       * @property {RedemptionHistory} [redemptionHistory]
+       * @property {LastRedemption} [lastRedemption]
+       */
+
+      /**
+       * @typedef {Object} SEEventData
+       * @property {string} [redemption]
+       * @property {string} [key]
+       * @property {WidgetState} [value]
+       */
+
+      /**
+       * @typedef {Object} SEEvent
+       * @property {string} [type]
+       * @property {string} [itemId]
+       * @property {SEEventData} [data]
+       * @property {string} [name]
+       */
+
+      /**
+       * @typedef {Object} SESession
+       * @property {{ "channel-points-latest"?: { redemption?: string } }} [data]
+       */
+
+      /**
+       * @typedef {Object} FieldData
+       * @property {number} [meterMaximum]
+       * @property {boolean} [showChars]
+       * @property {boolean} [showRedemptionAnnouncements]
+       * @property {number} [numberOfSecondsBetweenReports]
+       * @property {boolean} [reportsShouldDisplay]
+       */
+
+      /**
+       * @typedef {Object} SEEventDetail
+       * @property {string} [listener]
+       * @property {SEEvent} [event]
+       * @property {SESession} [session]
+       * @property {FieldData} [fieldData]
+       */
+
+      /**
+       * The custom event shape StreamElements dispatches for both
+       * onEventReceived and onWidgetLoad.
+       * @typedef {CustomEvent<SEEventDetail>} SECustomEvent
+       */
+
+      /**
+       * @typedef {Object} MockSeApi
+       * @property {{ get: (key: string) => Promise<WidgetState|null>, set: (key: string, value: WidgetState) => Promise<void> }} store
+       * @property {() => void} resumeQueue
+       */
+
+      // =====================================================================
+      // Constants
+      // =====================================================================
+
+      /** Must match STORE_KEY_NAME in widget.ts. */
+      const STORE_KEY = "blessCurseMeterState";
+      /** Where the mocked store persists between reloads. */
+      const LOCAL_STORAGE_KEY = "blessMeter.v1.localTest.store";
+
+      const WIDGET_HTML_URL = "widget.html";
+      const WIDGET_CSS_URL = "widget.css";
+      const WIDGET_JS_URL = "widget.js";
+      const WIDGET_FIELDS_URL = "widgetFields.json";
+      const JQUERY_LOCAL_URL = "../node_modules/jquery/dist/jquery.js";
+      const JQUERY_CDN_URL = "https://code.jquery.com/jquery-3.7.1.min.js";
+
+      const BLESS_THE_RUN = "Bless the Run";
+      const CURSE_THE_RUN = "Curse the Run";
+      const BLURSE_THE_RUN = "Blurse the Run";
+      const REDEMPTION_NAMES = [BLESS_THE_RUN, CURSE_THE_RUN, BLURSE_THE_RUN];
+
+      /** @type {HTMLIFrameElement|null} */
+      let widgetFrame = null;
+
+      // =====================================================================
+      // Logging
+      // =====================================================================
+
+      const logElement = document.getElementById("log");
+
+      /**
+       * Appends a line to the panel log.
+       * @param {string} message
+       * @param {"call"|"event"|"console"|"error"} [kind]
+       */
+      function log(message, kind) {
+        const line = document.createElement("div");
+        line.className = kind || "";
+        const now = new Date();
+        const stamp = `${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}.${String(now.getMilliseconds()).padStart(3, "0")}`;
+        const time = document.createElement("span");
+        time.className = "time";
+        time.textContent = `${stamp} `;
+        line.appendChild(time);
+        line.appendChild(document.createTextNode(message));
+        const atBottom = logElement.scrollTop + logElement.clientHeight >= logElement.scrollHeight - 20;
+        logElement.appendChild(line);
+        if (atBottom) {
+          logElement.scrollTop = logElement.scrollHeight;
+        }
+      }
+
+      /**
+       * Sets the one-line status readout next to the page title.
+       * @param {string} message
+       */
+      function setStatus(message) {
+        document.getElementById("stage-status").textContent = message;
+      }
+
+      // =====================================================================
+      // Mock store persistence
+      // =====================================================================
+
+      /**
+       * Reads the whole mocked key/value store out of localStorage.
+       * @returns {Object.<string, WidgetState>}
+       */
+      function readAll() {
+        try {
+          const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
+          return raw ? JSON.parse(raw) : {};
+        } catch (error) {
+          log(`Could not read localStorage: ${error}`, "error");
+          return {};
+        }
+      }
+
+      /**
+       * @param {Object.<string, WidgetState>} all
+       */
+      function writeAll(all) {
+        window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(all));
+      }
+
+      /**
+       * JSON round-tripping turns lastUpdated into a string; SE_API hands back a
+       * Date, so restore it here.
+       * @param {WidgetState|null} state
+       * @returns {WidgetState|null}
+       */
+      function reviveState(state) {
+        if (state && typeof state.lastUpdated === "string") {
+          state.lastUpdated = new Date(state.lastUpdated);
+        }
+        return state;
+      }
+
+      /**
+       * @param {string} key
+       * @returns {WidgetState|null}
+       */
+      function readStore(key) {
+        const all = readAll();
+        return reviveState(key in all ? all[key] : null);
+      }
+
+      /**
+       * @param {string} key
+       * @param {WidgetState} value
+       */
+      function writeStore(key, value) {
+        const all = readAll();
+        all[key] = value;
+        writeAll(all);
+      }
+
+      function clearStore() {
+        window.localStorage.removeItem(LOCAL_STORAGE_KEY);
+      }
+
+      /** Resolves after the configured fake store latency. */
+      function delay() {
+        const ms = Number(document.getElementById("store-latency").value) || 0;
+        return ms > 0 ? new Promise(resolve => window.setTimeout(resolve, ms)) : Promise.resolve();
+      }
+
+      // =====================================================================
+      // SE_API mock
+      // =====================================================================
+
+      /**
+       * Builds the mocked SE_API global for a widget window. Covers every member
+       * declared in se-api.d.ts: store.get, store.set, and resumeQueue.
+       * @param {Window} win The widget iframe's window.
+       * @returns {MockSeApi}
+       */
+      function createMockSeApi(win) {
+        return {
+          store: {
+            get(key) {
+              log(`SE_API.store.get("${key}")`, "call");
+              return delay().then(() => {
+                const value = readStore(key);
+                log(`  get -> ${value === null ? "null" : summarizeState(value)}`, "call");
+                return value;
+              });
+            },
+            set(key, value) {
+              log(`SE_API.store.set("${key}", ${summarizeState(value)})`, "call");
+              return delay().then(() => {
+                writeStore(key, value);
+                renderStoreJson();
+                // StreamElements broadcasts a kvstore:update to every custom
+                // widget after a set. The widget relies on that event to redraw
+                // after a redemption, so it has to arrive as a separate task.
+                win.setTimeout(() => emitKvStoreUpdate(win, key, value), 0);
+              });
+            },
+          },
+          resumeQueue() {
+            log("SE_API.resumeQueue()", "call");
+          },
+        };
+      }
+
+      /**
+       * Short one-line description of a state object for the log.
+       * @param {WidgetState|null|undefined} state
+       */
+      function summarizeState(state) {
+        if (!state || !state.current) {
+          return String(state);
+        }
+        const current = state.current;
+        return `{bless:${current.numberOfBlesses} curse:${current.numberOfCurses} blurse:${current.numberOfBlurses} showAll:${!!state.showAll}}`;
+      }
+
+      // =====================================================================
+      // Event detail builders
+      // =====================================================================
+
+      /**
+       * Builds a redemption event detail with the redemption name placed in one
+       * of the three locations getRedemptionName() checks.
+       * @param {{ name: string, user: string, path: "eventData"|"session"|"itemId" }} options
+       * @returns {SEEventDetail}
+       */
+      function makeRedemptionDetail(options) {
+        /** @type {SEEvent} */
+        const event = { type: "channelPointsRedemption" };
+        if (options.user) {
+          event.name = options.user;
+        }
+        /** @type {SEEventDetail} */
+        const detail = { event: event };
+        if (options.path === "itemId") {
+          event.itemId = options.name;
+        } else if (options.path === "session") {
+          detail.session = { data: { "channel-points-latest": { redemption: options.name } } };
+        } else {
+          event.data = { redemption: options.name };
+        }
+        return detail;
+      }
+
+      /**
+       * @param {FieldData} fieldData
+       * @returns {SEEventDetail}
+       */
+      function makeWidgetLoadDetail(fieldData) {
+        return { listener: "widget-load", fieldData: fieldData };
+      }
+
+      /**
+       * @param {string} key
+       * @param {WidgetState} value
+       * @returns {SEEventDetail}
+       */
+      function makeKvStoreDetail(key, value) {
+        return { listener: "kvstore:update", event: { data: { key: key, value: value } } };
+      }
+
+      /**
+       * Builds a complete WidgetState with every field the widget expects.
+       * @param {{ current?: Partial<CurrentState>, allTime?: Partial<AllTimeState>, showAll?: boolean, redemptionHistory?: RedemptionHistory, lastRedemption?: LastRedemption }} [overrides]
+       * @returns {WidgetState}
+       */
+      function makeWidgetState(overrides) {
+        const options = overrides || {};
+        /** @type {WidgetState} */
+        const state = {
+          current: Object.assign(
+            {
+              numberOfBlesses: 0,
+              numberOfCurses: 0,
+              numberOfBlurses: 0,
+              numberOfBlursesThatCursed: 0,
+              numberOfBlursesThatBlessed: 0,
+              numberOfBlessesPreReset: 0,
+              numberOfCursesPreReset: 0,
+              numberOfBlursesPreReset: 0,
+              numberOfBlursesThatCursedPreReset: 0,
+              numberOfBlursesThatBlessedPreReset: 0,
+            },
+            options.current
+          ),
+          allTime: Object.assign(
+            {
+              numberOfBlesses: 0,
+              numberOfCurses: 0,
+              numberOfBlurses: 0,
+              numberOfBlursesThatCursed: 0,
+              numberOfBlursesThatBlessed: 0,
+            },
+            options.allTime
+          ),
+          showAll: options.showAll === true,
+          lastUpdated: new Date(),
+          redemptionHistory: options.redemptionHistory || {},
+        };
+        if (options.lastRedemption) {
+          state.lastRedemption = options.lastRedemption;
+        }
+        return state;
+      }
+
+      // =====================================================================
+      // Dispatching into the widget
+      // =====================================================================
+
+      /**
+       * @returns {Window|null} The widget window, or null when it is not booted.
+       */
+      function widgetWindow() {
+        if (!widgetFrame || !widgetFrame.contentWindow) {
+          log("Widget frame is not ready yet", "error");
+          return null;
+        }
+        return widgetFrame.contentWindow;
+      }
+
+      /**
+       * Dispatches a StreamElements style CustomEvent on the widget window.
+       * @param {Window} win
+       * @param {"onEventReceived"|"onWidgetLoad"} type
+       * @param {SEEventDetail} detail
+       */
+      function dispatchToWidget(win, type, detail) {
+        win.dispatchEvent(new win.CustomEvent(type, { detail: detail }));
+      }
+
+      /**
+       * @param {Window} win
+       * @param {string} key
+       * @param {WidgetState} value
+       */
+      function emitKvStoreUpdate(win, key, value) {
+        log(`dispatch onEventReceived kvstore:update (${key})`, "event");
+        dispatchToWidget(win, "onEventReceived", makeKvStoreDetail(key, value));
+      }
+
+      /**
+       * Fires a single channel point redemption.
+       * @param {string} redemptionName
+       */
+      function fireRedemption(redemptionName) {
+        const win = widgetWindow();
+        if (!win) return;
+        const path = /** @type {"eventData"|"session"|"itemId"} */ (
+          document.getElementById("payload-path").value
+        );
+        const user = document.getElementById("redeem-user").value.trim();
+        log(`dispatch onEventReceived redemption "${redemptionName}" (${path}, user "${user}")`, "event");
+        dispatchToWidget(win, "onEventReceived", makeRedemptionDetail({ name: redemptionName, user: user, path: path }));
+      }
+
+      /** Fires onWidgetLoad using the current field data inputs. */
+      function fireWidgetLoad() {
+        const win = widgetWindow();
+        if (!win) return;
+        const fieldData = readFieldDataInputs();
+        log(`dispatch onWidgetLoad (meterMaximum ${fieldData.meterMaximum}, showChars ${fieldData.showChars})`, "event");
+        dispatchToWidget(win, "onWidgetLoad", makeWidgetLoadDetail(fieldData));
+      }
+
+      /** Enqueues the top-redeemer report animations on the widget display queue. */
+      function fireReport() {
+        const win = widgetWindow();
+        if (!win) return;
+        if (typeof win.enqueuePeriodicReportCycle !== "function") {
+          log("enqueuePeriodicReportCycle is not available on the widget yet", "error");
+          return;
+        }
+        log("enqueue top-redeemer report cycle (forced)", "event");
+        win.enqueuePeriodicReportCycle(true);
+      }
+
+      /** @returns {FieldData} */
+      function readFieldDataInputs() {
+        return {
+          meterMaximum: Number(document.getElementById("field-meter-maximum").value),
+          showChars: document.getElementById("field-show-chars").checked,
+          showRedemptionAnnouncements: document.getElementById("field-show-redemption-announcements").checked,
+          numberOfSecondsBetweenReports: Number(document.getElementById("field-seconds-between-reports").value),
+          reportsShouldDisplay: document.getElementById("field-reports-should-display").checked,
+        };
+      }
+
+      /**
+       * Fires several redemptions back to back to exercise the widget's display
+       * queue under rapid redemptions.
+       */
+      async function fireBurst() {
+        const count = Number(document.getElementById("burst-count").value) || 1;
+        const gap = Number(document.getElementById("burst-gap").value) || 0;
+        const type = document.getElementById("burst-type").value;
+        log(`burst of ${count} (${type}), ${gap}ms apart`, "event");
+        for (let index = 0; index < count; index++) {
+          const name = type === "random"
+            ? REDEMPTION_NAMES[Math.floor(Math.random() * REDEMPTION_NAMES.length)]
+            : type;
+          fireRedemption(name);
+          if (gap > 0) {
+            await new Promise(resolve => window.setTimeout(resolve, gap));
+          }
+        }
+      }
+
+      // =====================================================================
+      // Widget boot
+      // =====================================================================
+
+      /**
+       * Injects a script into the widget document and resolves once it has run.
+       * @param {Document} doc
+       * @param {string} src
+       * @returns {Promise<void>}
+       */
+      function injectScript(doc, src) {
+        return new Promise((resolve, reject) => {
+          const script = doc.createElement("script");
+          script.src = src;
+          script.addEventListener("load", () => resolve(), { once: true });
+          script.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
+          doc.head.appendChild(script);
+        });
+      }
+
+      /**
+       * Injects a stylesheet into the widget iframe, mirroring how StreamElements
+       * attaches widget.css when hosting the overlay.
+       * @param {Document} doc
+       * @param {string} href
+       */
+      function injectStylesheet(doc, href) {
+        return new Promise((resolve, reject) => {
+          const link = doc.createElement("link");
+          link.rel = "stylesheet";
+          link.href = href;
+          link.addEventListener("load", () => resolve(), { once: true });
+          link.addEventListener("error", () => reject(new Error(`Failed to load ${href}`)), { once: true });
+          doc.head.appendChild(link);
+        });
+      }
+
+      /**
+       * StreamElements provides jQuery globally. Prefer the copy from
+       * node_modules (matches the version the Jest suite runs against) and fall
+       * back to the CDN when dependencies are not installed.
+       * @param {Document} doc
+       * @param {Window} win
+       */
+      async function injectJQuery(doc, win) {
+        try {
+          await injectScript(doc, JQUERY_LOCAL_URL);
+        } catch {
+          log("node_modules jQuery not found, falling back to the CDN", "error");
+          await injectScript(doc, JQUERY_CDN_URL);
+        }
+        if (!win.jQuery) {
+          throw new Error("jQuery did not load; the widget cannot run");
+        }
+      }
+
+      /**
+       * Mirrors the widget's console output into the panel log when the toggle
+       * is on. Installed before widget.js runs so module scope logs are caught.
+       * @param {Window} win
+       */
+      function mirrorConsole(win) {
+        const original = win.console.log.bind(win.console);
+        win.console.log = function (...args) {
+          original(...args);
+          if (document.getElementById("log-console").checked) {
+            log(args.map(arg => (typeof arg === "string" ? arg : JSON.stringify(arg))).join(" "), "console");
+          }
+        };
+      }
+
+      /**
+       * Recreates the widget iframe and injects everything it needs:
+       * widget.css (StreamElements injects this separately in production),
+       * the mocked SE_API (widget.js reads the store at script scope),
+       * jQuery, then the compiled widget. Asset URLs are cache-busted so a
+       * rebuild is always picked up.
+       */
+      async function bootWidget() {
+        const stage = document.getElementById("stage");
+        stage.textContent = "";
+        setStatus("loading widget.html...");
+
+        const frame = document.createElement("iframe");
+        frame.id = "widget-frame";
+        applyFrameSize(frame);
+        const loaded = new Promise((resolve, reject) => {
+          frame.addEventListener("load", () => resolve(), { once: true });
+          frame.addEventListener("error", () => reject(new Error("widget.html failed to load")), { once: true });
+        });
+        const cacheBust = Date.now();
+        frame.src = `${WIDGET_HTML_URL}?t=${cacheBust}`;
+        stage.appendChild(frame);
+
+        try {
+          await loaded;
+          widgetFrame = frame;
+          const win = frame.contentWindow;
+          const doc = frame.contentDocument;
+
+          mirrorConsole(win);
+          setStatus("injecting widget.css...");
+          await injectStylesheet(doc, `${WIDGET_CSS_URL}?t=${cacheBust}`);
+
+          // Must exist before widget.js runs: initializeLastWidgetState() calls
+          // SE_API.store.get() at script scope.
+          win.SE_API = createMockSeApi(win);
+
+          setStatus("injecting jQuery...");
+          await injectJQuery(doc, win);
+
+          setStatus("injecting widget.js...");
+          await injectScript(doc, `${WIDGET_JS_URL}?t=${cacheBust}`);
+
+          fireWidgetLoad();
+          renderStoreJson();
+          setStatus(`ready (loaded at ${new Date().toLocaleTimeString()})`);
+        } catch (error) {
+          setStatus(String(error));
+          log(String(error), "error");
+        }
+      }
+
+      /**
+       * @param {HTMLIFrameElement} frame
+       */
+      function applyFrameSize(frame) {
+        frame.width = String(Number(document.getElementById("frame-width").value) || 420);
+        frame.height = String(Number(document.getElementById("frame-height").value) || 330);
+      }
+
+      // =====================================================================
+      // Field data defaults from widgetFields.json
+      // =====================================================================
+
+      /**
+       * Seeds the field data inputs from widgetFields.json so the harness starts
+       * with the same values the StreamElements fields default to.
+       */
+      async function loadFieldDefaults() {
+        try {
+          const response = await fetch(`${WIDGET_FIELDS_URL}?t=${Date.now()}`);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          const fields = await response.json();
+          if (fields.meterMaximum && typeof fields.meterMaximum.value === "number") {
+            document.getElementById("field-meter-maximum").value = String(fields.meterMaximum.value);
+          }
+          if (fields.showChars && typeof fields.showChars.value === "boolean") {
+            document.getElementById("field-show-chars").checked = fields.showChars.value;
+          }
+          if (fields.showRedemptionAnnouncements && typeof fields.showRedemptionAnnouncements.value === "boolean") {
+            document.getElementById("field-show-redemption-announcements").checked = fields.showRedemptionAnnouncements.value;
+          }
+          if (fields.numberOfSecondsBetweenReports && typeof fields.numberOfSecondsBetweenReports.value === "number") {
+            document.getElementById("field-seconds-between-reports").value = String(fields.numberOfSecondsBetweenReports.value);
+          }
+          if (fields.reportsShouldDisplay && typeof fields.reportsShouldDisplay.value === "boolean") {
+            document.getElementById("field-reports-should-display").checked = fields.reportsShouldDisplay.value;
+          }
+          log("Loaded field defaults from widgetFields.json");
+        } catch (error) {
+          log(`Could not read widgetFields.json (${error}); using the inputs as-is`, "error");
+        }
+      }
+
+      // =====================================================================
+      // Store panel
+      // =====================================================================
+
+      /** Renders the persisted state into the JSON textarea. */
+      function renderStoreJson() {
+        const state = readStore(STORE_KEY);
+        document.getElementById("store-json").value = state === null ? "" : JSON.stringify(state, null, 2);
+      }
+
+      /**
+       * Persists a state object and notifies the widget the same way
+       * SE_API.store.set does.
+       * @param {WidgetState} state
+       */
+      function pushStateToWidget(state) {
+        writeStore(STORE_KEY, state);
+        renderStoreJson();
+        const win = widgetWindow();
+        if (win) {
+          emitKvStoreUpdate(win, STORE_KEY, state);
+        }
+      }
+
+      /**
+       * Builds one of the canned states used to reach display cases that are
+       * slow to produce by clicking.
+       * @param {string} name
+       * @returns {WidgetState}
+       */
+      function makePresetState(name) {
+        const max = Number(document.getElementById("field-meter-maximum").value) || 15;
+        if (name === "midRun") {
+          return makeWidgetState({
+            current: {
+              numberOfBlesses: 4,
+              numberOfCurses: 2,
+              numberOfBlurses: 3,
+              numberOfBlursesThatBlessed: 1,
+              numberOfBlursesThatCursed: 2,
+            },
+            allTime: {
+              numberOfBlesses: 4,
+              numberOfCurses: 2,
+              numberOfBlurses: 3,
+              numberOfBlursesThatBlessed: 1,
+              numberOfBlursesThatCursed: 2,
+            },
+            redemptionHistory: {
+              testUserName: { numberOfBlesses: 4, numberOfCurses: 2, numberOfBlurses: 3 },
+            },
+            lastRedemption: { redeemingUser: "testUserName", charType: "blurse", meterTarget: "curse", meterAmount: 2 },
+          });
+        }
+        if (name === "blessMaxed") {
+          return makeWidgetState({
+            current: { numberOfBlesses: max, numberOfCurses: 2 },
+            allTime: { numberOfBlesses: max, numberOfCurses: 2 },
+          });
+        }
+        if (name === "nearMax") {
+          return makeWidgetState({
+            current: { numberOfBlesses: max - 1, numberOfCurses: max - 1 },
+            allTime: { numberOfBlesses: max - 1, numberOfCurses: max - 1 },
+          });
+        }
+        if (name === "bothAtMax") {
+          return makeWidgetState({
+            current: { numberOfBlesses: max, numberOfCurses: max },
+            allTime: { numberOfBlesses: max, numberOfCurses: max },
+          });
+        }
+        if (name === "postReset") {
+          return makeWidgetState({
+            current: {
+              numberOfBlessesPreReset: max,
+              numberOfCursesPreReset: max,
+              numberOfBlursesPreReset: 4,
+              numberOfBlursesThatBlessedPreReset: 2,
+              numberOfBlursesThatCursedPreReset: 2,
+            },
+            allTime: {
+              numberOfBlesses: max,
+              numberOfCurses: max,
+              numberOfBlurses: 4,
+              numberOfBlursesThatBlessed: 2,
+              numberOfBlursesThatCursed: 2,
+            },
+          });
+        }
+        if (name === "allTime") {
+          return makeWidgetState({
+            showAll: true,
+            current: { numberOfBlesses: 2, numberOfCurses: 1 },
+            allTime: {
+              numberOfBlesses: 37,
+              numberOfCurses: 24,
+              numberOfBlurses: 11,
+              numberOfBlursesThatBlessed: 5,
+              numberOfBlursesThatCursed: 6,
+            },
+          });
+        }
+        return makeWidgetState();
+      }
+
+      // =====================================================================
+      // Wiring
+      // =====================================================================
+
+      document.querySelectorAll("button[data-redeem]").forEach(button => {
+        button.addEventListener("click", () => fireRedemption(button.dataset.redeem));
+      });
+
+      document.getElementById("fire-custom").addEventListener("click", () => {
+        const name = document.getElementById("custom-redeem").value.trim();
+        if (!name) {
+          log("Enter a custom redemption name first", "error");
+          return;
+        }
+        fireRedemption(name);
+      });
+
+      document.getElementById("fire-burst").addEventListener("click", fireBurst);
+      document.getElementById("fire-widget-load").addEventListener("click", fireWidgetLoad);
+      document.getElementById("fire-report").addEventListener("click", fireReport);
+
+      document.getElementById("apply-preset").addEventListener("click", () => {
+        const preset = document.getElementById("preset").value;
+        log(`Applying preset "${preset}"`);
+        pushStateToWidget(makePresetState(preset));
+      });
+
+      document.getElementById("store-refresh").addEventListener("click", renderStoreJson);
+
+      document.getElementById("store-write").addEventListener("click", () => {
+        const raw = document.getElementById("store-json").value.trim();
+        if (!raw) {
+          log("Nothing to write; the JSON box is empty", "error");
+          return;
+        }
+        try {
+          pushStateToWidget(JSON.parse(raw));
+        } catch (error) {
+          log(`Invalid JSON: ${error}`, "error");
+        }
+      });
+
+      document.getElementById("store-clear").addEventListener("click", () => {
+        clearStore();
+        renderStoreJson();
+        log("Cleared the mocked store; reload the widget to start from scratch");
+      });
+
+      document.getElementById("frame-apply").addEventListener("click", () => {
+        if (widgetFrame) {
+          applyFrameSize(widgetFrame);
+        }
+      });
+
+      document.getElementById("frame-reload").addEventListener("click", bootWidget);
+      document.getElementById("log-clear").addEventListener("click", () => {
+        logElement.textContent = "";
+      });
+
+      // =====================================================================
+      // Start
+      // =====================================================================
+
+      loadFieldDefaults().then(bootWidget);
+    </script>
+  </body>
+</html>

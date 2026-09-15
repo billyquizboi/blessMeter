@@ -8,5 +8,20 @@
     "type": "checkbox",
     "label": "Show chars for redeems?",
     "value": true
+  },
+  "showRedemptionAnnouncements": {
+    "type": "checkbox",
+    "label": "Show the user who redeemed and impact of the redeem?",
+    "value": true
+  },
+  "numberOfSecondsBetweenReports": {
+    "type": "number",
+    "label": "Number of seconds between displays of the all time & top redeemers",
+    "value": 90
+  },
+  "reportsShouldDisplay": {
+    "type": "checkbox",
+    "label": "Show top-redeemers and all-time report periodically?",
+    "value": true
   }
 }

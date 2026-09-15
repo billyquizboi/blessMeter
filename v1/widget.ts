@@ -1,9 +1,3 @@
-// TODO: Revert to commit e7d5013a2605f3fd846c7eacf57f649821f4abd5
-// TODO: Then, implement my own redemption queue
-//   + animation queue for each redemption queue item with sprite laugh & casting animations
-//   + the sprite animations should be longer for each redeem to be more enjoyable
-//   + add testing for the complex cases of many redeems occurring rapidly
-
 const blurseTheRun = "Blurse the Run";
 const blessTheRun = "Bless the Run";
 const curseTheRun = "Curse the Run";
@@ -64,11 +58,25 @@ const ATTRIBUTE_SHOW_ALL = "showAll" as const;
 
 const animationDuration = 1000;
 const shortAnimationDuration = 1;
+const redemptionLetterDelayMs = 45;
+const redemptionHoldAfterTypeMs = 600;
+const reportAllTimeHoldMs = 2000;
+const topRedeemerLimit = 3;
+
+type TopRedeemerCategory = "bless" | "curse" | "blurse";
 
 let meterMaximum = 15;
 let showChars = true;
+let showRedemptionAnnouncements = true;
+let numberOfSecondsBetweenReports = 90;
+let reportsShouldDisplay = true;
 
 let lastWidgetState: WidgetState | null = null;
+
+/** Set by {@link incrementState} so only fresh redemptions trigger the announcement. */
+let shouldAnnounceRedemption = false;
+
+let periodicReportTimerId: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Runs enqueued async tasks one at a time, in order — each task completes
@@ -196,18 +204,19 @@ function incrementState(toIncrement: string, name: string | null): void {
             console.log("Initializing redemptionHistory  object");
             obj[redemptionHistoryKey] = {}
         }
-        if (name != null && name !== "" && obj[redemptionHistoryKey][name] == null) {
-            console.log("Initializing redemptionHistory for user " + name);
-            obj[redemptionHistoryKey][name] = {
-                "numberOfBlesses": 0,
-                "numberOfBlurses": 0,
-                "numberOfCurses": 0
+        if (name != null && name !== "") {
+            if (obj[redemptionHistoryKey][name] == null) {
+                console.log("Initializing redemptionHistory for user " + name);
+                obj[redemptionHistoryKey][name] = createEmptyRedemptionHistoryEntry();
+            } else {
+                obj[redemptionHistoryKey][name] = normalizeRedemptionHistoryEntry(obj[redemptionHistoryKey][name]);
             }
         }
 
         // stores info on the user who redeemed
-        let charType: string | undefined = undefined; 
-        let impact: number | undefined = undefined;
+        let charType: string | undefined = undefined;
+        let meterTarget: string | undefined = undefined;
+        let meterAmount: number | undefined = undefined;
 
         // handles blurses
         if (toIncrement == StateKeys.numberOfBlurses) {
@@ -217,18 +226,26 @@ function incrementState(toIncrement: string, name: string | null): void {
                 optionallyInitializeNumericField(obj, StateKeys.numberOfBlursesThatBlessed);
                 (obj.current as Record<string, number>)[StateKeys.numberOfBlursesThatBlessed] += 1;
                 obj.allTime[StateKeys.numberOfBlursesThatBlessed] += 1;
-                impact = -2;
+                meterTarget = TYPE_BLESS;
+                meterAmount = 2;
             } else {
                 // curse it bby
                 optionallyInitializeNumericField(obj, StateKeys.numberOfBlursesThatCursed);
                 (obj.current as Record<string, number>)[StateKeys.numberOfBlursesThatCursed] += 1;
                 obj.allTime[StateKeys.numberOfBlursesThatCursed] += 1;
-                impact = 2;
+                meterTarget = TYPE_CURSE;
+                meterAmount = 2;
             }
 
             if (name != null && name !== "" && obj[redemptionHistoryKey][name] != null) {
                 console.log("Incrementing blurses for user " + name);
-                obj[redemptionHistoryKey][name].numberOfBlurses = obj[redemptionHistoryKey][name].numberOfBlurses + 1;
+                const userEntry = obj[redemptionHistoryKey][name];
+                userEntry.numberOfBlurses = getOrDefaultCount(userEntry.numberOfBlurses) + 1;
+                if (meterTarget === TYPE_BLESS) {
+                    userEntry.numberOfBlursesThatBlessed = getOrDefaultCount(userEntry.numberOfBlursesThatBlessed) + 1;
+                } else {
+                    userEntry.numberOfBlursesThatCursed = getOrDefaultCount(userEntry.numberOfBlursesThatCursed) + 1;
+                }
             }
         }
         (obj.current as Record<string, number>)[toIncrement] += 1;
@@ -236,33 +253,38 @@ function incrementState(toIncrement: string, name: string | null): void {
         obj.lastUpdated = new Date();
 
         if (name != null && name !== "" && obj[redemptionHistoryKey][name] != null) {
-            if (toIncrement == TYPE_BLESS) {
+            if (toIncrement == StateKeys.numberOfBlesses) {
                 console.log("Incrementing blesses for user " + name);
                 obj[redemptionHistoryKey][name][StateKeys.numberOfBlesses] = obj[redemptionHistoryKey][name]["numberOfBlesses"] + 1;
                 charType = TYPE_BLESS;
-                impact = 1;
-            } else if (toIncrement == TYPE_CURSE) {
+                meterTarget = TYPE_BLESS;
+                meterAmount = 1;
+            } else if (toIncrement == StateKeys.numberOfCurses) {
                 console.log("Incrementing curses for user " + name);
                 obj[redemptionHistoryKey][name][StateKeys.numberOfCurses] = obj[redemptionHistoryKey][name]["numberOfCurses"] + 1;
                 charType = TYPE_CURSE;
-                impact = -1;
+                meterTarget = TYPE_CURSE;
+                meterAmount = 1;
             }
         }
 
-        if (name != null && name !== "" && impact != undefined && charType != undefined) {
+        if (name != null && name !== "" && meterTarget != undefined && meterAmount != undefined && charType != undefined) {
             obj["lastRedemption"] = {
                 "redeemingUser": name,
                 "charType": charType,
-                "impact": impact
+                "meterTarget": meterTarget,
+                "meterAmount": meterAmount,
             };
         }
 
         if (bothMetersAreAtMax(obj)) {
+            shouldAnnounceRedemption = false;
             const newState = resetMetersButKeepCurrentState(obj);
             if (newState) {
                 SE_API.store.set(STORE_KEY_NAME, newState);
             }
         } else {
+            shouldAnnounceRedemption = true;
             SE_API.store.set(STORE_KEY_NAME, obj);
         }
 
@@ -311,6 +333,7 @@ function resetMetersButKeepCurrentState(widgetState: WidgetState): WidgetState |
         allTime: widgetState.allTime,
         showAll: widgetState.showAll,
         redemptionHistory: widgetState.redemptionHistory,
+        lastRedemption: widgetState.lastRedemption,
         current: {
             [StateKeys.numberOfBlesses]: 0,
             [StateKeys.numberOfCurses]: 0,
@@ -449,18 +472,7 @@ function widgetLoadHandler(event: Event): void {
     const obj = event as SECustomEvent;
     // since we initialize from stored state we don't need to re-process recents
     if (obj.detail != null && obj.detail.fieldData != null) {
-        if (obj.detail.fieldData.meterMaximum != null && typeof obj.detail.fieldData.meterMaximum === "number") {
-            if (!Number.isInteger(meterMaximum)) {
-                meterMaximum = Math.floor(meterMaximum);
-            }
-            if (Number.isInteger(meterMaximum)) {
-                meterMaximum = obj.detail.fieldData.meterMaximum;
-            }
-        }
-
-        if (obj.detail.fieldData.showChars != null && typeof obj.detail.fieldData.showChars === "boolean") {
-            showChars = obj.detail.fieldData.showChars;
-        }
+        applyFieldData(obj.detail.fieldData);
     }
     try {
         SE_API.store.get(STORE_KEY_NAME).then(retrieved => {
@@ -650,16 +662,116 @@ function getRedeemingUserName(detail: SEEventDetail | undefined): string | null 
  * @param widgetState - The state to render, or null to skip the update.
  * @param showAnimate - When true uses the full {@link animationDuration};
  *   when false uses {@link shortAnimationDuration} for an instant update.
+ * @param announceRedemption - When omitted, uses {@link shouldAnnounceRedemption}
+ *   (set by {@link incrementState}). Pass explicitly in tests.
  */
-function updateDisplay(widgetState: WidgetState | null, showAnimate: boolean): void {
+function updateDisplay(widgetState: WidgetState | null, showAnimate: boolean, announceRedemption?: boolean): void {
     // Capture and clear before any async work so rapid redemptions don't bleed over.
+    const announce = announceRedemption ?? shouldAnnounceRedemption;
+    shouldAnnounceRedemption = false;
 
     if (widgetState == null || widgetState.current == undefined) {
         console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
         return;
     }
 
-    displayQueue.enqueue(() => processDisplay(widgetState, showAnimate));
+    displayQueue.enqueue(async () => {
+        if (showAnimate && announce && showRedemptionAnnouncements && hasValidLastRedemption(widgetState.lastRedemption)) {
+            await animateRedemptionAnnouncement(widgetState.lastRedemption);
+        }
+        await processDisplay(widgetState, showAnimate);
+    });
+}
+
+/**
+ * Applies StreamElements widget field configuration to module-level settings.
+ * @param fieldData - Field values from the widget editor or test harness.
+ */
+function applyFieldData(fieldData: FieldData | undefined): void {
+    if (fieldData == undefined) {
+        return;
+    }
+    if (fieldData.meterMaximum != null && typeof fieldData.meterMaximum === "number") {
+        if (!Number.isInteger(meterMaximum)) {
+            meterMaximum = Math.floor(meterMaximum);
+        }
+        if (Number.isInteger(meterMaximum)) {
+            meterMaximum = fieldData.meterMaximum;
+        }
+    }
+    if (fieldData.showChars != null && typeof fieldData.showChars === "boolean") {
+        showChars = fieldData.showChars;
+    }
+    if (fieldData.showRedemptionAnnouncements != null && typeof fieldData.showRedemptionAnnouncements === "boolean") {
+        showRedemptionAnnouncements = fieldData.showRedemptionAnnouncements;
+    }
+    if (fieldData.numberOfSecondsBetweenReports != null && typeof fieldData.numberOfSecondsBetweenReports === "number") {
+        numberOfSecondsBetweenReports = Math.max(0, Math.floor(fieldData.numberOfSecondsBetweenReports));
+    }
+    if (fieldData.reportsShouldDisplay != null && typeof fieldData.reportsShouldDisplay === "boolean") {
+        reportsShouldDisplay = fieldData.reportsShouldDisplay;
+    }
+    configurePeriodicReports();
+}
+
+/** Starts or stops the interval that enqueues top-redeemer report cycles. */
+function configurePeriodicReports(): void {
+    if (periodicReportTimerId != null) {
+        window.clearInterval(periodicReportTimerId);
+        periodicReportTimerId = null;
+    }
+    if (!reportsShouldDisplay || numberOfSecondsBetweenReports <= 0) {
+        return;
+    }
+    periodicReportTimerId = window.setInterval(() => {
+        enqueuePeriodicReportCycle();
+    }, numberOfSecondsBetweenReports * 1000);
+}
+
+/** Clears the periodic report interval without changing field settings. */
+function stopPeriodicReports(): void {
+    if (periodicReportTimerId != null) {
+        window.clearInterval(periodicReportTimerId);
+        periodicReportTimerId = null;
+    }
+}
+
+/**
+ * Enqueues the top-redeemer report sequence followed by a temporary all-time view.
+ * Does nothing when {@link reportsShouldDisplay} is false (unless {@link force} is true)
+ * or when state is unavailable.
+ * @param force - When true, enqueues even if periodic reports are disabled in field data.
+ */
+function enqueuePeriodicReportCycle(force = false): void {
+    if (!force && !reportsShouldDisplay) {
+        return;
+    }
+    const widgetState = lastWidgetState;
+    if (widgetState == null || widgetState.current == undefined) {
+        return;
+    }
+
+    displayQueue.enqueue(async () => {
+        const history = widgetState.redemptionHistory;
+        await animateOverlayTypewriter(
+            buildTopRedeemersReportSegments("TOP BLESS REDEEMERS", getTopRedeemers(history, "bless"), "redemption-text-bless")
+        );
+        await animateOverlayTypewriter(
+            buildTopRedeemersReportSegments("TOP CURSE REDEEMERS", getTopRedeemers(history, "curse"), "redemption-text-curse")
+        );
+        await animateOverlayTypewriter(
+            buildTopRedeemersReportSegments("TOP BLURSE REDEEMERS", getTopRedeemers(history, "blurse"), "redemption-text-blurse")
+        );
+        await animateOverlayTypewriter(
+            [ { "text": "ALL TIME" } ]
+        );
+        await processDisplay({ ...widgetState, showAll: true }, true);
+        await waitMs(reportAllTimeHoldMs);
+        await animateOverlayTypewriter(
+            [ { "text": "CURRENT RUN" } ]
+        );
+        await processDisplay({ ...widgetState, showAll: false }, true);
+    });
 }
 
 /**
@@ -705,7 +817,7 @@ function processDisplay(widgetState: WidgetState, showAnimate: boolean): Promise
         blessCountText = preResetBlesses;
         curseCountText = preResetCurses;
         blurseCountText = `${preResetBlursesThatBlessed} / ${preResetBlursesThatCursed}`;
-        //updateToggleButtonDisplay(isShowingAll(widgetState));
+        updateToggleButtonDisplay(isShowingAll(widgetState));
     } else {
         const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
         const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
@@ -725,7 +837,7 @@ function processDisplay(widgetState: WidgetState, showAnimate: boolean): Promise
             blessWidth = ((effectiveBlesses >= meterMaximum ? 100 : (effectiveBlesses / meterMaximum) * 100)).toFixed(2) + "%";
             curseWidth = ((effectiveCurses >= meterMaximum ? 100 : (effectiveCurses / meterMaximum) * 100)).toFixed(2) + "%";
         }
-        //updateToggleButtonDisplay(isShowingAll(widgetState));
+        updateToggleButtonDisplay(isShowingAll(widgetState));
         console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}`);
 
         // Build factories now (captures current widths; glow class changes happen immediately).
@@ -749,9 +861,6 @@ function processDisplay(widgetState: WidgetState, showAnimate: boolean): Promise
     }
 
     const animations: Promise<void>[] = [];
-    if (hasValidLastRedemption(widgetState["lastRedemption"])) {
-        // TODO: push an animation to animations for the user who redeemed, impact, and svg
-    } 
     animations.push(blessFactory());
     animations.push(curseFactory());
     return Promise.all(animations).then(() => {
@@ -766,8 +875,299 @@ function processDisplay(widgetState: WidgetState, showAnimate: boolean): Promise
 function hasValidLastRedemption(lastRedemption: any): lastRedemption is LastRedemption {
     return lastRedemption != undefined
         && typeof lastRedemption["redeemingUser"] === "string"    
-        && typeof lastRedemption["charType"] === "string" 
-        && typeof lastRedemption["impact"] === "number";
+        && typeof lastRedemption["charType"] === "string"
+        && typeof lastRedemption["meterTarget"] === "string"
+        && typeof lastRedemption["meterAmount"] === "number";
+}
+
+/**
+ * Hides the meter panel, types a redemption summary letter-by-letter into the
+ * main dialogue window, holds briefly, then restores the meter panel.
+ * @param redemption - The most recent redemption recorded in widget state.
+ */
+async function animateRedemptionAnnouncement(redemption: LastRedemption): Promise<void> {
+    await animateOverlayTypewriter(buildRedemptionAnnouncementSegments(redemption));
+}
+
+/**
+ * Hides the meter panel, runs a typewriter animation in the announcement overlay,
+ * holds briefly, then restores the meter panel.
+ * @param segments - Colored text segments to type out.
+ */
+async function animateOverlayTypewriter(segments: AnnouncementSegment[]): Promise<void> {
+    const meterPanel = getMeterPanelContent();
+    const announcement = getRedemptionAnnouncement();
+    const announcementElement = announcement.get(0);
+    if (!announcementElement) {
+        return;
+    }
+
+    const textContainer = document.createElement("div");
+    textContainer.className = "redemption-announcement-text";
+    announcement
+        .addClass("visible")
+        .attr("aria-hidden", "false")
+        .empty()
+        .append(textContainer);
+
+    meterPanel.addClass("hidden");
+
+    await typewriterSegments(textContainer, segments, redemptionLetterDelayMs);
+    await waitMs(redemptionHoldAfterTypeMs);
+
+    announcement
+        .removeClass("visible")
+        .attr("aria-hidden", "true")
+        .empty();
+    meterPanel.removeClass("hidden");
+}
+
+/** @returns A zeroed per-user redemption history entry. */
+function createEmptyRedemptionHistoryEntry(): RedemptionHistoryEntry {
+    return {
+        numberOfBlesses: 0,
+        numberOfCurses: 0,
+        numberOfBlurses: 0,
+        numberOfBlursesThatBlessed: 0,
+        numberOfBlursesThatCursed: 0,
+    };
+}
+
+/**
+ * Fills in missing per-user redemption fields for entries saved before blurse
+ * outcome tracking was added.
+ * @param entry - A stored redemption history entry.
+ */
+function normalizeRedemptionHistoryEntry(entry: RedemptionHistoryEntry): RedemptionHistoryEntry {
+    return {
+        numberOfBlesses: getOrDefaultCount(entry.numberOfBlesses),
+        numberOfCurses: getOrDefaultCount(entry.numberOfCurses),
+        numberOfBlurses: getOrDefaultCount(entry.numberOfBlurses),
+        numberOfBlursesThatBlessed: getOrDefaultCount(entry.numberOfBlursesThatBlessed),
+        numberOfBlursesThatCursed: getOrDefaultCount(entry.numberOfBlursesThatCursed),
+    };
+}
+
+/**
+ * @param entry - A per-user redemption history entry.
+ * @param category - Which redeem type to count.
+ */
+function getRedemptionHistoryCount(entry: RedemptionHistoryEntry, category: TopRedeemerCategory): number {
+    if (category === "bless") {
+        return getOrDefaultCount(entry.numberOfBlesses);
+    }
+    if (category === "curse") {
+        return getOrDefaultCount(entry.numberOfCurses);
+    }
+    return getOrDefaultCount(entry.numberOfBlurses);
+}
+
+/**
+ * Returns the highest-ranked redeemers for a category, sorted by count descending.
+ * @param redemptionHistory - Per-user redemption totals from widget state.
+ * @param category - bless, curse, or blurse leaderboard to build.
+ * @param limit - Maximum number of rows to return (default {@link topRedeemerLimit}).
+ */
+function getTopRedeemers(
+    redemptionHistory: RedemptionHistory | undefined,
+    category: TopRedeemerCategory,
+    limit = topRedeemerLimit
+): { userName: string; count: number }[] {
+    if (redemptionHistory == undefined) {
+        return [];
+    }
+    const ranked: { userName: string; count: number }[] = [];
+    for (const userName in redemptionHistory) {
+        if (!Object.prototype.hasOwnProperty.call(redemptionHistory, userName)) {
+            continue;
+        }
+        const count = getRedemptionHistoryCount(
+            normalizeRedemptionHistoryEntry(redemptionHistory[userName]),
+            category
+        );
+        if (count > 0) {
+            ranked.push({ userName, count });
+        }
+    }
+    ranked.sort((left, right) => right.count - left.count || left.userName.localeCompare(right.userName));
+    return ranked.slice(0, limit);
+}
+
+/**
+ * Builds typewriter segments for a top-redeemers leaderboard overlay.
+ * @param title - Heading shown at the top of the report.
+ * @param redeemers - Ranked rows from {@link getTopRedeemers}.
+ * @param titleColorClass - CSS class for the heading color.
+ */
+function buildTopRedeemersReportSegments(
+    title: string,
+    redeemers: { userName: string; count: number }[],
+    titleColorClass: string
+): AnnouncementSegment[] {
+    const segments: AnnouncementSegment[] = [
+        { text: `${title}\n`, colorClass: titleColorClass },
+    ];
+    if (redeemers.length === 0) {
+        segments.push({ text: "No redeems yet" });
+        return segments;
+    }
+    segments.push({
+        text: redeemers
+            .map((row, index) => `${index + 1}. ${row.userName} - ${row.count}`)
+            .join("\n"),
+    });
+    return segments;
+}
+
+interface AnnouncementSegment {
+    text: string;
+    colorClass?: string;
+}
+
+/**
+ * Builds the redemption summary as colored segments for the typewriter animation.
+ * All text is white except {@link formatRedemptionTypeLabel} and
+ * {@link formatRedemptionImpactLabel}, which receive type/meter-target colors.
+ * @param redemption - The redemption to describe.
+ */
+function buildRedemptionAnnouncementSegments(redemption: LastRedemption): AnnouncementSegment[] {
+    const typeLabel = formatRedemptionTypeLabel(redemption.charType);
+    const impactLabel = formatRedemptionImpactLabel(redemption.meterTarget, redemption.meterAmount);
+    return [
+        { text: `${redemption.redeemingUser}\n` },
+        { text: typeLabel, colorClass: getTypeColorClass(redemption.charType) },
+        { text: " the run\nImpact: " },
+        { text: impactLabel, colorClass: getMeterTargetColorClass(redemption.meterTarget) },
+    ];
+}
+
+/**
+ * @param charType - One of {@link TYPE_BLESS}, {@link TYPE_CURSE}, or {@link TYPE_BLURSE}.
+ */
+function getTypeColorClass(charType: string): string {
+    if (charType === TYPE_BLESS) {
+        return "redemption-text-bless";
+    }
+    if (charType === TYPE_CURSE) {
+        return "redemption-text-curse";
+    }
+    if (charType === TYPE_BLURSE) {
+        return "redemption-text-blurse";
+    }
+    return "";
+}
+
+/**
+ * @param meterTarget - {@link TYPE_BLESS} or {@link TYPE_CURSE}: which meter moved.
+ */
+function getMeterTargetColorClass(meterTarget: string): string {
+    if (meterTarget === TYPE_BLESS) {
+        return "redemption-text-bless";
+    }
+    if (meterTarget === TYPE_CURSE) {
+        return "redemption-text-curse";
+    }
+    return "";
+}
+
+/**
+ * @param charType - One of {@link TYPE_BLESS}, {@link TYPE_CURSE}, or {@link TYPE_BLURSE}.
+ */
+function formatRedemptionTypeLabel(charType: string): string {
+    if (charType === TYPE_BLESS) {
+        return "BLESSED";
+    }
+    if (charType === TYPE_CURSE) {
+        return "CURSED";
+    }
+    if (charType === TYPE_BLURSE) {
+        return "BLURSED";
+    }
+    return charType.toUpperCase();
+}
+
+/**
+ * Formats the meter movement stored on lastRedemption for the announcement.
+ * @param meterTarget - {@link TYPE_BLESS} or {@link TYPE_CURSE}.
+ * @param meterAmount - How many points the target meter gained.
+ */
+function formatRedemptionImpactLabel(meterTarget: string, meterAmount: number): string {
+    const targetLabel = meterTarget === TYPE_BLESS ? "BLESS" : "CURSE";
+    return `+${meterAmount} ${targetLabel}`;
+}
+
+/**
+ * Reveals announcement segments one character at a time, left to right, preserving
+ * per-segment colors via span elements.
+ * @param element - The container whose child spans are updated.
+ * @param segments - Text chunks and optional color classes.
+ * @param letterDelayMs - Delay between characters; 0 reveals the full string immediately.
+ */
+function typewriterSegments(element: HTMLElement, segments: AnnouncementSegment[], letterDelayMs: number): Promise<void> {
+    const flatChars: { char: string; colorClass?: string }[] = [];
+    for (const segment of segments) {
+        for (const char of segment.text) {
+            flatChars.push({ char: char, colorClass: segment.colorClass });
+        }
+    }
+
+    return new Promise(resolve => {
+        element.innerHTML = "";
+        if (flatChars.length === 0) {
+            resolve();
+            return;
+        }
+        if (letterDelayMs <= 0) {
+            renderTypewriterChars(element, flatChars, flatChars.length);
+            resolve();
+            return;
+        }
+        let index = 0;
+        const revealNext = () => {
+            index += 1;
+            renderTypewriterChars(element, flatChars, index);
+            if (index >= flatChars.length) {
+                resolve();
+            } else {
+                window.setTimeout(revealNext, letterDelayMs);
+            }
+        };
+        revealNext();
+    });
+}
+
+/**
+ * Renders the first {@link visibleCount} characters of a flattened typewriter stream.
+ * @param element - The container to populate with colored spans.
+ * @param flatChars - Characters paired with optional color classes.
+ * @param visibleCount - How many characters from the start to show.
+ */
+function renderTypewriterChars(
+    element: HTMLElement,
+    flatChars: { char: string; colorClass?: string }[],
+    visibleCount: number
+): void {
+    element.innerHTML = "";
+    let index = 0;
+    while (index < visibleCount) {
+        const colorClass = flatChars[index].colorClass;
+        let end = index + 1;
+        while (end < visibleCount && flatChars[end].colorClass === colorClass) {
+            end += 1;
+        }
+        const span = document.createElement("span");
+        if (colorClass) {
+            span.className = colorClass;
+        }
+        span.textContent = flatChars.slice(index, end).map(entry => entry.char).join("");
+        element.appendChild(span);
+        index = end;
+    }
+}
+
+/** @param durationMs - How long to wait before resolving. */
+function waitMs(durationMs: number): Promise<void> {
+    return new Promise(resolve => window.setTimeout(resolve, durationMs));
 }
 
 /**
@@ -815,6 +1215,21 @@ function getCurseInfoValue(): JQuery<HTMLElement> {
 /** Returns the jQuery-wrapped span element that displays the blurse count. */
 function getBlurseInfoValue(): JQuery<HTMLElement> {
     return $("span.blurse-info-value");
+}
+
+/** Returns the meter panel inside the main dialogue window (not the sprite window). */
+function getMainMeterInnerWindow(): JQuery<HTMLElement> {
+    return $("div.outer-dialogue-window-main > div.inner-dialogue-window").not(".user-redeem-window");
+}
+
+/** Returns the jQuery-wrapped meter readout content hidden during redemption announcements. */
+function getMeterPanelContent(): JQuery<HTMLElement> {
+    return getMainMeterInnerWindow().find(".meter-panel-content");
+}
+
+/** Returns the jQuery-wrapped element used for the redemption typewriter text. */
+function getRedemptionAnnouncement(): JQuery<HTMLElement> {
+    return getMainMeterInnerWindow().find(".redemption-announcement");
 }
 
 /**
