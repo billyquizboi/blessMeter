@@ -23,5 +23,27 @@
     "type": "checkbox",
     "label": "Show top-redeemers and all-time report periodically?",
     "value": true
+  },
+  "emoteBlessEnabled": {
+    "type": "checkbox",
+    "label": "Enable emote-triggered bless?",
+    "value": false
+  },
+  "emoteBlessEmoteNamesCsv": {
+    "type": "text",
+    "label": "Emote names (comma-separated) that count toward bless trigger",
+    "value": "Kappa,PogChamp"
+  },
+  "emoteBlessWindowSeconds": {
+    "type": "number",
+    "label": "Emote bless: time window (seconds)",
+    "value": 120,
+    "min": 1
+  },
+  "emoteBlessRequiredMatches": {
+    "type": "number",
+    "label": "Emote bless: matching emotes required in window",
+    "value": 5,
+    "min": 1
   }
 }

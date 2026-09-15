@@ -58,6 +58,13 @@ interface LastRedemption {
   charType: string,
   meterTarget: string,
   meterAmount: number,
+  /**
+   * Identifies this redemption for announcement de-duplication. A fresh id means
+   * the redemption has not been announced yet; reusing a prior id (or null)
+   * marks it as already announced. Optional because states persisted before
+   * announcement ids were introduced do not carry one.
+   */
+  id?: string | null,
 }
 
 /**
@@ -69,6 +76,12 @@ interface WidgetState {
   current: CurrentState;
   allTime: AllTimeState;
   showAll?: boolean;
+  /**
+   * Which background styling the widget renders: "ffvi" (default) or "ct".
+   * Optional because states persisted before the theme toggle existed do not
+   * carry one; those fall back to "ffvi".
+   */
+  backgroundTheme?: string;
   lastUpdated: Date;
   redemptionHistory?: RedemptionHistory;
   lastRedemption?: LastRedemption;
@@ -90,7 +103,19 @@ declare const SE_API: {
 // StreamElements Event Payload Types
 // ============================================================
 
-interface SEEventData {
+interface ChatEmote {
+  name?: string;
+}
+
+interface ChatMessageData {
+  text?: string;
+  displayName?: string;
+  nick?: string;
+  userId?: string;
+  emotes?: ChatEmote[];
+}
+
+interface SEEventData extends ChatMessageData {
   redemption?: string;
   key?: string;
   value?: WidgetState;
@@ -117,6 +142,19 @@ interface FieldData {
   showRedemptionAnnouncements?: boolean;
   numberOfSecondsBetweenReports?: number;
   reportsShouldDisplay?: boolean;
+  emoteBlessEnabled?: boolean;
+  emoteBlessEmoteNamesCsv?: string;
+  emoteBlessWindowSeconds?: number;
+  emoteBlessRequiredMatches?: number;
+}
+
+interface IncrementStateOptions {
+  /**
+   * When false, the increment does not stamp a new {@link LastRedemption} id,
+   * so no redemption announcement is played for it. Used by flows that render
+   * their own announcement (e.g. the emote-triggered bless).
+   */
+  recordRedemption?: boolean;
 }
 
 interface SEEventDetail {
@@ -144,7 +182,7 @@ type JQueryGetterFn  = () => JQuery<HTMLElement>;
 
 // Void state / side-effect functions
 type NoArgVoidFunction                  = () => void;
-type IncrementStateFn                   = (toIncrement: string, name?: string | null) => void;
+type IncrementStateFn                   = (toIncrement: string, name?: string | null, options?: IncrementStateOptions) => void;
 type OptionallyInitializeNumericFieldFn = (obj: WidgetState, fieldName: string) => void;
 type EventHandlerFn                     = (event: Event) => void;
 type HandleRedemptionFn                 = (detail: SEEventDetail) => void;
@@ -158,6 +196,12 @@ type StoreHasBeenInitializedFn = (obj: WidgetState | null) => obj is WidgetState
 type CanIncrementFn            = (obj: WidgetState | null, toIncrement: string) => boolean;
 type BothMetersAreAtMaxFn      = (widgetState: WidgetState) => boolean;
 type IsShowingAllFn            = (widgetState: WidgetState | null | undefined) => boolean;
+
+// Background theme
+type NormalizeBackgroundThemeFn           = (value: unknown) => string;
+type GetBackgroundThemeFn                 = (widgetState: WidgetState | null | undefined) => string;
+type ApplyBackgroundThemeFn               = (theme: string) => void;
+type UpdateBackgroundThemeButtonDisplayFn = (theme: string) => void;
 
 // Value-returning functions
 type ResetMetersButKeepCurrentStateFn = (widgetState: WidgetState) => WidgetState | undefined;

@@ -73,6 +73,13 @@ declare global {
     animateGlowForever: GlowFn;
     endGlowForever: GlowFn;
     toggleAllTime: NoArgVoidFunction;
+    // Background theme
+    normalizeBackgroundTheme: NormalizeBackgroundThemeFn;
+    getBackgroundTheme: GetBackgroundThemeFn;
+    applyBackgroundTheme: ApplyBackgroundThemeFn;
+    updateBackgroundThemeButtonDisplay: UpdateBackgroundThemeButtonDisplayFn;
+    toggleBackgroundThemeState: NoArgVoidFunction;
+    toggleBackgroundTheme: NoArgVoidFunction;
     // Predicates
     storeHasBeenInitialized: StoreHasBeenInitializedFn;
     canIncrement: CanIncrementFn;
@@ -99,6 +106,14 @@ declare global {
     getTopRedeemers: (history: RedemptionHistory | undefined, category: "bless" | "curse" | "blurse", limit?: number) => { userName: string; count: number }[];
     buildTopRedeemersReportSegments: (title: string, redeemers: { userName: string; count: number }[], titleColorClass: string) => { text: string; colorClass?: string }[];
     applyFieldData: (fieldData: FieldData) => void;
+    getRedemptionAnnouncementId: (widgetState: WidgetState | null | undefined) => string | null;
+    parseEmoteNamesCsv: (csv: string) => string[];
+    findMatchingTrackedEmotesInChat: (message: ChatMessageData, trackedLower: Set<string>) => string[];
+    handleChatMessage: (detail: SEEventDetail) => void;
+    buildEmoteBlessAnnouncementSegments: (
+      distinctDisplayNames: string[],
+      matchCount: number
+    ) => { text: string; colorClass?: string }[];
     configurePeriodicReports: () => void;
     stopPeriodicReports: () => void;
     enqueuePeriodicReportCycle: (force?: boolean) => void;
@@ -1370,6 +1385,358 @@ describe("buildTopRedeemersReportSegments", () => {
   it("shows a fallback when there are no redeems", () => {
     const segments = w.buildTopRedeemersReportSegments("TOP CURSE REDEEMERS", [], "redemption-text-curse");
     expect(segments[1]).toEqual({ text: "No redeems yet" });
+  });
+});
+
+// ===========================================================================
+// Emote-triggered bless
+// ===========================================================================
+describe("emote bless helpers", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("parseEmoteNamesCsv splits and trims entries", () => {
+    expect(w.parseEmoteNamesCsv(" Kappa , PogChamp, ")).toEqual(["Kappa", "PogChamp"]);
+    expect(w.parseEmoteNamesCsv("")).toEqual([]);
+  });
+
+  it("findMatchingTrackedEmotesInChat matches emote objects case-insensitively", () => {
+    const tracked = new Set(["kappa", "pogchamp"]);
+    const fromEmotes = w.findMatchingTrackedEmotesInChat(
+      { emotes: [{ name: "Kappa" }, { name: "LUL" }] },
+      tracked
+    );
+    expect(fromEmotes).toEqual(["Kappa"]);
+
+    const fromText = w.findMatchingTrackedEmotesInChat(
+      { text: "hello PogChamp world" },
+      tracked
+    );
+    expect(fromText).toEqual(["PogChamp"]);
+  });
+
+  it("buildEmoteBlessAnnouncementSegments includes match and user summary", () => {
+    const segments = w.buildEmoteBlessAnnouncementSegments(["alice", "bob"], 5);
+    expect(segments[0].text).toBe("EMOTE HYPE!\n");
+    expect(segments[1].text).toContain("5 emotes from 2 user(s)");
+    expect(segments[1].text).toContain("alice, bob");
+    expect(segments[3].text).toBe("+1 BLESS");
+  });
+});
+
+describe("handleChatMessage emote bless", () => {
+  const emoteFieldData: FieldData = {
+    emoteBlessEnabled: true,
+    emoteBlessEmoteNamesCsv: "Kappa",
+    emoteBlessWindowSeconds: 120,
+    emoteBlessRequiredMatches: 2,
+  };
+
+  it("increments bless after enough matching emotes in the window", async () => {
+    const state = makeState();
+    const { w, mockSEAPI } = setupTestDOM(state);
+    w.applyFieldData(emoteFieldData);
+    w.animateOverlayTypewriter = jest.fn().mockResolvedValue(undefined);
+
+    const makeMessageDetail = (displayName: string, emoteName: string): SEEventDetail => ({
+      listener: "message",
+      event: {
+        data: {
+          displayName,
+          userId: displayName,
+          emotes: [{ name: emoteName }],
+          text: emoteName,
+        },
+      },
+    });
+
+    w.handleChatMessage(makeMessageDetail("alice", "Kappa"));
+    w.handleChatMessage(makeMessageDetail("bob", "Kappa"));
+    await flushPromises();
+    await flushPromises();
+
+    const saved = mockSEAPI.store._data["blessCurseMeterState"];
+    expect(saved?.current.numberOfBlesses).toBe(1);
+    expect(w.animateOverlayTypewriter).toHaveBeenCalled();
+  });
+
+  it("ignores chat when the feature is disabled", async () => {
+    const state = makeState();
+    const { w, mockSEAPI } = setupTestDOM(state);
+    w.applyFieldData({ ...emoteFieldData, emoteBlessEnabled: false });
+
+    w.handleChatMessage({
+      listener: "message",
+      event: { data: { displayName: "alice", emotes: [{ name: "Kappa" }] } },
+    });
+    w.handleChatMessage({
+      listener: "message",
+      event: { data: { displayName: "bob", emotes: [{ name: "Kappa" }] } },
+    });
+    await flushPromises();
+
+    expect(mockSEAPI.store._data["blessCurseMeterState"]?.current.numberOfBlesses).toBe(0);
+  });
+});
+
+// ===========================================================================
+// Background theme toggle (FFVI <-> Chrono Trigger)
+// ===========================================================================
+describe("background theme", () => {
+  const themeClass = "theme-ct";
+  const themeButtonText = (w: Window) =>
+    w.document.getElementById("background-theme-toggle")?.textContent;
+  const hasCtTheme = (w: Window) => w.document.body.classList.contains(themeClass);
+
+  describe("normalizeBackgroundTheme", () => {
+    it("passes through the Chrono Trigger theme", () => {
+      const { w } = setupTestDOM();
+      expect(w.normalizeBackgroundTheme("ct")).toBe("ct");
+    });
+
+    it("falls back to ffvi for unknown, missing, or malformed values", () => {
+      const { w } = setupTestDOM();
+      expect(w.normalizeBackgroundTheme("ffvi")).toBe("ffvi");
+      expect(w.normalizeBackgroundTheme(undefined)).toBe("ffvi");
+      expect(w.normalizeBackgroundTheme(null)).toBe("ffvi");
+      expect(w.normalizeBackgroundTheme("chrono")).toBe("ffvi");
+      expect(w.normalizeBackgroundTheme(7)).toBe("ffvi");
+    });
+  });
+
+  describe("getBackgroundTheme", () => {
+    it("defaults to ffvi for states saved before the theme existed", () => {
+      const { w } = setupTestDOM();
+      expect(w.getBackgroundTheme(makeState())).toBe("ffvi");
+      expect(w.getBackgroundTheme(null)).toBe("ffvi");
+    });
+
+    it("reads ct from state", () => {
+      const { w } = setupTestDOM();
+      expect(w.getBackgroundTheme(makeState({ backgroundTheme: "ct" }))).toBe("ct");
+    });
+  });
+
+  describe("applyBackgroundTheme", () => {
+    it("adds the body class and labels the button FF6 for ct", () => {
+      const { w } = setupTestDOM();
+
+      w.applyBackgroundTheme("ct");
+
+      expect(hasCtTheme(w)).toBe(true);
+      expect(themeButtonText(w)).toBe("FF6");
+    });
+
+    it("removes the body class and labels the button CT for ffvi", () => {
+      const { w } = setupTestDOM();
+      w.applyBackgroundTheme("ct");
+
+      w.applyBackgroundTheme("ffvi");
+
+      expect(hasCtTheme(w)).toBe(false);
+      expect(themeButtonText(w)).toBe("CT");
+    });
+
+    it("treats an unknown theme as ffvi", () => {
+      const { w } = setupTestDOM();
+      w.applyBackgroundTheme("ct");
+
+      w.applyBackgroundTheme("nonsense");
+
+      expect(hasCtTheme(w)).toBe(false);
+    });
+  });
+
+  describe("toggleBackgroundThemeState", () => {
+    it("persists ct when the stored theme is ffvi", async () => {
+      const { w, mockSEAPI } = setupTestDOM(makeState());
+
+      w.toggleBackgroundThemeState();
+      await flushPromises();
+
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.backgroundTheme).toBe("ct");
+    });
+
+    it("persists ffvi when the stored theme is ct", async () => {
+      const { w, mockSEAPI } = setupTestDOM(makeState({ backgroundTheme: "ct" }));
+
+      w.toggleBackgroundThemeState();
+      await flushPromises();
+
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.backgroundTheme).toBe("ffvi");
+    });
+
+    it("leaves the run counters untouched", async () => {
+      const state = makeState();
+      state.current.numberOfBlesses = 4;
+      state.allTime.numberOfBlesses = 9;
+      const { w, mockSEAPI } = setupTestDOM(state);
+
+      w.toggleBackgroundThemeState();
+      await flushPromises();
+
+      const saved = mockSEAPI.store._data["blessCurseMeterState"];
+      expect(saved?.current.numberOfBlesses).toBe(4);
+      expect(saved?.allTime.numberOfBlesses).toBe(9);
+    });
+  });
+
+  describe("updateDisplay", () => {
+    it("applies the theme carried by the rendered state", async () => {
+      const { w } = setupTestDOM(makeState());
+
+      w.updateDisplay(makeState({ backgroundTheme: "ct" }), false);
+      await flushPromises();
+
+      expect(hasCtTheme(w)).toBe(true);
+      expect(themeButtonText(w)).toBe("FF6");
+    });
+
+    it("switches back when a later state carries ffvi", async () => {
+      const { w } = setupTestDOM(makeState());
+      w.updateDisplay(makeState({ backgroundTheme: "ct" }), false);
+      await flushPromises();
+
+      w.updateDisplay(makeState(), false);
+      await flushPromises();
+
+      expect(hasCtTheme(w)).toBe(false);
+    });
+  });
+
+  describe("persistence across resets", () => {
+    it("keeps the theme through resetCurrentState", async () => {
+      const { w, mockSEAPI } = setupTestDOM(makeState({ backgroundTheme: "ct" }));
+
+      w.resetCurrentState();
+      await flushPromises();
+
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.backgroundTheme).toBe("ct");
+    });
+
+    it("keeps the theme through resetAllTimeState", async () => {
+      const { w, mockSEAPI } = setupTestDOM(makeState({ backgroundTheme: "ct" }));
+      // resetAllTimeState reads the theme from the last rendered state.
+      w.updateDisplay(makeState({ backgroundTheme: "ct" }), false);
+      await flushPromises();
+
+      w.resetAllTimeState();
+      await flushPromises();
+
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.backgroundTheme).toBe("ct");
+    });
+
+    it("keeps the theme when both meters max out and the run resets", async () => {
+      const state = makeState({ backgroundTheme: "ct" });
+      state.current.numberOfBlesses = 15;
+      state.current.numberOfCurses = 15;
+      const { w, mockSEAPI } = setupTestDOM(state);
+
+      w.incrementState("numberOfBlesses", "alice");
+      await flushPromises();
+
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.backgroundTheme).toBe("ct");
+    });
+  });
+});
+
+// ===========================================================================
+// Redemption announcement de-duplication (lastRedemption.id)
+// ===========================================================================
+describe("redemption announcement de-duplication", () => {
+  const isAnnouncementVisible = (w: Window) =>
+    w.document.querySelector(".redemption-announcement")?.classList.contains("visible");
+
+  const savedState = (mockSEAPI: MockSEAPI) =>
+    mockSEAPI.store._data["blessCurseMeterState"]!;
+
+  it("stamps a fresh announcement id on a recorded redemption", async () => {
+    const { w, mockSEAPI } = setupTestDOM(makeState());
+
+    w.incrementState("numberOfBlesses", "alice");
+    await flushPromises();
+
+    expect(w.getRedemptionAnnouncementId(savedState(mockSEAPI))).toEqual(expect.any(String));
+  });
+
+  it("does not stamp an id when recordRedemption is false", async () => {
+    const { w, mockSEAPI } = setupTestDOM(makeState());
+
+    w.incrementState("numberOfBlesses", "alice", { recordRedemption: false });
+    await flushPromises();
+
+    expect(w.getRedemptionAnnouncementId(savedState(mockSEAPI))).toBeNull();
+    w.updateDisplay(savedState(mockSEAPI), true);
+    await flushPromises();
+    expect(isAnnouncementVisible(w)).toBe(false);
+  });
+
+  it("announces only once when the same redemption is rendered twice", async () => {
+    const { w, mockSEAPI } = setupTestDOM(makeState());
+    w.incrementState("numberOfBlesses", "alice");
+    await flushPromises();
+    const state = savedState(mockSEAPI);
+
+    jest.useFakeTimers();
+    try {
+      w.updateDisplay(state, true);
+      await flushMicrotasks();
+      expect(isAnnouncementVisible(w)).toBe(true);
+      await jest.runAllTimersAsync();
+      await flushMicrotasks();
+
+      // A second kvstore:update carrying the same redemption must not replay it.
+      w.updateDisplay(state, true);
+      await flushMicrotasks();
+      expect(isAnnouncementVisible(w)).toBe(false);
+      await jest.runAllTimersAsync();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("still announces the next redemption after a non-recorded increment resets the meters", async () => {
+    const state = makeState({ lastRedemption: makeLastRedemption() });
+    state.current.numberOfBlesses = 15;
+    state.current.numberOfCurses = 15;
+    const { w, mockSEAPI } = setupTestDOM(state);
+
+    // Emote bless tips both meters to max, which swallows its own announcement.
+    w.incrementState("numberOfBlesses", "alice", { recordRedemption: false });
+    await flushPromises();
+
+    w.incrementState("numberOfBlesses", "bob");
+    await flushPromises();
+
+    jest.useFakeTimers();
+    try {
+      w.updateDisplay(savedState(mockSEAPI), true);
+      await flushMicrotasks();
+      expect(isAnnouncementVisible(w)).toBe(true);
+      await jest.runAllTimersAsync();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("does not replay a stored redemption on widget load", async () => {
+    const { w, mockSEAPI } = setupTestDOM(makeState());
+    w.incrementState("numberOfBlesses", "alice");
+    await flushPromises();
+    expect(w.getRedemptionAnnouncementId(savedState(mockSEAPI))).toEqual(expect.any(String));
+
+    const loadEvent = new (w as unknown as { CustomEvent: typeof CustomEvent }).CustomEvent(
+      "onWidgetLoad",
+      { detail: { fieldData: { reportsShouldDisplay: false, numberOfSecondsBetweenReports: 0 } } }
+    );
+    w.widgetLoadHandler(loadEvent);
+    await flushPromises();
+
+    expect(isAnnouncementVisible(w)).toBe(false);
+    w.stopPeriodicReports();
   });
 });
 

@@ -16,6 +16,12 @@ const curseGlowForeverClass = "animated-curse-glow";
 const TYPE_BLESS = "bless";
 const TYPE_CURSE = "curse";
 const TYPE_BLURSE = "blurse";
+/** Final Fantasy VI styled dialogue window, the widget's original look. */
+const THEME_FFVI = "ffvi";
+/** Chrono Trigger styled dialogue window. */
+const THEME_CT = "ct";
+/** Added to <body> to select {@link THEME_CT}; absent means {@link THEME_FFVI}. */
+const CT_THEME_BODY_CLASS = "theme-ct";
 const StateKeys = {
     numberOfBlesses: "numberOfBlesses",
     numberOfCurses: "numberOfCurses",
@@ -54,11 +60,13 @@ const initialWidgetState = {
         numberOfBlursesThatBlessed: 0,
     },
     showAll: false,
+    backgroundTheme: THEME_FFVI,
     lastUpdated: new Date(),
     redemptionHistory: {}
 };
 const STORE_KEY_NAME = "blessCurseMeterState";
 const ATTRIBUTE_SHOW_ALL = "showAll";
+const ATTRIBUTE_BACKGROUND_THEME = "backgroundTheme";
 const animationDuration = 1000;
 const shortAnimationDuration = 1;
 const redemptionLetterDelayMs = 45;
@@ -70,9 +78,21 @@ let showChars = true;
 let showRedemptionAnnouncements = true;
 let numberOfSecondsBetweenReports = 90;
 let reportsShouldDisplay = true;
+let emoteBlessEnabled = false;
+let emoteBlessEmoteNamesCsv = "Kappa,PogChamp";
+let emoteBlessWindowSeconds = 120;
+let emoteBlessRequiredMatches = 5;
+let trackedEmoteNamesLower = new Set();
+let emoteWindowEntries = [];
 let lastWidgetState = null;
-/** Set by {@link incrementState} so only fresh redemptions trigger the announcement. */
-let shouldAnnounceRedemption = false;
+/**
+ * Id of the most recently announced redemption. Announcement intent travels
+ * inside the persisted state via {@link LastRedemption.id} rather than through
+ * a module-level flag, so whichever `kvstore:update` renders a redemption
+ * announces it exactly once regardless of event ordering.
+ */
+let lastAnnouncedRedemptionId = null;
+let redemptionIdCounter = 0;
 let periodicReportTimerId = null;
 /**
  * Runs enqueued async tasks one at a time, in order — each task completes
@@ -132,7 +152,7 @@ function initializeLastWidgetState() {
     catch (error) {
         console.log(`Received error ${error}`);
     }
-    if (lastWidgetState == null || lastWidgetState == undefined) {
+    if (lastWidgetState == null) {
         lastWidgetState = initialWidgetState;
     }
 }
@@ -174,8 +194,10 @@ function toggleShowAllState() {
  * before saving.
  * @param toIncrement - A {@link StateKeys} value identifying the counter to increment.
  */
-function incrementState(toIncrement, name) {
+function incrementState(toIncrement, name, options) {
+    var _a;
     console.log(`Incrementing ${toIncrement}`);
+    const recordRedemption = (_a = options === null || options === void 0 ? void 0 : options.recordRedemption) !== null && _a !== void 0 ? _a : true;
     SE_API.store.get(STORE_KEY_NAME).then(obj => {
         console.log(`Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
         if (storeHasBeenInitialized(obj)) {
@@ -257,23 +279,28 @@ function incrementState(toIncrement, name) {
                 meterAmount = 1;
             }
         }
-        if (name != null && name !== "" && meterTarget != undefined && meterAmount != undefined && charType != undefined) {
+        // Reusing this id on the new lastRedemption marks it as already announced.
+        const previousRedemptionId = getRedemptionAnnouncementId(obj);
+        const metersReset = bothMetersAreAtMax(obj);
+        if (recordRedemption && name != null && name !== ""
+            && meterTarget != undefined && meterAmount != undefined && charType != undefined) {
             obj["lastRedemption"] = {
                 "redeemingUser": name,
                 "charType": charType,
                 "meterTarget": meterTarget,
                 "meterAmount": meterAmount,
+                // A reset swallows the announcement, so keep the prior id instead
+                // of minting one that would read as "not yet announced".
+                "id": metersReset ? previousRedemptionId : createRedemptionId(),
             };
         }
-        if (bothMetersAreAtMax(obj)) {
-            shouldAnnounceRedemption = false;
+        if (metersReset) {
             const newState = resetMetersButKeepCurrentState(obj);
             if (newState) {
                 SE_API.store.set(STORE_KEY_NAME, newState);
             }
         }
         else {
-            shouldAnnounceRedemption = true;
             SE_API.store.set(STORE_KEY_NAME, obj);
         }
         // the SE.store.set function emits an onEventReceived for every custom widget
@@ -311,6 +338,7 @@ function resetMetersButKeepCurrentState(widgetState) {
         lastUpdated: new Date(),
         allTime: widgetState.allTime,
         showAll: widgetState.showAll,
+        backgroundTheme: getBackgroundTheme(widgetState),
         redemptionHistory: widgetState.redemptionHistory,
         lastRedemption: widgetState.lastRedemption,
         current: {
@@ -412,6 +440,9 @@ function eventReceivedHandler(event) {
         console.log(JSON.stringify(detail));
         handleRedemption(detail);
     }
+    else if (detail.listener === "message") {
+        handleChatMessage(detail);
+    }
     else if (detail.listener === "kvstore:update") {
         console.log(`Key store was updated so update the widget display ${JSON.stringify(obj)}`);
         if (seEvent != undefined && seEvent.data != undefined
@@ -452,12 +483,16 @@ function widgetLoadHandler(event) {
         SE_API.store.get(STORE_KEY_NAME).then(retrieved => {
             console.log(`Initializing with retrieved widgetState from store: ${JSON.stringify(retrieved)}`);
             if (storeHasBeenInitialized(retrieved)) {
+                // Treat whatever is already stored as announced so a refresh does
+                // not replay the previous session's redemption.
+                lastAnnouncedRedemptionId = getRedemptionAnnouncementId(retrieved);
                 updateDisplay(retrieved, true);
             }
             else {
                 console.log("The store object has not yet been initialized. Setting up initial values.");
                 initialWidgetState.lastUpdated = new Date();
                 const toSave = initialWidgetState;
+                applyBackgroundTheme(getBackgroundTheme(toSave));
                 SE_API.store.set(STORE_KEY_NAME, toSave);
                 // the SE.store.set function emits an onEventReceived for every custom widget
                 lastWidgetState = toSave;
@@ -635,16 +670,23 @@ function getRedeemingUserName(detail) {
  * @param widgetState - The state to render, or null to skip the update.
  * @param showAnimate - When true uses the full {@link animationDuration};
  *   when false uses {@link shortAnimationDuration} for an instant update.
- * @param announceRedemption - When omitted, uses {@link shouldAnnounceRedemption}
- *   (set by {@link incrementState}). Pass explicitly in tests.
+ * @param announceRedemption - When omitted, derives the intent from
+ *   {@link LastRedemption.id} on the supplied state. Pass explicitly in tests.
  */
 function updateDisplay(widgetState, showAnimate, announceRedemption) {
-    // Capture and clear before any async work so rapid redemptions don't bleed over.
-    const announce = announceRedemption !== null && announceRedemption !== void 0 ? announceRedemption : shouldAnnounceRedemption;
-    shouldAnnounceRedemption = false;
     if (widgetState == null || widgetState.current == undefined) {
         console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
         return;
+    }
+    // Applied outside the queue so a theme switch lands immediately instead of
+    // waiting behind any in-flight announcement or meter animation.
+    applyBackgroundTheme(getBackgroundTheme(widgetState));
+    // Claim the announcement synchronously so concurrent updates carrying the
+    // same redemption id cannot both play it.
+    const announcementId = getRedemptionAnnouncementId(widgetState);
+    const announce = announceRedemption !== null && announceRedemption !== void 0 ? announceRedemption : (announcementId != null && announcementId !== lastAnnouncedRedemptionId);
+    if (announce && announcementId != null) {
+        lastAnnouncedRedemptionId = announcementId;
     }
     displayQueue.enqueue(() => __awaiter(this, void 0, void 0, function* () {
         if (showAnimate && announce && showRedemptionAnnouncements && hasValidLastRedemption(widgetState.lastRedemption)) {
@@ -681,7 +723,165 @@ function applyFieldData(fieldData) {
     if (fieldData.reportsShouldDisplay != null && typeof fieldData.reportsShouldDisplay === "boolean") {
         reportsShouldDisplay = fieldData.reportsShouldDisplay;
     }
+    if (fieldData.emoteBlessEnabled != null && typeof fieldData.emoteBlessEnabled === "boolean") {
+        emoteBlessEnabled = fieldData.emoteBlessEnabled;
+    }
+    if (fieldData.emoteBlessEmoteNamesCsv != null && typeof fieldData.emoteBlessEmoteNamesCsv === "string") {
+        emoteBlessEmoteNamesCsv = fieldData.emoteBlessEmoteNamesCsv;
+    }
+    if (fieldData.emoteBlessWindowSeconds != null && typeof fieldData.emoteBlessWindowSeconds === "number") {
+        emoteBlessWindowSeconds = Math.max(1, Math.floor(fieldData.emoteBlessWindowSeconds));
+    }
+    if (fieldData.emoteBlessRequiredMatches != null && typeof fieldData.emoteBlessRequiredMatches === "number") {
+        emoteBlessRequiredMatches = Math.max(1, Math.floor(fieldData.emoteBlessRequiredMatches));
+    }
+    rebuildTrackedEmoteNameSet();
     configurePeriodicReports();
+}
+/**
+ * Parses {@link emoteBlessEmoteNamesCsv} into a lowercase lookup set for matching.
+ */
+function rebuildTrackedEmoteNameSet() {
+    trackedEmoteNamesLower = new Set(parseEmoteNamesCsv(emoteBlessEmoteNamesCsv).map(normalizeEmoteNameForMatch));
+}
+/**
+ * @param csv - Comma-separated emote names from widget field data.
+ */
+function parseEmoteNamesCsv(csv) {
+    if (csv == null || csv.trim() === "") {
+        return [];
+    }
+    return csv
+        .split(",")
+        .map(part => part.trim())
+        .filter(part => part.length > 0);
+}
+/**
+ * @param emoteName - Raw emote name from chat or config.
+ */
+function normalizeEmoteNameForMatch(emoteName) {
+    return emoteName.trim().toLowerCase();
+}
+/**
+ * Returns tracked emote names found in a chat message (one entry per occurrence).
+ * @param message - StreamElements chat payload at `event.data`.
+ * @param trackedLower - Lowercase emote names to match.
+ */
+function findMatchingTrackedEmotesInChat(message, trackedLower) {
+    if (trackedLower.size === 0) {
+        return [];
+    }
+    const matches = [];
+    if (message.emotes != null && message.emotes.length > 0) {
+        for (const emote of message.emotes) {
+            if (emote.name == null) {
+                continue;
+            }
+            if (trackedLower.has(normalizeEmoteNameForMatch(emote.name))) {
+                matches.push(emote.name);
+            }
+        }
+        return matches;
+    }
+    if (message.text != null && message.text.trim() !== "") {
+        const tokens = message.text.split(/\s+/);
+        for (const token of tokens) {
+            if (trackedLower.has(normalizeEmoteNameForMatch(token))) {
+                matches.push(token);
+            }
+        }
+    }
+    return matches;
+}
+/**
+ * Drops emote window entries older than {@link windowMs}.
+ * @param nowMs - Current timestamp.
+ * @param windowMs - Rolling window length in milliseconds.
+ */
+function pruneEmoteWindowEntries(nowMs, windowMs) {
+    const cutoff = nowMs - windowMs;
+    emoteWindowEntries = emoteWindowEntries.filter(entry => entry.timestamp >= cutoff);
+}
+/**
+ * Returns distinct display names among entries in the current emote window.
+ */
+function getDistinctUsersInEmoteWindow() {
+    const seen = new Set();
+    const names = [];
+    for (const entry of emoteWindowEntries) {
+        if (seen.has(entry.displayName)) {
+            continue;
+        }
+        seen.add(entry.displayName);
+        names.push(entry.displayName);
+    }
+    return names;
+}
+/**
+ * Handles Twitch/YouTube chat messages for the emote-triggered bless feature.
+ * @param detail - `onEventReceived` payload with `listener === "message"`.
+ */
+function handleChatMessage(detail) {
+    var _a, _b, _c, _d, _e;
+    if (!emoteBlessEnabled) {
+        return;
+    }
+    const message = (_a = detail.event) === null || _a === void 0 ? void 0 : _a.data;
+    if (message == null) {
+        return;
+    }
+    const matchedEmotes = findMatchingTrackedEmotesInChat(message, trackedEmoteNamesLower);
+    if (matchedEmotes.length === 0) {
+        return;
+    }
+    const nowMs = Date.now();
+    const userId = (_c = (_b = message.userId) !== null && _b !== void 0 ? _b : message.nick) !== null && _c !== void 0 ? _c : "unknown";
+    const displayName = (_e = (_d = message.displayName) !== null && _d !== void 0 ? _d : message.nick) !== null && _e !== void 0 ? _e : userId;
+    const windowMs = emoteBlessWindowSeconds * 1000;
+    pruneEmoteWindowEntries(nowMs, windowMs);
+    for (const emoteName of matchedEmotes) {
+        emoteWindowEntries.push({
+            timestamp: nowMs,
+            userId,
+            displayName,
+            emoteName,
+        });
+    }
+    if (emoteWindowEntries.length < emoteBlessRequiredMatches) {
+        return;
+    }
+    const distinctUsers = getDistinctUsersInEmoteWindow();
+    const matchCount = emoteWindowEntries.length;
+    emoteWindowEntries = [];
+    triggerEmoteBlessReward(distinctUsers, matchCount);
+}
+/**
+ * Enqueues the emote-bless typewriter, then applies a +1 bless without a second announcement.
+ * @param distinctDisplayNames - Unique chatters who contributed matching emotes.
+ * @param matchCount - Total matching emotes that filled the window.
+ */
+function triggerEmoteBlessReward(distinctDisplayNames, matchCount) {
+    displayQueue.enqueue(() => __awaiter(this, void 0, void 0, function* () {
+        yield animateOverlayTypewriter(buildEmoteBlessAnnouncementSegments(distinctDisplayNames, matchCount));
+        const creditedUser = distinctDisplayNames.length === 1 ? distinctDisplayNames[0] : null;
+        // The typewriter above is this feature's announcement, so skip stamping a
+        // redemption id that would trigger a second one.
+        incrementState(StateKeys.numberOfBlesses, creditedUser, { recordRedemption: false });
+    }));
+}
+/**
+ * Typewriter copy for the emote-triggered bless animation.
+ */
+function buildEmoteBlessAnnouncementSegments(distinctDisplayNames, matchCount) {
+    const userSummary = distinctDisplayNames.length === 0
+        ? "chat"
+        : distinctDisplayNames.join(", ");
+    return [
+        { text: "EMOTE HYPE!\n", colorClass: "redemption-text-bless" },
+        { text: `${matchCount} emotes from ${distinctDisplayNames.length} user(s):\n${userSummary}\n` },
+        { text: "Impact: ", },
+        { text: "+1 BLESS", colorClass: "redemption-text-bless" },
+    ];
 }
 /** Starts or stops the interval that enqueues top-redeemer report cycles. */
 function configurePeriodicReports() {
@@ -816,6 +1016,26 @@ function processDisplay(widgetState, showAnimate) {
         getCurseInfoValue().text(curseCountText);
         getBlurseInfoValue().text(blurseCountText);
     });
+}
+/** @returns A process-unique id used to mark a redemption as awaiting announcement. */
+function createRedemptionId() {
+    redemptionIdCounter += 1;
+    // The random suffix keeps ids distinct across widget instances, which each
+    // keep their own counter but share the store.
+    return `${Date.now()}-${redemptionIdCounter}-${Math.random().toString(36).slice(2, 8)}`;
+}
+/**
+ * Reads the announcement id carried by a state's lastRedemption.
+ * @param widgetState - State to inspect.
+ * @returns The id, or null when there is nothing announceable.
+ */
+function getRedemptionAnnouncementId(widgetState) {
+    var _a;
+    const lastRedemption = widgetState === null || widgetState === void 0 ? void 0 : widgetState.lastRedemption;
+    if (!hasValidLastRedemption(lastRedemption)) {
+        return null;
+    }
+    return (_a = lastRedemption.id) !== null && _a !== void 0 ? _a : null;
 }
 function hasValidLastRedemption(lastRedemption) {
     return lastRedemption != undefined
@@ -1261,6 +1481,8 @@ function resetCurrentState() {
  */
 function resetAllTimeState() {
     initialWidgetState.lastUpdated = new Date();
+    // The theme is a display preference rather than run data, so it survives a reset.
+    initialWidgetState[ATTRIBUTE_BACKGROUND_THEME] = getBackgroundTheme(lastWidgetState);
     SE_API.store.set(STORE_KEY_NAME, initialWidgetState);
     lastWidgetState = initialWidgetState;
 }
@@ -1275,6 +1497,72 @@ function toggleAllTime() {
     console.log(`Toggling display ${JSON.stringify(lastWidgetState)}`);
     toggleShowAllState();
 }
+//////////////////////
+// BACKGROUND THEME
+//////////////////////
+/**
+ * Coerces a stored or user-supplied value to a known theme, defaulting to
+ * {@link THEME_FFVI} so legacy and malformed states render the original look.
+ * @param value - Candidate theme value.
+ */
+function normalizeBackgroundTheme(value) {
+    return value === THEME_CT ? THEME_CT : THEME_FFVI;
+}
+/**
+ * @param widgetState - The state to read the theme from, or null/undefined.
+ * @returns {@link THEME_FFVI} or {@link THEME_CT}.
+ */
+function getBackgroundTheme(widgetState) {
+    return normalizeBackgroundTheme(widgetState === null || widgetState === void 0 ? void 0 : widgetState[ATTRIBUTE_BACKGROUND_THEME]);
+}
+/**
+ * Applies the theme to the document and syncs the toggle button label.
+ * @param theme - The theme to render.
+ */
+function applyBackgroundTheme(theme) {
+    const normalized = normalizeBackgroundTheme(theme);
+    if (normalized === THEME_CT) {
+        document.body.classList.add(CT_THEME_BODY_CLASS);
+    }
+    else {
+        document.body.classList.remove(CT_THEME_BODY_CLASS);
+    }
+    updateBackgroundThemeButtonDisplay(normalized);
+}
+/**
+ * Labels the toggle with the theme a click switches to, matching how the
+ * all-time button advertises its action rather than its current state.
+ * @param theme - The theme currently applied.
+ */
+function updateBackgroundThemeButtonDisplay(theme) {
+    const label = normalizeBackgroundTheme(theme) === THEME_CT ? "FF6" : "CT";
+    $("#background-theme-toggle").text(label);
+}
+/**
+ * Flips {@link ATTRIBUTE_BACKGROUND_THEME} in SE_API.store. The resulting
+ * kvstore:update re-renders every widget instance with the new theme.
+ */
+function toggleBackgroundThemeState() {
+    SE_API.store.get(STORE_KEY_NAME).then(obj => {
+        if (!storeHasBeenInitialized(obj)) {
+            console.log("Toggling theme: the store object has not yet been initialized. Setting up initial values.");
+            obj = initialWidgetState;
+        }
+        obj.lastUpdated = new Date();
+        obj[ATTRIBUTE_BACKGROUND_THEME] = getBackgroundTheme(obj) === THEME_CT ? THEME_FFVI : THEME_CT;
+        console.log(`Toggled background theme to ${obj[ATTRIBUTE_BACKGROUND_THEME]}`);
+        SE_API.store.set(STORE_KEY_NAME, obj);
+        // the SE.store.set function emits an onEventReceived for every custom widget
+        lastWidgetState = obj;
+    });
+}
+/**
+ * Toggles between the FFVI and Chrono Trigger backgrounds.
+ * Wired to the theme button's onclick handler.
+ */
+function toggleBackgroundTheme() {
+    toggleBackgroundThemeState();
+}
 /**
  * Returns true when the widget is currently displaying all-time counts
  * (i.e. {@link ATTRIBUTE_SHOW_ALL} is present and truthy on `widgetState`).
@@ -1283,7 +1571,7 @@ function toggleAllTime() {
 function isShowingAll(widgetState) {
     const result = widgetState != undefined
         && widgetState[ATTRIBUTE_SHOW_ALL] != undefined
-        && !!widgetState[ATTRIBUTE_SHOW_ALL];
+        && widgetState[ATTRIBUTE_SHOW_ALL];
     console.log(`isShowingAll? ${result}`);
     return result;
 }

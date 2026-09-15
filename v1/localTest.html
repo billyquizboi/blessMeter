@@ -348,6 +348,22 @@
       </fieldset>
 
       <fieldset>
+        <legend>Background theme</legend>
+        <p class="hint">
+          The theme lives in the store alongside <code>showAll</code>, so switching it
+          travels through a <code>kvstore:update</code> just like it does on StreamElements.
+        </p>
+        <div class="row">
+          <button id="theme-click-button">Click widget button</button>
+          <button id="theme-set-ffvi">Set FFVI</button>
+          <button id="theme-set-ct">Set CT</button>
+        </div>
+        <div class="row">
+          <span class="hint">Stored theme: <code id="theme-current">-</code></span>
+        </div>
+      </fieldset>
+
+      <fieldset>
         <legend>Frame</legend>
         <div class="row">
           <label for="frame-width">W</label>
@@ -431,6 +447,7 @@
        * @property {CurrentState} current
        * @property {AllTimeState} allTime
        * @property {boolean} [showAll]
+       * @property {string} [backgroundTheme] "ffvi" (default) or "ct"
        * @property {Date|string} lastUpdated
        * @property {RedemptionHistory} [redemptionHistory]
        * @property {LastRedemption} [lastRedemption]
@@ -660,7 +677,23 @@
           return String(state);
         }
         const current = state.current;
-        return `{bless:${current.numberOfBlesses} curse:${current.numberOfCurses} blurse:${current.numberOfBlurses} showAll:${!!state.showAll}}`;
+        return `{bless:${current.numberOfBlesses} curse:${current.numberOfCurses} blurse:${current.numberOfBlurses} showAll:${!!state.showAll} theme:${normalizeHarnessTheme(state.backgroundTheme)}}`;
+      }
+
+      /**
+       * Mirrors normalizeBackgroundTheme in widget.ts so the harness labels
+       * unknown values the same way the widget renders them.
+       * @param {unknown} value
+       * @returns {string} "ffvi" or "ct"
+       */
+      function normalizeHarnessTheme(value) {
+        return value === "ct" ? "ct" : "ffvi";
+      }
+
+      /** @returns {string} The theme currently persisted in the mocked store. */
+      function storedBackgroundTheme() {
+        const state = readStore(STORE_KEY);
+        return normalizeHarnessTheme(state && state.backgroundTheme);
       }
 
       // =====================================================================
@@ -743,6 +776,11 @@
             options.allTime
           ),
           showAll: options.showAll === true,
+          // Presets should not yank the background out from under you, so the
+          // theme defaults to whatever is already stored.
+          backgroundTheme: normalizeHarnessTheme(
+            options.backgroundTheme !== undefined ? options.backgroundTheme : storedBackgroundTheme()
+          ),
           lastUpdated: new Date(),
           redemptionHistory: options.redemptionHistory || {},
         };
@@ -1029,6 +1067,44 @@
       function renderStoreJson() {
         const state = readStore(STORE_KEY);
         document.getElementById("store-json").value = state === null ? "" : JSON.stringify(state, null, 2);
+        renderCurrentTheme(state);
+      }
+
+      /**
+       * Mirrors the stored theme into the panel readout.
+       * @param {WidgetState|null} state
+       */
+      function renderCurrentTheme(state) {
+        document.getElementById("theme-current").textContent =
+          state === null ? "-" : normalizeHarnessTheme(state.backgroundTheme);
+      }
+
+      /**
+       * Writes a theme into the store, which reaches the widget through the same
+       * kvstore:update path StreamElements uses.
+       * @param {string} theme "ffvi" or "ct"
+       */
+      function setBackgroundTheme(theme) {
+        const state = readStore(STORE_KEY) || makeWidgetState({});
+        state.backgroundTheme = theme;
+        log(`set backgroundTheme to "${theme}"`, "event");
+        pushStateToWidget(state);
+      }
+
+      /**
+       * Clicks the widget's own theme button inside the iframe, exercising the
+       * same path a streamer takes on the overlay.
+       */
+      function clickWidgetThemeButton() {
+        const win = widgetWindow();
+        if (!win) return;
+        const button = win.document.getElementById("background-theme-toggle");
+        if (!button) {
+          log("background-theme-toggle button not found in the widget", "error");
+          return;
+        }
+        log(`click widget theme button (currently labelled "${button.textContent.trim()}")`, "event");
+        button.click();
       }
 
       /**
@@ -1174,6 +1250,10 @@
         renderStoreJson();
         log("Cleared the mocked store; reload the widget to start from scratch");
       });
+
+      document.getElementById("theme-click-button").addEventListener("click", clickWidgetThemeButton);
+      document.getElementById("theme-set-ffvi").addEventListener("click", () => setBackgroundTheme("ffvi"));
+      document.getElementById("theme-set-ct").addEventListener("click", () => setBackgroundTheme("ct"));
 
       document.getElementById("frame-apply").addEventListener("click", () => {
         if (widgetFrame) {
