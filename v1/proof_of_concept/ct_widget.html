@@ -1,0 +1,344 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet">
+    
+    <title>BlessMeter</title>
+
+    <style>
+      :root {
+    --outer-battle-window-color-0: #7c7874;
+    --outer-battle-window-color-1: #c8c4c0;
+    --outer-battle-window-color-2: #ccc9cc;
+    --outer-battle-window-color-3: #c9c9cb;
+    --outer-battle-window-color-4: #c2c1c5;
+    --outer-battle-window-color-5: #71767e;
+    --outer-battle-window-color-6: #6b6e87;
+  
+    --battle-window-top-gradient-color: #6c70a6;
+    --background-color-blue:#21217c;
+    --battle-window-bottom-gradient-color: #040136;
+  
+    --dialogue-window-color-gradient:#6d6db3,#5554ad,#5352a8,#3f4791,#354783,#32348d,#32328a,#313188,#222279,#14156d,#02045a,#040233,#020234,#020134;
+    --battle-window-border-radius: 5px;
+  
+    --br:5px;     /* border radius   */
+    --bg:#6b6e87,#71767e,#c2c1c5,#c9c9cb,#ccc9cc,#c8c4c0,#7c7874,#c0bcb3;/*border gradient */
+    --bgb: #6b6e87,#71767e,#c2c1c5,#c9c9cb,#ccc9cc,#c8c4c0,#7c7874,#c0bcb3,#020134;
+    --f:16px;/* minimum font size */
+    --highlighted-text: #edd758;
+  }
+  
+* {
+    font-family: "Rubik", sans-serif;
+    font-optical-sizing: auto;
+    overflow: hidden;
+    font-weight: 500;
+    font-style: normal;
+    color: #ecedee;
+  }
+  
+html {
+    color: #ecedee;
+    margin: 0px;
+    padding: 0px;
+    text-shadow: 1px 1px #2d2a4b;
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    margin: 0;
+    padding: 0;
+    /* These dimensions were used during testing fyi */
+    height: 125px;
+    width: 400px;
+}
+
+h1,h2,h3,h4,h5{
+    font-weight: 400;
+}
+
+.main-title {
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+.outer-dialogue-window {
+    border-radius:var(--br);
+    padding:calc(var(--br) + 5px);
+
+
+    /* background: */
+    /*corners*/
+    /* radial-gradient(farthest-side at bottom right,var(--bg)) top    left /var(--br) var(--br), */
+    /* radial-gradient(farthest-side at top    right,var(--bg)) bottom left /var(--br) var(--br), */
+    /* radial-gradient(farthest-side at bottom left ,var(--bg)) top    right/var(--br) var(--br), */
+    /* radial-gradient(farthest-side at top    left ,var(--bg)) bottom right/var(--br) var(--br), */
+    /* borders*/
+    /* linear-gradient(to top   ,var(--bg)) top   /calc(100% - 2*var(--br)) var(--br), */
+    /* linear-gradient(to bottom,var(--bg)) bottom/calc(100% - 2*var(--br)) var(--br), */
+    /* linear-gradient(to right ,var(--bg)) right /var(--br) calc(100% - 2*var(--br)), */
+    /* linear-gradient(to left  ,var(--bg)) left  /var(--br) calc(100% - 2*var(--br)); */
+    /* background-repeat:no-repeat; */
+
+    /* border: 1px solid white; */
+
+    box-sizing:border-box;
+    display:inline-block;
+    vertical-align:top;
+    font-size:var(--f);
+    border-width: 1px;
+    text-shadow: 2px 1px #2d2a4b;
+}
+
+.outer-dialogue-window-main {
+    height: 65%;
+    width: 100%;
+}
+
+.outer-dialogue-window-button {
+    height: 25%;
+    width: 50%;
+}
+
+.outer-dialogue-window-button:nth-child(1) {
+    height: 25%;
+    width: 35%;
+}
+
+.outer-dialogue-window-button:nth-child(2) {
+    height: 25%;
+    width: 65%;
+}
+
+.button-container {
+    display: flex;
+    flex-direction: row;
+    font-size: 14px;
+}
+
+.text-button {
+    background: none;
+    border: none;
+    margin: 0;
+    padding: 0;
+    cursor: pointer; /* Changes the cursor to a pointer on hover, indicating it's clickable */
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    transition: color 0.2s ease-in-out;
+}
+
+.text-button:hover {
+    color: #00D1FF;
+}
+
+.inner-dialogue-window {
+    /* background: linear-gradient(to bottom,var(--dialogue-window-color-gradient)); */
+    background-image: linear-gradient(180deg, rgba(97, 106, 114, 0.7) 0%, rgba(113, 121, 131, 0.7) 50%, rgba(100, 108, 116, 0.7) 75%, rgba(96, 96, 96, 0.7) 90%, rgba(48, 48, 48, 0.7) 100%), url('./mock_ct_background.png');
+    background-repeat: repeat;
+    padding: 5px;
+    margin: -5px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    width: 100%;
+    height: 100%;
+}
+
+.bless-container,.curse-container,.blurse-container,.info-container {
+    display: flex;
+    justify-content: space-between;
+}
+
+.meter,.meter-title {
+    display: inline-block;
+}
+
+.meter-title {
+    width: 35%;
+}
+
+.meter {
+    width: 70%;
+    margin-right: 10px;
+}
+
+.meter {
+    height: 10px;
+    background-color: #555;
+    margin-top: 0px;
+    border: 2px solid var(--outer-battle-window-color-4);
+    border-radius: 7px;
+}
+
+.meter-fill {
+    height: 100%;
+    width: 50%; /* Example fill level */
+}
+
+.bless-container .meter-fill {
+    background-color: #0f0;
+}
+
+.curse-container .meter-fill {
+    background-color: #FF3886;
+}
+
+.blurse-container .meter-fill {
+    background-color: #00D1FF;
+}
+
+.info-container {
+    display: flex;
+    flex-direction: row;
+}
+
+.bless-info,.curse-info,.blurse-info {
+    display: flex;
+    flex-direction: row;
+}
+
+.bless-info-label,.curse-info-label,.blurse-info-label {
+    /* vertical-align: -0.125em; */
+    overflow: visible;
+    height: 16px;
+    width: 16px;
+    fill: white;
+    margin-right: 2px;
+}
+
+.reset-all-container div.outer-dialogue-window {
+    height: 100%;
+}
+
+.test-button-container,.reset-all-container {
+  width: 400px;
+  display: flex;
+  flex-direction: row;
+}
+
+.test-button-container .outer-dialogue-window, .reset-all-container .outer-dialogue-window {
+  width: 50%;
+}
+
+.ct-background {
+    background-image: linear-gradient(180deg, rgba(97, 106, 114, 0.7) 0%, rgba(113, 121, 131, 0.7) 50%, rgba(100, 108, 116, 0.7) 75%, rgba(96, 96, 96, 0.7) 90%, rgba(48, 48, 48, 0.7) 100%), url('./mock_ct_background.png');
+}
+    </style>
+
+  </head>
+  <body>
+    <div class="container">
+        <div class="button-container">
+            <div class="outer-dialogue-window outer-dialogue-window-button">
+                <div class="inner-dialogue-window">
+                    <button id="reset-run-button" class="text-button" onclick="resetCurrentState()">
+                        Reset
+                    </button>
+                </div>
+            </div>
+            <div class="outer-dialogue-window outer-dialogue-window-button">
+                <div class="inner-dialogue-window">
+                    <button id="all-time-toggle" class="text-button" showAll="false" onclick="toggleAllTime(this)">
+                        Show all
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="outer-dialogue-window outer-dialogue-window-main">
+          <div class="inner-dialogue-window">
+            <div class="bless-container">
+              <div class="meter-title">
+                BLESS
+              </div>
+              <div class="meter">
+                <div class="meter-fill"></div>
+              </div>
+            </div>
+            <div class="curse-container">
+              <div class="meter-title">
+                CURSE
+              </div>
+              <div class="meter">
+                <div class="meter-fill"></div>
+              </div>
+            </div>
+            <div class="info-container">
+                <div class="bless-info">
+                    <svg class="bless-info-label" xmlns="http://www.w3.org/2000/svg" viewBox="64 64 640 640">
+                        <!-- !Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. -->
+                        <path d="M304 64C277.5 64 256 85.5 256 112L256 192L176 192C149.5 192 128 213.5 128 240L128 272C128 298.5 149.5 320 176 320L256 320L256 528C256 554.5 277.5 576 304 576L336 576C362.5 576 384 554.5 384 528L384 320L464 320C490.5 320 512 298.5 512 272L512 240C512 213.5 490.5 192 464 192L384 192L384 112C384 85.5 362.5 64 336 64L304 64z"/>
+                    </svg>
+                    <span class="bless-info-value">
+                        69
+                    </span>
+                </div>
+                <div class="curse-info">
+                    <svg class="curse-info-label" xmlns="http://www.w3.org/2000/svg" viewBox="64 64 640 640">
+                        <!-- !Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. -->
+                        <path d="M480 491.4C538.5 447.4 576 379.8 576 304C576 171.5 461.4 64 320 64C178.6 64 64 171.5 64 304C64 379.8 101.5 447.4 160 491.4L160 528C160 554.5 181.5 576 208 576L240 576L240 536C240 522.7 250.7 512 264 512C277.3 512 288 522.7 288 536L288 576L352 576L352 536C352 522.7 362.7 512 376 512C389.3 512 400 522.7 400 536L400 576L432 576C458.5 576 480 554.5 480 528L480 491.4zM160 320C160 284.7 188.7 256 224 256C259.3 256 288 284.7 288 320C288 355.3 259.3 384 224 384C188.7 384 160 355.3 160 320zM416 256C451.3 256 480 284.7 480 320C480 355.3 451.3 384 416 384C380.7 384 352 355.3 352 320C352 284.7 380.7 256 416 256z"/>
+                    </svg>
+                    <span class="curse-info-value">
+                        420
+                    </span>
+                </div>
+                <div class="blurse-info">
+                    <svg class="blurse-info-label" xmlns="http://www.w3.org/2000/svg" viewBox="64 64 640 640">
+                        <!-- !Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc. -->
+                        <path d="M224 224C224 171 267 128 320 128C373 128 416 171 416 224C416 266.7 388.1 302.9 349.5 315.4C321.1 324.6 288 350.7 288 392L288 416C288 433.7 302.3 448 320 448C337.7 448 352 433.7 352 416L352 392C352 390.3 352.6 387.9 355.5 384.7C358.5 381.4 363.4 378.2 369.2 376.3C433.5 355.6 480 295.3 480 224C480 135.6 408.4 64 320 64C231.6 64 160 135.6 160 224C160 241.7 174.3 256 192 256C209.7 256 224 241.7 224 224zM320 576C342.1 576 360 558.1 360 536C360 513.9 342.1 496 320 496C297.9 496 280 513.9 280 536C280 558.1 297.9 576 320 576z"/>
+                    </svg>
+                    <span class="blurse-info-value">
+                        123
+                    </span>
+                </div>
+            </div>
+          </div>
+        </div>
+    </div>
+
+    <div class="test-button-container">
+      <div class="outer-dialogue-window">
+          <div class="inner-dialogue-window">
+            <button class="test-bless-button text-button" onclick="testBless()">Test Bless</button>  
+          </div>
+      </div>
+      <div class="outer-dialogue-window">
+        <div class="inner-dialogue-window">
+          <button class="test-curse-button text-button" onclick="testCurse()">Test Curse</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="reset-all-container">
+      <div class="outer-dialogue-window">
+        <div class="inner-dialogue-window">
+          <button class="test-blurse-button text-button" onclick="testBlurse()">Test Blurse</button>
+        </div>
+      </div>
+      <div class="outer-dialogue-window">
+        <div class="inner-dialogue-window">
+          <button class="reset-all-button text-button" onclick="resetAllTimeState()">Reset all</button>
+        </div>
+      </div>
+    </div>
+
+    
+  </body>
+</html>
