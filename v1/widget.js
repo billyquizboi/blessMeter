@@ -82,8 +82,12 @@ let emoteBlessEnabled = false;
 let emoteBlessEmoteNamesCsv = "Kappa,PogChamp";
 let emoteBlessWindowSeconds = 120;
 let emoteBlessRequiredMatches = 5;
+let emoteBlessCooldownSeconds = 300;
+let emoteBlessHeadlineText = "Mustache man blesses the run";
 let trackedEmoteNamesLower = new Set();
 let emoteWindowEntries = [];
+/** Timestamp of the last successful emote-bless trigger; 0 means never fired. */
+let lastEmoteBlessTriggeredAt = 0;
 let lastWidgetState = null;
 /**
  * Id of the most recently announced redemption. Announcement intent travels
@@ -735,8 +739,19 @@ function applyFieldData(fieldData) {
     if (fieldData.emoteBlessRequiredMatches != null && typeof fieldData.emoteBlessRequiredMatches === "number") {
         emoteBlessRequiredMatches = Math.max(1, Math.floor(fieldData.emoteBlessRequiredMatches));
     }
+    if (fieldData.emoteBlessCooldownSeconds != null && typeof fieldData.emoteBlessCooldownSeconds === "number") {
+        emoteBlessCooldownSeconds = Math.max(0, Math.floor(fieldData.emoteBlessCooldownSeconds));
+    }
+    if (fieldData.emoteBlessHeadlineText != null && typeof fieldData.emoteBlessHeadlineText === "string") {
+        emoteBlessHeadlineText = fieldData.emoteBlessHeadlineText;
+    }
     rebuildTrackedEmoteNameSet();
-    configurePeriodicReports();
+    // Only (re)start the report interval when those fields are in this payload.
+    // Partial updates (headline, emote list, …) must not resurrect a 90s timer
+    // from the module defaults — that leaks open handles in Jest.
+    if (fieldData.reportsShouldDisplay != null || fieldData.numberOfSecondsBetweenReports != null) {
+        configurePeriodicReports();
+    }
 }
 /**
  * Parses {@link emoteBlessEmoteNamesCsv} into a lowercase lookup set for matching.
@@ -850,10 +865,27 @@ function handleChatMessage(detail) {
     if (emoteWindowEntries.length < emoteBlessRequiredMatches) {
         return;
     }
+    if (isEmoteBlessOnCooldown(nowMs)) {
+        console.log("Emote bless is on cooldown; ignoring this matching window");
+        emoteWindowEntries = [];
+        return;
+    }
     const distinctUsers = getDistinctUsersInEmoteWindow();
     const matchCount = emoteWindowEntries.length;
     emoteWindowEntries = [];
+    lastEmoteBlessTriggeredAt = nowMs;
     triggerEmoteBlessReward(distinctUsers, matchCount);
+}
+/**
+ * @param nowMs - Current timestamp.
+ * @returns True when a successful trigger happened recently enough that another
+ *   must wait for {@link emoteBlessCooldownSeconds}.
+ */
+function isEmoteBlessOnCooldown(nowMs) {
+    if (emoteBlessCooldownSeconds <= 0 || lastEmoteBlessTriggeredAt <= 0) {
+        return false;
+    }
+    return nowMs - lastEmoteBlessTriggeredAt < emoteBlessCooldownSeconds * 1000;
 }
 /**
  * Enqueues the emote-bless typewriter, then applies a +1 bless without a second announcement.
@@ -873,15 +905,25 @@ function triggerEmoteBlessReward(distinctDisplayNames, matchCount) {
  * Typewriter copy for the emote-triggered bless animation.
  */
 function buildEmoteBlessAnnouncementSegments(distinctDisplayNames, matchCount) {
+    // userSummary is currently unused, but may be used in the future.
     const userSummary = distinctDisplayNames.length === 0
         ? "chat"
         : distinctDisplayNames.join(", ");
     return [
-        { text: "EMOTE HYPE!\n", colorClass: "redemption-text-bless" },
-        { text: `${matchCount} emotes from ${distinctDisplayNames.length} user(s):\n${userSummary}\n` },
+        { text: formatEmoteBlessHeadline(emoteBlessHeadlineText), },
         { text: "Impact: ", },
         { text: "+1 BLESS", colorClass: "redemption-text-bless" },
     ];
+}
+/**
+ * Ensures the configured headline is followed by a newline for the typewriter.
+ * Empty or whitespace-only values fall back to the default "Mustache man blesses the run".
+ * @param configuredText - Headline from widget field data.
+ */
+function formatEmoteBlessHeadline(configuredText) {
+    const body = configuredText.replace(/[\s\r\n]+$/g, "");
+    const headline = body.length > 0 ? body : "Mustache man blesses the run";
+    return `${headline}\n`;
 }
 /** Starts or stops the interval that enqueues top-redeemer report cycles. */
 function configurePeriodicReports() {

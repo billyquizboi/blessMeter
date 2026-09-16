@@ -76,7 +76,9 @@ The dev panel on the right can:
 - Fire `Bless the Run` / `Curse the Run` / `Blurse the Run` redemptions, or any custom reward name, as a chosen user
 - Put the reward name in any of the three payload locations `getRedemptionName` reads: `event.data.redemption` (live Twitch), `session.data["channel-points-latest"].redemption` (SE docs), or `event.itemId` (SE emulator)
 - Fire a burst of redemptions to see how the display queue behaves under rapid redeems
-- Edit `meterMaximum` and `showChars` (seeded from [widgetFields.json](./widgetFields.json)) and re-fire `onWidgetLoad`
+- Edit every field from [widgetFields.json](./widgetFields.json) (including emote-bless settings) and re-fire `onWidgetLoad`
+- Dispatch chat `message` events with text and/or an `emotes` array, or fire a burst of matching emotes from distinct users
+- Toggle the FFVI / Chrono Trigger background via the widget button or the harness theme controls
 - Read, edit, and overwrite the persisted widget state as JSON, or apply presets such as a maxed bless meter or both meters at max
 - Add artificial latency to `SE_API.store` calls, resize the widget frame, and reload the widget after a rebuild
 - Log every `SE_API` call and dispatched event, optionally mirroring the widget's own `console.log` output

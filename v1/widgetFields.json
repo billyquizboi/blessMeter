@@ -27,7 +27,7 @@
   "emoteBlessEnabled": {
     "type": "checkbox",
     "label": "Enable emote-triggered bless?",
-    "value": false
+    "value": true
   },
   "emoteBlessEmoteNamesCsv": {
     "type": "text",
@@ -45,5 +45,16 @@
     "label": "Emote bless: matching emotes required in window",
     "value": 5,
     "min": 1
+  },
+  "emoteBlessCooldownSeconds": {
+    "type": "number",
+    "label": "Emote bless: minimum seconds between triggers",
+    "value": 300,
+    "min": 0
+  },
+  "emoteBlessHeadlineText": {
+    "type": "text",
+    "label": "Emote bless: headline shown before the typewriter details",
+    "value": "Mustache man blesses the run"
   }
 }

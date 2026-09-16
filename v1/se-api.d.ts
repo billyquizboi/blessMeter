@@ -146,6 +146,8 @@ interface FieldData {
   emoteBlessEmoteNamesCsv?: string;
   emoteBlessWindowSeconds?: number;
   emoteBlessRequiredMatches?: number;
+  emoteBlessCooldownSeconds?: number;
+  emoteBlessHeadlineText?: string;
 }
 
 interface IncrementStateOptions {

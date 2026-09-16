@@ -309,14 +309,72 @@
           <input id="field-show-chars" type="checkbox" checked />
           <label for="field-show-redemption-announcements">showRedemptionAnnouncements</label>
           <input id="field-show-redemption-announcements" type="checkbox" checked />
+        </div>
+        <div class="row">
           <label for="field-seconds-between-reports">numberOfSecondsBetweenReports</label>
           <input id="field-seconds-between-reports" type="number" min="0" value="90" />
           <label for="field-reports-should-display">reportsShouldDisplay</label>
           <input id="field-reports-should-display" type="checkbox" checked />
         </div>
         <div class="row">
+          <label for="field-emote-bless-enabled">emoteBlessEnabled</label>
+          <input id="field-emote-bless-enabled" type="checkbox" />
+        </div>
+        <div class="row">
+          <label for="field-emote-bless-window">emoteBlessWindowSeconds</label>
+          <input id="field-emote-bless-window" type="number" min="1" value="120" />
+          <label for="field-emote-bless-required">emoteBlessRequiredMatches</label>
+          <input id="field-emote-bless-required" type="number" min="1" value="5" />
+          <label for="field-emote-bless-cooldown">emoteBlessCooldownSeconds</label>
+          <input id="field-emote-bless-cooldown" type="number" min="0" value="300" />
+        </div>
+        <div class="row">
+          <label for="field-emote-bless-csv">emoteBlessEmoteNamesCsv</label>
+          <input id="field-emote-bless-csv" class="grow" type="text" value="Kappa,PogChamp" />
+        </div>
+        <div class="row">
+          <label for="field-emote-bless-headline">emoteBlessHeadlineText</label>
+          <input id="field-emote-bless-headline" class="grow" type="text" value="Mustache man blesses the run" />
+        </div>
+        <div class="row">
           <button id="fire-widget-load">Fire onWidgetLoad</button>
           <button id="fire-report">Fire report</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Chat / emotes</legend>
+        <p class="hint">
+          Dispatches an <code>onEventReceived</code> chat <code>message</code>, matching
+          StreamElements. Enable <code>emoteBlessEnabled</code> and fire
+          <code>onWidgetLoad</code> first. Matching uses <code>event.data.emotes</code>
+          when present, otherwise whitespace tokens in <code>text</code>.
+        </p>
+        <div class="row">
+          <label for="chat-user">User</label>
+          <input id="chat-user" class="grow" type="text" value="emoteFan" />
+        </div>
+        <div class="row">
+          <label for="chat-text">Text</label>
+          <input id="chat-text" class="grow" type="text" value="Kappa" />
+        </div>
+        <div class="row">
+          <label for="chat-emotes">Emotes CSV</label>
+          <input id="chat-emotes" class="grow" type="text" value="Kappa" />
+        </div>
+        <div class="row">
+          <label for="chat-include-emotes">include emotes array</label>
+          <input id="chat-include-emotes" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <button id="fire-chat">Fire chat message</button>
+        </div>
+        <div class="row">
+          <label for="chat-burst-count">Burst</label>
+          <input id="chat-burst-count" type="number" min="1" max="100" value="5" />
+          <label for="chat-burst-gap">gap ms</label>
+          <input id="chat-burst-gap" type="number" min="0" max="5000" value="0" />
+          <button id="fire-chat-burst">Fire matching burst</button>
         </div>
       </fieldset>
 
@@ -454,10 +512,20 @@
        */
 
       /**
+       * @typedef {Object} ChatEmote
+       * @property {string} [name]
+       */
+
+      /**
        * @typedef {Object} SEEventData
        * @property {string} [redemption]
        * @property {string} [key]
        * @property {WidgetState} [value]
+       * @property {string} [text]
+       * @property {string} [displayName]
+       * @property {string} [nick]
+       * @property {string} [userId]
+       * @property {ChatEmote[]} [emotes]
        */
 
       /**
@@ -480,6 +548,12 @@
        * @property {boolean} [showRedemptionAnnouncements]
        * @property {number} [numberOfSecondsBetweenReports]
        * @property {boolean} [reportsShouldDisplay]
+       * @property {boolean} [emoteBlessEnabled]
+       * @property {string} [emoteBlessEmoteNamesCsv]
+       * @property {number} [emoteBlessWindowSeconds]
+       * @property {number} [emoteBlessRequiredMatches]
+       * @property {number} [emoteBlessCooldownSeconds]
+       * @property {string} [emoteBlessHeadlineText]
        */
 
       /**
@@ -742,6 +816,39 @@
       }
 
       /**
+       * Builds an onEventReceived chat payload matching StreamElements' message listener.
+       * @param {{ displayName: string, text: string, emoteNames?: string[], includeEmotesArray?: boolean }} options
+       * @returns {SEEventDetail}
+       */
+      function makeChatMessageDetail(options) {
+        const displayName = options.displayName || "emoteFan";
+        const nick = displayName.toLowerCase().replace(/\s+/g, "");
+        /** @type {SEEventData} */
+        const data = {
+          text: options.text,
+          displayName: displayName,
+          nick: nick,
+          userId: nick,
+        };
+        if (options.includeEmotesArray !== false) {
+          const names = options.emoteNames || [];
+          data.emotes = names.map(name => ({ name: name }));
+        }
+        return { listener: "message", event: { data: data } };
+      }
+
+      /**
+       * @param {string} csv
+       * @returns {string[]}
+       */
+      function parseCsvNames(csv) {
+        if (!csv || !csv.trim()) {
+          return [];
+        }
+        return csv.split(",").map(part => part.trim()).filter(part => part.length > 0);
+      }
+
+      /**
        * Builds a complete WidgetState with every field the widget expects.
        * @param {{ current?: Partial<CurrentState>, allTime?: Partial<AllTimeState>, showAll?: boolean, redemptionHistory?: RedemptionHistory, lastRedemption?: LastRedemption }} [overrides]
        * @returns {WidgetState}
@@ -845,8 +952,61 @@
         const win = widgetWindow();
         if (!win) return;
         const fieldData = readFieldDataInputs();
-        log(`dispatch onWidgetLoad (meterMaximum ${fieldData.meterMaximum}, showChars ${fieldData.showChars})`, "event");
+        log(
+          `dispatch onWidgetLoad (meterMaximum ${fieldData.meterMaximum}, emoteBlessEnabled ${fieldData.emoteBlessEnabled})`,
+          "event"
+        );
         dispatchToWidget(win, "onWidgetLoad", makeWidgetLoadDetail(fieldData));
+      }
+
+      /**
+       * Fires a single chat message using the Chat / emotes inputs.
+       */
+      function fireChatMessage() {
+        const win = widgetWindow();
+        if (!win) return;
+        const displayName = document.getElementById("chat-user").value.trim() || "emoteFan";
+        const text = document.getElementById("chat-text").value;
+        const includeEmotesArray = document.getElementById("chat-include-emotes").checked;
+        const emoteNames = parseCsvNames(document.getElementById("chat-emotes").value);
+        log(
+          `dispatch onEventReceived message from "${displayName}" text="${text}" emotes=[${emoteNames.join(",")}] array=${includeEmotesArray}`,
+          "event"
+        );
+        dispatchToWidget(win, "onEventReceived", makeChatMessageDetail({
+          displayName: displayName,
+          text: text,
+          emoteNames: emoteNames,
+          includeEmotesArray: includeEmotesArray,
+        }));
+      }
+
+      /**
+       * Fires several matching chat messages from distinct users, to fill the
+       * emote-bless window without clicking Fire chat message repeatedly.
+       */
+      async function fireChatBurst() {
+        const win = widgetWindow();
+        if (!win) return;
+        const count = Number(document.getElementById("chat-burst-count").value) || 1;
+        const gap = Number(document.getElementById("chat-burst-gap").value) || 0;
+        const includeEmotesArray = document.getElementById("chat-include-emotes").checked;
+        const emoteNames = parseCsvNames(document.getElementById("chat-emotes").value);
+        const text = document.getElementById("chat-text").value || emoteNames.join(" ");
+        const baseUser = document.getElementById("chat-user").value.trim() || "emoteFan";
+        log(`chat burst of ${count} matching messages, ${gap}ms apart`, "event");
+        for (let index = 0; index < count; index++) {
+          const displayName = `${baseUser}${index + 1}`;
+          dispatchToWidget(win, "onEventReceived", makeChatMessageDetail({
+            displayName: displayName,
+            text: text,
+            emoteNames: emoteNames,
+            includeEmotesArray: includeEmotesArray,
+          }));
+          if (gap > 0 && index < count - 1) {
+            await new Promise(resolve => window.setTimeout(resolve, gap));
+          }
+        }
       }
 
       /** Enqueues the top-redeemer report animations on the widget display queue. */
@@ -869,6 +1029,12 @@
           showRedemptionAnnouncements: document.getElementById("field-show-redemption-announcements").checked,
           numberOfSecondsBetweenReports: Number(document.getElementById("field-seconds-between-reports").value),
           reportsShouldDisplay: document.getElementById("field-reports-should-display").checked,
+          emoteBlessEnabled: document.getElementById("field-emote-bless-enabled").checked,
+          emoteBlessEmoteNamesCsv: document.getElementById("field-emote-bless-csv").value,
+          emoteBlessWindowSeconds: Number(document.getElementById("field-emote-bless-window").value),
+          emoteBlessRequiredMatches: Number(document.getElementById("field-emote-bless-required").value),
+          emoteBlessCooldownSeconds: Number(document.getElementById("field-emote-bless-cooldown").value),
+          emoteBlessHeadlineText: document.getElementById("field-emote-bless-headline").value,
         };
       }
 
@@ -1053,6 +1219,24 @@
           if (fields.reportsShouldDisplay && typeof fields.reportsShouldDisplay.value === "boolean") {
             document.getElementById("field-reports-should-display").checked = fields.reportsShouldDisplay.value;
           }
+          if (fields.emoteBlessEnabled && typeof fields.emoteBlessEnabled.value === "boolean") {
+            document.getElementById("field-emote-bless-enabled").checked = fields.emoteBlessEnabled.value;
+          }
+          if (fields.emoteBlessEmoteNamesCsv && typeof fields.emoteBlessEmoteNamesCsv.value === "string") {
+            document.getElementById("field-emote-bless-csv").value = fields.emoteBlessEmoteNamesCsv.value;
+          }
+          if (fields.emoteBlessWindowSeconds && typeof fields.emoteBlessWindowSeconds.value === "number") {
+            document.getElementById("field-emote-bless-window").value = String(fields.emoteBlessWindowSeconds.value);
+          }
+          if (fields.emoteBlessRequiredMatches && typeof fields.emoteBlessRequiredMatches.value === "number") {
+            document.getElementById("field-emote-bless-required").value = String(fields.emoteBlessRequiredMatches.value);
+          }
+          if (fields.emoteBlessCooldownSeconds && typeof fields.emoteBlessCooldownSeconds.value === "number") {
+            document.getElementById("field-emote-bless-cooldown").value = String(fields.emoteBlessCooldownSeconds.value);
+          }
+          if (fields.emoteBlessHeadlineText && typeof fields.emoteBlessHeadlineText.value === "string") {
+            document.getElementById("field-emote-bless-headline").value = fields.emoteBlessHeadlineText.value;
+          }
           log("Loaded field defaults from widgetFields.json");
         } catch (error) {
           log(`Could not read widgetFields.json (${error}); using the inputs as-is`, "error");
@@ -1223,6 +1407,8 @@
       document.getElementById("fire-burst").addEventListener("click", fireBurst);
       document.getElementById("fire-widget-load").addEventListener("click", fireWidgetLoad);
       document.getElementById("fire-report").addEventListener("click", fireReport);
+      document.getElementById("fire-chat").addEventListener("click", fireChatMessage);
+      document.getElementById("fire-chat-burst").addEventListener("click", fireChatBurst);
 
       document.getElementById("apply-preset").addEventListener("click", () => {
         const preset = document.getElementById("preset").value;

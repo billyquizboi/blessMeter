@@ -114,6 +114,7 @@ declare global {
       distinctDisplayNames: string[],
       matchCount: number
     ) => { text: string; colorClass?: string }[];
+    formatEmoteBlessHeadline: (configuredText: string) => string;
     configurePeriodicReports: () => void;
     stopPeriodicReports: () => void;
     enqueuePeriodicReportCycle: (force?: boolean) => void;
@@ -198,8 +199,21 @@ function setupTestDOM(initialState?: WidgetState): TestEnv {
   widgetScript.textContent = widgetContent;
   dom.window.document.head.appendChild(widgetScript);
 
-  return { dom, mockSEAPI, w: dom.window as any as Window };
+  const env: TestEnv = { dom, mockSEAPI, w: dom.window as any as Window };
+  openTestEnvs.push(env);
+  return env;
 }
+
+/** JSDOMs whose report intervals must be cleared so Jest can exit cleanly. */
+const openTestEnvs: TestEnv[] = [];
+
+afterEach(() => {
+  for (const env of openTestEnvs) {
+    env.w.stopPeriodicReports();
+    env.dom.window.close();
+  }
+  openTestEnvs.length = 0;
+});
 
 /** Flush the microtask queue so Promise .then() callbacks have run. */
 const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -1420,10 +1434,17 @@ describe("emote bless helpers", () => {
 
   it("buildEmoteBlessAnnouncementSegments includes match and user summary", () => {
     const segments = w.buildEmoteBlessAnnouncementSegments(["alice", "bob"], 5);
-    expect(segments[0].text).toBe("EMOTE HYPE!\n");
-    expect(segments[1].text).toContain("5 emotes from 2 user(s)");
-    expect(segments[1].text).toContain("alice, bob");
-    expect(segments[3].text).toBe("+1 BLESS");
+    expect(segments[0].text).toBe("Mustache man blesses the run\n");
+    expect(segments[1].text).toContain("Impact:");
+    expect(segments[2].text).toBe("+1 BLESS");
+  });
+
+  it("uses the configured headline and always appends a newline", () => {
+    w.applyFieldData({ emoteBlessHeadlineText: "POGGERS" });
+    const segments = w.buildEmoteBlessAnnouncementSegments(["alice"], 1);
+    expect(segments[0].text).toBe("POGGERS\n");
+    expect(w.formatEmoteBlessHeadline("")).toBe("Mustache man blesses the run\n");
+    expect(w.formatEmoteBlessHeadline("Custom\n")).toBe("Custom\n");
   });
 });
 
@@ -1479,6 +1500,57 @@ describe("handleChatMessage emote bless", () => {
     await flushPromises();
 
     expect(mockSEAPI.store._data["blessCurseMeterState"]?.current.numberOfBlesses).toBe(0);
+  });
+
+  it("does not trigger again until the cooldown elapses", async () => {
+    const state = makeState();
+    const { w, mockSEAPI } = setupTestDOM(state);
+    const now = jest.spyOn((w as unknown as { Date: DateConstructor }).Date, "now");
+    now.mockReturnValue(1_000_000);
+    try {
+      w.applyFieldData({ ...emoteFieldData, emoteBlessCooldownSeconds: 300 });
+      w.animateOverlayTypewriter = jest.fn().mockResolvedValue(undefined);
+
+      const makeMessageDetail = (displayName: string): SEEventDetail => ({
+        listener: "message",
+        event: {
+          data: {
+            displayName,
+            userId: displayName,
+            emotes: [{ name: "Kappa" }],
+            text: "Kappa",
+          },
+        },
+      });
+
+      w.handleChatMessage(makeMessageDetail("alice"));
+      w.handleChatMessage(makeMessageDetail("bob"));
+      await flushPromises();
+      await flushPromises();
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.current.numberOfBlesses).toBe(1);
+
+      w.handleChatMessage(makeMessageDetail("carol"));
+      w.handleChatMessage(makeMessageDetail("dave"));
+      await flushPromises();
+      await flushPromises();
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.current.numberOfBlesses).toBe(1);
+
+      now.mockReturnValue(1_000_000 + 299_000);
+      w.handleChatMessage(makeMessageDetail("erin"));
+      w.handleChatMessage(makeMessageDetail("frank"));
+      await flushPromises();
+      await flushPromises();
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.current.numberOfBlesses).toBe(1);
+
+      now.mockReturnValue(1_000_000 + 300_000);
+      w.handleChatMessage(makeMessageDetail("gina"));
+      w.handleChatMessage(makeMessageDetail("hank"));
+      await flushPromises();
+      await flushPromises();
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.current.numberOfBlesses).toBe(2);
+    } finally {
+      now.mockRestore();
+    }
   });
 });
 
