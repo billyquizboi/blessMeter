@@ -51,29 +51,57 @@ _These OBS instructions below were copied from google_
 
 ## Development
 
+All commands below are run from the **repository root** (the folder that contains `package.json`, one level above `v1/`).
+
+### Prerequisites
+
+- **[Node.js](https://nodejs.org/)** 20 or newer (the project CI uses Node 20). The installer includes **npm**.
+- After installing, confirm in a terminal: `node -v` and `npm -v`.
+
+On Windows, use the official Node installer or a version manager (for example [nvm-windows](https://github.com/coreybutler/nvm-windows)). On macOS/Linux, the installer or [nvm](https://github.com/nvm-sh/nvm) both work.
+
+### Install dependencies
+
+From the repository root, once per clone (or after `package.json` changes):
+
+```bash
+npm install
+```
+
+For a clean install that matches the lockfile exactly (same as CI): `npm ci`.
+
+### Dev server
+
+| Action                  | Command                                                |
+| ----------------------- | ------------------------------------------------------ |
+| Start (build + serve)   | `npm run dev`                                          |
+| Serve only (no compile) | `npm run serve`                                        |
+| Stop                    | **Ctrl+C** in the terminal where the server is running |
+
+`npm run dev` compiles TypeScript, then starts a static server at **http://localhost:8080**. Open the local harness at **http://localhost:8080/v1/localTest.html**.
+
+Use another port if 8080 is busy: `npm run serve -- --port 8090` (run `npm run build` first if you changed `.ts` files and skipped `npm run dev`).
+
 ### Source files
 
 [widget.js](./widget.js) is the file used by the StreamElements widget editor. It is generated from [widget.ts](./widget.ts) — do not edit `widget.js` directly. Edit `widget.ts` and rebuild using `npm run build`.
 
 ### npm commands
 
-Run these from the repository root (the directory containing `package.json`):
-
-| Command         | Description                                                               |
-| --------------- | ------------------------------------------------------------------------- |
-| `npm run build` | Compiles `widget.ts` → `widget.js` via TypeScript                         |
-| `npm test`      | Compiles TypeScript then runs the Jest test suite                         |
-| `npm run dev`   | Compiles TypeScript then serves the repository for the local test harness |
-| `npm run serve` | Serves the repository without rebuilding first                            |
+| Command          | Description                                       |
+| ---------------- | ------------------------------------------------- |
+| `npm run build`  | Compiles `widget.ts` → `widget.js` via TypeScript |
+| `npm test`       | Compiles TypeScript then runs the Jest test suite |
+| `npm run dev`    | Build, then serve the repo for local testing      |
+| `npm run serve`  | Serve without rebuilding                          |
+| `npm run lint`   | Run ESLint                                        |
+| `npm run format` | Format the repo with Prettier                     |
 
 ### Testing locally in a browser
 
 [localTest.html](./localTest.html) runs the widget in a browser without touching StreamElements. It loads the real [widget.html](./widget.html) in an iframe and injects jQuery, a mocked `SE_API`, and the compiled [widget.js](./widget.js) into it, so it always exercises the current files on disk. Nothing in the harness is pasted into the StreamElements editor.
 
-- Run `npm run dev`
-- Open <http://localhost:8080/v1/localTest.html>
-
-A local server is required because a `file://` page gets an opaque origin, which blocks both `fetch()` and scripting into the iframe. Pass `--port` to use a different port: `npm run serve -- --port 8090`.
+Start the dev server as above, then open <http://localhost:8080/v1/localTest.html>. A local server is required because a `file://` page gets an opaque origin, which blocks both `fetch()` and scripting into the iframe.
 
 The dev panel on the right can:
 
