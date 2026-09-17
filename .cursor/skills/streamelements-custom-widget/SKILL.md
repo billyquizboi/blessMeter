@@ -21,12 +21,12 @@ Type definitions for this repo: [v1/se-api.d.ts](../../../v1/se-api.d.ts). Exten
 
 ## blessMeter workflow (this repo)
 
-| Artifact | Source | StreamElements tab |
-|----------|--------|-------------------|
-| Markup | `v1/widget.html` | HTML |
-| Styles | `v1/widget.css` | CSS |
-| Logic | `v1/widget.js` (compiled) | JS |
-| Settings | `v1/widgetFields.json` | FIELDS |
+| Artifact | Source                    | StreamElements tab |
+| -------- | ------------------------- | ------------------ |
+| Markup   | `v1/widget.html`          | HTML               |
+| Styles   | `v1/widget.css`           | CSS                |
+| Logic    | `v1/widget.js` (compiled) | JS                 |
+| Settings | `v1/widgetFields.json`    | FIELDS             |
 
 1. Edit **`v1/widget.ts`** only — never hand-edit `widget.js`.
 2. Run `npm run build` (or `npm test` / `npm run dev`).
@@ -84,9 +84,9 @@ Chat messages: `obj.detail.event.data` (store `msgId` + `userId` for deletions).
 
 Session stats refresh (goals, top donators). **Path differs from load:**
 
-| Event | Session stats path |
-|-------|-------------------|
-| `onWidgetLoad` | `obj.detail.session.data` |
+| Event             | Session stats path                    |
+| ----------------- | ------------------------------------- |
+| `onWidgetLoad`    | `obj.detail.session.data`             |
 | `onSessionUpdate` | `obj.detail.session` (top-level keys) |
 
 Prefer `onEventReceived` unless you need rich session-only data (e.g. goal widgets).
@@ -97,7 +97,9 @@ Persist cross-widget state with **`SE_API.store`** (account-wide KV). No key del
 
 ```javascript
 SE_API.store.set("myKey", { count: 1 });
-SE_API.store.get("myKey").then((obj) => { /* ... */ });
+SE_API.store.get("myKey").then((obj) => {
+  /* ... */
+});
 ```
 
 Each `set` broadcasts `onEventReceived` with `listener: "kvstore:update"` and:

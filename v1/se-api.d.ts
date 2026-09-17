@@ -54,17 +54,17 @@ interface RedemptionHistory {
 }
 
 interface LastRedemption {
-  redeemingUser: string,
-  charType: string,
-  meterTarget: string,
-  meterAmount: number,
+  redeemingUser: string;
+  charType: string;
+  meterTarget: string;
+  meterAmount: number;
   /**
    * Identifies this redemption for announcement de-duplication. A fresh id means
    * the redemption has not been announced yet; reusing a prior id (or null)
    * marks it as already announced. Optional because states persisted before
    * announcement ids were introduced do not carry one.
    */
-  id?: string | null,
+  id?: string | null;
 }
 
 /**
@@ -180,36 +180,42 @@ interface SECustomEvent extends Event {
 // ============================================================
 
 // DOM helpers — return jQuery-wrapped elements
-type JQueryGetterFn  = () => JQuery<HTMLElement>;
+type JQueryGetterFn = () => JQuery<HTMLElement>;
 
 // Void state / side-effect functions
-type NoArgVoidFunction                  = () => void;
-type IncrementStateFn                   = (toIncrement: string, name?: string | null, options?: IncrementStateOptions) => void;
+type NoArgVoidFunction = () => void;
+type IncrementStateFn = (toIncrement: string, name?: string | null, options?: IncrementStateOptions) => void;
 type OptionallyInitializeNumericFieldFn = (obj: WidgetState, fieldName: string) => void;
-type EventHandlerFn                     = (event: Event) => void;
-type HandleRedemptionFn                 = (detail: SEEventDetail) => void;
-type ShowCharSvgFn                      = (type: string) => Promise<void>;
-type UpdateToggleButtonDisplayFn        = (showAll: boolean) => void;
-type GlowFn                             = (ele: HTMLElement, type: string) => void;
-type UpdateDisplayFn                    = (widgetState: WidgetState | null, showAnimate: boolean, announceRedemption?: boolean) => void;
+type EventHandlerFn = (event: Event) => void;
+type HandleRedemptionFn = (detail: SEEventDetail) => void;
+type ShowCharSvgFn = (type: string) => Promise<void>;
+type UpdateToggleButtonDisplayFn = (showAll: boolean) => void;
+type GlowFn = (ele: HTMLElement, type: string) => void;
+type UpdateDisplayFn = (widgetState: WidgetState | null, showAnimate: boolean, announceRedemption?: boolean) => void;
 
 // Predicate / boolean functions
 type StoreHasBeenInitializedFn = (obj: WidgetState | null) => obj is WidgetState;
-type CanIncrementFn            = (obj: WidgetState | null, toIncrement: string) => boolean;
-type BothMetersAreAtMaxFn      = (widgetState: WidgetState) => boolean;
-type IsShowingAllFn            = (widgetState: WidgetState | null | undefined) => boolean;
+type CanIncrementFn = (obj: WidgetState | null, toIncrement: string) => boolean;
+type BothMetersAreAtMaxFn = (widgetState: WidgetState) => boolean;
+type IsShowingAllFn = (widgetState: WidgetState | null | undefined) => boolean;
 
 // Background theme
-type NormalizeBackgroundThemeFn           = (value: unknown) => string;
-type GetBackgroundThemeFn                 = (widgetState: WidgetState | null | undefined) => string;
-type ApplyBackgroundThemeFn               = (theme: string) => void;
+type NormalizeBackgroundThemeFn = (value: unknown) => string;
+type GetBackgroundThemeFn = (widgetState: WidgetState | null | undefined) => string;
+type ApplyBackgroundThemeFn = (theme: string) => void;
 type UpdateBackgroundThemeButtonDisplayFn = (theme: string) => void;
 
 // Value-returning functions
 type ResetMetersButKeepCurrentStateFn = (widgetState: WidgetState) => WidgetState | undefined;
-type GetRedemptionNameFn              = (detail: SEEventDetail | undefined) => string | null;
-type GetOrDefaultCountFn              = (value: number | boolean | undefined) => number;
-type GetCountFromStateFn              = (widgetState: WidgetState, keyName: string) => number;
-type GletGlowForeverClassFn           = (type: string) => string;
-type AnimateChangeFn                  = (ele: HTMLElement | undefined, currentWidth: string, targetWidth: string, durationOfAnimation: number, type: string) => () => Promise<void>;
-type MockRedeemEventFn                = (redemptionName: string) => CustomEvent<SEEventDetail>;
+type GetRedemptionNameFn = (detail: SEEventDetail | undefined) => string | null;
+type GetOrDefaultCountFn = (value: number | boolean | undefined) => number;
+type GetCountFromStateFn = (widgetState: WidgetState, keyName: string) => number;
+type GletGlowForeverClassFn = (type: string) => string;
+type AnimateChangeFn = (
+  ele: HTMLElement | undefined,
+  currentWidth: string,
+  targetWidth: string,
+  durationOfAnimation: number,
+  type: string
+) => () => Promise<void>;
+type MockRedeemEventFn = (redemptionName: string) => CustomEvent<SEEventDetail>;

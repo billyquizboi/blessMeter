@@ -24,15 +24,7 @@ import * as path from "path";
 // ---------------------------------------------------------------------------
 const WIDGET_HTML_PATH = path.resolve(__dirname, "widget.html");
 const WIDGET_JS_PATH = path.resolve(__dirname, "widget.js");
-const JQUERY_PATH = path.resolve(
-  __dirname,
-  "..",
-  "node_modules",
-  "jquery",
-  "dist",
-  "jquery.js"
-);
-
+const JQUERY_PATH = path.resolve(__dirname, "..", "node_modules", "jquery", "dist", "jquery.js");
 
 declare global {
   // interface Window {
@@ -99,17 +91,30 @@ declare global {
     getTypeColorClass: (charType: string) => string;
     getMeterTargetColorClass: (meterTarget: string) => string;
     buildRedemptionAnnouncementSegments: (redemption: LastRedemption) => { text: string; colorClass?: string }[];
-    typewriterSegments: (element: HTMLElement, segments: { text: string; colorClass?: string }[], letterDelayMs: number) => Promise<void>;
+    typewriterSegments: (
+      element: HTMLElement,
+      segments: { text: string; colorClass?: string }[],
+      letterDelayMs: number
+    ) => Promise<void>;
     liftAnnouncementText: (element: HTMLElement, options?: { pinToTop?: boolean }) => void;
     animateRedemptionAnnouncement: (redemption: LastRedemption) => Promise<void>;
     animateOverlayTypewriter: (segments: { text: string; colorClass?: string }[]) => Promise<void>;
     createEmptyRedemptionHistoryEntry: () => RedemptionHistoryEntry;
     normalizeRedemptionHistoryEntry: (entry: RedemptionHistoryEntry) => RedemptionHistoryEntry;
-    getTopRedeemers: (history: RedemptionHistory | undefined, category: "bless" | "curse" | "blurse", limit?: number) => { userName: string; count: number }[];
+    getTopRedeemers: (
+      history: RedemptionHistory | undefined,
+      category: "bless" | "curse" | "blurse",
+      limit?: number
+    ) => { userName: string; count: number }[];
     buildReportHeadlineSegments: (text: string) => { text: string; colorClass?: string }[];
     buildTopRedeemersTitleSegments: (title: string) => { text: string; colorClass?: string }[];
-    buildTopRedeemersListSegments: (redeemers: { userName: string; count: number }[]) => { text: string; colorClass?: string }[];
-    buildTopRedeemersReportSegments: (title: string, redeemers: { userName: string; count: number }[]) => { text: string; colorClass?: string }[];
+    buildTopRedeemersListSegments: (
+      redeemers: { userName: string; count: number }[]
+    ) => { text: string; colorClass?: string }[];
+    buildTopRedeemersReportSegments: (
+      title: string,
+      redeemers: { userName: string; count: number }[]
+    ) => { text: string; colorClass?: string }[];
     applyFieldData: (fieldData: FieldData) => void;
     getRedemptionAnnouncementId: (widgetState: WidgetState | null | undefined) => string | null;
     parseEmoteNamesCsv: (csv: string) => string[];
@@ -161,7 +166,6 @@ function createMockSEAPI(initialState?: WidgetState): MockSEAPI {
   };
 }
 
-
 // ---------------------------------------------------------------------------
 // JSDOM setup helper
 // ---------------------------------------------------------------------------
@@ -169,7 +173,7 @@ interface TestEnv {
   dom: JSDOM;
   mockSEAPI: MockSEAPI;
   /** Convenience shortcut: dom.window cast to any for calling widget globals */
-  w: Window; // eslint-disable-line @typescript-eslint/no-explicit-any
+  w: Window;
 }
 
 function setupTestDOM(initialState?: WidgetState): TestEnv {
@@ -570,9 +574,7 @@ describe("resetMetersButKeepCurrentState", () => {
   });
 
   it("returns undefined when state has no current", () => {
-    expect(
-      w.resetMetersButKeepCurrentState({ allTime: {}, showAll: false } as any as WidgetState)
-    ).toBeUndefined();
+    expect(w.resetMetersButKeepCurrentState({ allTime: {}, showAll: false } as any as WidgetState)).toBeUndefined();
   });
 
   it("resets current counters to 0", () => {
@@ -595,7 +597,7 @@ describe("resetMetersButKeepCurrentState", () => {
     const result = w.resetMetersButKeepCurrentState(state);
     expect(result).toBeDefined();
     expect(result!.current.numberOfBlessesPreReset).toBe(3 + 8); // 11
-    expect(result!.current.numberOfCursesPreReset).toBe(2 + 6);  // 8
+    expect(result!.current.numberOfCursesPreReset).toBe(2 + 6); // 8
   });
 
   it("preserves allTime and showAll from the original state", () => {
@@ -616,7 +618,7 @@ describe("resetMetersButKeepCurrentState", () => {
     const result = w.resetMetersButKeepCurrentState(state);
     expect(result).toBeDefined();
     expect(result!.current.numberOfBlursesThatBlessedPreReset).toBe(1 + 4); // 5
-    expect(result!.current.numberOfBlursesThatCursedPreReset).toBe(0 + 2);  // 2
+    expect(result!.current.numberOfBlursesThatCursedPreReset).toBe(0 + 2); // 2
   });
 });
 
@@ -887,11 +889,7 @@ describe("typewriterSegments", () => {
     parent.appendChild(container);
     w.document.body.appendChild(parent);
 
-    await w.typewriterSegments(
-      container,
-      [{ text: "1. alice - 3\n2. bob - 2\n3. carol - 1" }],
-      0
-    );
+    await w.typewriterSegments(container, [{ text: "1. alice - 3\n2. bob - 2\n3. carol - 1" }], 0);
 
     expect(container.style.marginTop).toBe("");
   });
@@ -976,8 +974,12 @@ describe("animateRedemptionAnnouncement", () => {
     );
     await w.typewriterSegments(container, segments, 0);
     const spans = Array.from(container.querySelectorAll("span"));
-    expect(spans.some((span) => span.className === "redemption-text-curse" && span.textContent === "CURSED")).toBe(true);
-    expect(spans.some((span) => span.className === "redemption-text-curse" && span.textContent === "+1 CURSE")).toBe(true);
+    expect(spans.some((span) => span.className === "redemption-text-curse" && span.textContent === "CURSED")).toBe(
+      true
+    );
+    expect(spans.some((span) => span.className === "redemption-text-curse" && span.textContent === "+1 CURSE")).toBe(
+      true
+    );
   });
 });
 
@@ -1130,9 +1132,7 @@ describe("incrementState", () => {
     await flushPromises();
 
     const blurseOutcomes = [0.1, 0.9];
-    const randomSpy = jest
-      .spyOn(dom.window.Math, "random")
-      .mockImplementation(() => blurseOutcomes.shift() ?? 0.5);
+    const randomSpy = jest.spyOn(dom.window.Math, "random").mockImplementation(() => blurseOutcomes.shift() ?? 0.5);
     w.incrementState("numberOfBlurses", "carol");
     await flushPromises();
     w.incrementState("numberOfBlurses", "carol");
@@ -1142,11 +1142,13 @@ describe("incrementState", () => {
     const saved = mockSEAPI.store._data["blessCurseMeterState"];
     expect(saved?.redemptionHistory?.alice).toEqual(makeRedemptionHistoryEntry({ numberOfBlesses: 1 }));
     expect(saved?.redemptionHistory?.bob).toEqual(makeRedemptionHistoryEntry({ numberOfCurses: 1 }));
-    expect(saved?.redemptionHistory?.carol).toEqual(makeRedemptionHistoryEntry({
-      numberOfBlurses: 2,
-      numberOfBlursesThatBlessed: 1,
-      numberOfBlursesThatCursed: 1,
-    }));
+    expect(saved?.redemptionHistory?.carol).toEqual(
+      makeRedemptionHistoryEntry({
+        numberOfBlurses: 2,
+        numberOfBlursesThatBlessed: 1,
+        numberOfBlursesThatCursed: 1,
+      })
+    );
   });
 
   it("resets meters when both are at max and calls set with reset state", async () => {
@@ -1172,9 +1174,10 @@ describe("incrementState", () => {
     const state = makeState();
     const { w, mockSEAPI } = setupTestDOM(state);
     mockSEAPI.store.get.mockImplementation(
-      (key: string) => new Promise((resolve) => {
-        setTimeout(() => resolve(mockSEAPI.store._data[key] ?? null), 15);
-      })
+      (key: string) =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve(mockSEAPI.store._data[key] ?? null), 15);
+        })
     );
 
     w.incrementState("numberOfBlesses", "alice");
@@ -1524,10 +1527,10 @@ describe("buildTopRedeemersReportSegments", () => {
   });
 
   it("combines title and list segments for legacy callers", () => {
-    const segments = w.buildTopRedeemersReportSegments(
-      "TOP BLESS REDEEMERS",
-      [{ userName: "alice", count: 3 }, { userName: "bob", count: 1 }]
-    );
+    const segments = w.buildTopRedeemersReportSegments("TOP BLESS REDEEMERS", [
+      { userName: "alice", count: 3 },
+      { userName: "bob", count: 1 },
+    ]);
     expect(segments[0]).toEqual({ text: "TOP BLESS REDEEMERS\n" });
     expect(segments[1].text).toBe("1. alice - 3\n2. bob - 1");
   });
@@ -1550,16 +1553,10 @@ describe("emote bless helpers", () => {
 
   it("findMatchingTrackedEmotesInChat matches emote objects case-insensitively", () => {
     const tracked = new Set(["kappa", "pogchamp"]);
-    const fromEmotes = w.findMatchingTrackedEmotesInChat(
-      { emotes: [{ name: "Kappa" }, { name: "LUL" }] },
-      tracked
-    );
+    const fromEmotes = w.findMatchingTrackedEmotesInChat({ emotes: [{ name: "Kappa" }, { name: "LUL" }] }, tracked);
     expect(fromEmotes).toEqual(["Kappa"]);
 
-    const fromText = w.findMatchingTrackedEmotesInChat(
-      { text: "hello PogChamp world" },
-      tracked
-    );
+    const fromText = w.findMatchingTrackedEmotesInChat({ text: "hello PogChamp world" }, tracked);
     expect(fromText).toEqual(["PogChamp"]);
   });
 
@@ -1690,8 +1687,7 @@ describe("handleChatMessage emote bless", () => {
 // ===========================================================================
 describe("background theme", () => {
   const themeClass = "theme-ct";
-  const themeButtonText = (w: Window) =>
-    w.document.getElementById("background-theme-toggle")?.textContent;
+  const themeButtonText = (w: Window) => w.document.getElementById("background-theme-toggle")?.textContent;
   const hasCtTheme = (w: Window) => w.document.body.classList.contains(themeClass);
 
   describe("normalizeBackgroundTheme", () => {
@@ -1853,8 +1849,7 @@ describe("redemption announcement de-duplication", () => {
   const isAnnouncementVisible = (w: Window) =>
     w.document.querySelector(".redemption-announcement")?.classList.contains("visible");
 
-  const savedState = (mockSEAPI: MockSEAPI) =>
-    mockSEAPI.store._data["blessCurseMeterState"]!;
+  const savedState = (mockSEAPI: MockSEAPI) => mockSEAPI.store._data["blessCurseMeterState"]!;
 
   it("stamps a fresh announcement id on a recorded redemption", async () => {
     const { w, mockSEAPI } = setupTestDOM(makeState());
@@ -1931,10 +1926,9 @@ describe("redemption announcement de-duplication", () => {
     await flushPromises();
     expect(w.getRedemptionAnnouncementId(savedState(mockSEAPI))).toEqual(expect.any(String));
 
-    const loadEvent = new (w as unknown as { CustomEvent: typeof CustomEvent }).CustomEvent(
-      "onWidgetLoad",
-      { detail: { fieldData: { reportsShouldDisplay: false, numberOfSecondsBetweenReports: 0 } } }
-    );
+    const loadEvent = new (w as unknown as { CustomEvent: typeof CustomEvent }).CustomEvent("onWidgetLoad", {
+      detail: { fieldData: { reportsShouldDisplay: false, numberOfSecondsBetweenReports: 0 } },
+    });
     w.widgetLoadHandler(loadEvent);
     await flushPromises();
 

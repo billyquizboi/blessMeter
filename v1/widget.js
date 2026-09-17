@@ -34,7 +34,7 @@ const StateKeys = {
     numberOfBlursesThatCursedPreReset: "numberOfBlursesThatCursedPreReset",
     numberOfBlursesThatBlessedPreReset: "numberOfBlursesThatBlessedPreReset",
     redemptionHistory: "redemptionHistory",
-    lastRedemption: "lastRedemption"
+    lastRedemption: "lastRedemption",
 };
 // Lines 25–50 in original: object literal + separate lastUpdated assignment merged here
 const initialWidgetState = {
@@ -62,7 +62,7 @@ const initialWidgetState = {
     showAll: false,
     backgroundTheme: THEME_FFVI,
     lastUpdated: new Date(),
-    redemptionHistory: {}
+    redemptionHistory: {},
 };
 const STORE_KEY_NAME = "blessCurseMeterState";
 const ATTRIBUTE_SHOW_ALL = "showAll";
@@ -109,7 +109,7 @@ class SequentialQueue {
     }
     enqueue(task) {
         const result = this.tail.then(() => task());
-        this.tail = result.catch(err => {
+        this.tail = result.catch((err) => {
             console.error("Queued display task failed:", err);
         });
         return result;
@@ -155,7 +155,7 @@ function getBlurseSvg() {
 function initializeLastWidgetState() {
     console.log("Trying to initialize last widget state");
     try {
-        SE_API.store.get(STORE_KEY_NAME).then(obj => {
+        SE_API.store.get(STORE_KEY_NAME).then((obj) => {
             lastWidgetState = obj;
         });
     }
@@ -175,7 +175,7 @@ initializeLastWidgetState();
  */
 function toggleShowAllState() {
     console.log(`Toggling state showAll`);
-    SE_API.store.get(STORE_KEY_NAME).then(obj => {
+    SE_API.store.get(STORE_KEY_NAME).then((obj) => {
         console.log(`Toggling showAll: Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
         if (!storeHasBeenInitialized(obj)) {
             console.log(`Toggling state showAll: The store object has not yet been initialized. Setting up initial values.`);
@@ -208,7 +208,7 @@ function incrementState(toIncrement, name, options) {
     var _a;
     console.log(`Incrementing ${toIncrement}`);
     const recordRedemption = (_a = options === null || options === void 0 ? void 0 : options.recordRedemption) !== null && _a !== void 0 ? _a : true;
-    void storeMutationQueue.enqueue(() => SE_API.store.get(STORE_KEY_NAME).then(obj => {
+    void storeMutationQueue.enqueue(() => SE_API.store.get(STORE_KEY_NAME).then((obj) => {
         console.log(`Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
         if (storeHasBeenInitialized(obj)) {
             if (!canIncrement(obj, toIncrement)) {
@@ -263,10 +263,12 @@ function incrementState(toIncrement, name, options) {
                 const userEntry = obj[redemptionHistoryKey][name];
                 userEntry.numberOfBlurses = getOrDefaultCount(userEntry.numberOfBlurses) + 1;
                 if (meterTarget === TYPE_BLESS) {
-                    userEntry.numberOfBlursesThatBlessed = getOrDefaultCount(userEntry.numberOfBlursesThatBlessed) + 1;
+                    userEntry.numberOfBlursesThatBlessed =
+                        getOrDefaultCount(userEntry.numberOfBlursesThatBlessed) + 1;
                 }
                 else {
-                    userEntry.numberOfBlursesThatCursed = getOrDefaultCount(userEntry.numberOfBlursesThatCursed) + 1;
+                    userEntry.numberOfBlursesThatCursed =
+                        getOrDefaultCount(userEntry.numberOfBlursesThatCursed) + 1;
                 }
             }
         }
@@ -276,14 +278,16 @@ function incrementState(toIncrement, name, options) {
         if (name != null && name !== "" && obj[redemptionHistoryKey][name] != null) {
             if (toIncrement == StateKeys.numberOfBlesses) {
                 console.log("Incrementing blesses for user " + name);
-                obj[redemptionHistoryKey][name][StateKeys.numberOfBlesses] = obj[redemptionHistoryKey][name]["numberOfBlesses"] + 1;
+                obj[redemptionHistoryKey][name][StateKeys.numberOfBlesses] =
+                    obj[redemptionHistoryKey][name]["numberOfBlesses"] + 1;
                 charType = TYPE_BLESS;
                 meterTarget = TYPE_BLESS;
                 meterAmount = 1;
             }
             else if (toIncrement == StateKeys.numberOfCurses) {
                 console.log("Incrementing curses for user " + name);
-                obj[redemptionHistoryKey][name][StateKeys.numberOfCurses] = obj[redemptionHistoryKey][name]["numberOfCurses"] + 1;
+                obj[redemptionHistoryKey][name][StateKeys.numberOfCurses] =
+                    obj[redemptionHistoryKey][name]["numberOfCurses"] + 1;
                 charType = TYPE_CURSE;
                 meterTarget = TYPE_CURSE;
                 meterAmount = 1;
@@ -292,16 +296,20 @@ function incrementState(toIncrement, name, options) {
         // Reusing this id on the new lastRedemption marks it as already announced.
         const previousRedemptionId = getRedemptionAnnouncementId(obj);
         const metersReset = bothMetersAreAtMax(obj);
-        if (recordRedemption && name != null && name !== ""
-            && meterTarget != undefined && meterAmount != undefined && charType != undefined) {
+        if (recordRedemption &&
+            name != null &&
+            name !== "" &&
+            meterTarget != undefined &&
+            meterAmount != undefined &&
+            charType != undefined) {
             obj["lastRedemption"] = {
-                "redeemingUser": name,
-                "charType": charType,
-                "meterTarget": meterTarget,
-                "meterAmount": meterAmount,
+                redeemingUser: name,
+                charType: charType,
+                meterTarget: meterTarget,
+                meterAmount: meterAmount,
                 // A reset swallows the announcement, so keep the prior id instead
                 // of minting one that would read as "not yet announced".
-                "id": metersReset ? previousRedemptionId : createRedemptionId(),
+                id: metersReset ? previousRedemptionId : createRedemptionId(),
             };
         }
         if (metersReset) {
@@ -341,7 +349,8 @@ function resetMetersButKeepCurrentState(widgetState) {
     const numberOfBlessesPreReset = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlessesPreReset]) + numberOfBlesses;
     const numberOfCursesPreReset = getOrDefaultCount(widgetState.current[StateKeys.numberOfCursesPreReset]) + numberOfCurses;
     const numberOfBlursesPreReset = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesPreReset]) + numberOfBlurses;
-    const numberOfBlursesThatBlessedPreReset = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatBlessedPreReset]) + numberOfBlursesThatBlessed;
+    const numberOfBlursesThatBlessedPreReset = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatBlessedPreReset]) +
+        numberOfBlursesThatBlessed;
     const numberOfBlursesThatCursedPreReset = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatCursedPreReset]) + numberOfBlursesThatCursed;
     // Structured as a complete WidgetState literal for TypeScript type safety.
     // Original built this incrementally via property assignments.
@@ -373,9 +382,7 @@ function resetMetersButKeepCurrentState(widgetState) {
  * @param obj - The value to test.
  */
 function storeHasBeenInitialized(obj) {
-    return obj != undefined
-        && obj.current != undefined
-        && obj.allTime != undefined;
+    return obj != undefined && obj.current != undefined && obj.allTime != undefined;
 }
 /**
  * Returns true when {@link obj} is a valid {@link WidgetState} and the named
@@ -385,11 +392,11 @@ function storeHasBeenInitialized(obj) {
  * @param toIncrement - The field name to verify.
  */
 function canIncrement(obj, toIncrement) {
-    return obj != undefined
-        && obj.current != undefined
-        && obj.allTime != undefined
-        && obj.current[toIncrement] != undefined
-        && obj.allTime[toIncrement] != undefined;
+    return (obj != undefined &&
+        obj.current != undefined &&
+        obj.allTime != undefined &&
+        obj.current[toIncrement] != undefined &&
+        obj.allTime[toIncrement] != undefined);
 }
 /**
  * Ensures the named field exists as a numeric value in both
@@ -456,15 +463,17 @@ function eventReceivedHandler(event) {
     }
     else if (detail.listener === "kvstore:update") {
         console.log(`Key store was updated so update the widget display ${JSON.stringify(obj)}`);
-        if (seEvent != undefined && seEvent.data != undefined
-            && seEvent.data.key === STORE_KEY_NAME && seEvent.data.value != undefined) {
+        if (seEvent != undefined &&
+            seEvent.data != undefined &&
+            seEvent.data.key === STORE_KEY_NAME &&
+            seEvent.data.value != undefined) {
             console.log("Updating widget display");
             updateDisplay(seEvent.data.value, true);
         }
         else {
             console.log(`This kvstore update may be invalid or not for us but we are going to check current state anyway as a fallback. This was necessary during testing on SE site.`);
             console.log(`A different key store item was saved ${JSON.stringify(obj)}`);
-            SE_API.store.get(STORE_KEY_NAME).then(state => {
+            SE_API.store.get(STORE_KEY_NAME).then((state) => {
                 console.log(`Retrieved widget state: ${JSON.stringify(state)}`);
                 lastWidgetState = state;
                 updateDisplay(state, true);
@@ -491,7 +500,7 @@ function widgetLoadHandler(event) {
         applyFieldData(obj.detail.fieldData);
     }
     try {
-        SE_API.store.get(STORE_KEY_NAME).then(retrieved => {
+        SE_API.store.get(STORE_KEY_NAME).then((retrieved) => {
             console.log(`Initializing with retrieved widgetState from store: ${JSON.stringify(retrieved)}`);
             if (storeHasBeenInitialized(retrieved)) {
                 // Treat whatever is already stored as announced so a refresh does
@@ -566,12 +575,8 @@ function showCharSvg(type) {
         console.log("Not running the showChars functionality");
         return Promise.resolve();
     }
-    let target = null;
-    const targets = [
-        getBlessSvg(),
-        getCurseSvg(),
-        getBlurseSvg(),
-    ];
+    let target;
+    const targets = [getBlessSvg(), getCurseSvg(), getBlurseSvg()];
     if (type === TYPE_BLESS) {
         target = targets[0];
     }
@@ -589,7 +594,7 @@ function showCharSvg(type) {
     if (target && target.length > 0) {
         console.log(`Showing ${JSON.stringify(target.get(0))}`);
         const finalTarget = target;
-        return new Promise(resolve => {
+        return new Promise((resolve) => {
             finalTarget.show({
                 duration: 0,
                 queue: true,
@@ -614,8 +619,8 @@ function bothMetersAreAtMax(widgetState) {
     const numberOfCurses = getOrDefaultCount(widgetState.current[StateKeys.numberOfCurses]);
     const numberOfBlursesThatBlessed = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatBlessed]);
     const numberOfBlursesThatCursed = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatCursed]);
-    const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
-    const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
+    const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * 2;
+    const effectiveCurses = numberOfCurses + numberOfBlursesThatCursed * 2;
     return effectiveBlesses >= meterMaximum && effectiveCurses >= meterMaximum;
 }
 /**
@@ -638,9 +643,10 @@ function getRedemptionName(detail) {
         redemptionName = (_a = detail.event.data.redemption) !== null && _a !== void 0 ? _a : null;
     }
     // the rest of this is where I thought the redemption name would be either from the SE docs or SE mock redeems
-    if (redemptionName == null && detail.session != undefined
-        && detail.session.data != undefined
-        && detail.session.data["channel-points-latest"] != undefined) {
+    if (redemptionName == null &&
+        detail.session != undefined &&
+        detail.session.data != undefined &&
+        detail.session.data["channel-points-latest"] != undefined) {
         // the name in this case is here
         // the stream elements docs for twitch suggest this is where it would be
         // but the emulate function on stream elements always has it in detail.event.itemId
@@ -665,7 +671,7 @@ function getRedeemingUserName(detail) {
     if (detail == null || detail.event == null) {
         return null;
     }
-    let name = detail.event.name;
+    const name = detail.event.name;
     if (name == undefined || name.length == 0) {
         return null;
     }
@@ -700,7 +706,10 @@ function updateDisplay(widgetState, showAnimate, announceRedemption) {
         lastAnnouncedRedemptionId = announcementId;
     }
     displayQueue.enqueue(() => __awaiter(this, void 0, void 0, function* () {
-        if (showAnimate && announce && showRedemptionAnnouncements && hasValidLastRedemption(widgetState.lastRedemption)) {
+        if (showAnimate &&
+            announce &&
+            showRedemptionAnnouncements &&
+            hasValidLastRedemption(widgetState.lastRedemption)) {
             yield animateRedemptionAnnouncement(widgetState.lastRedemption);
         }
         yield processDisplay(widgetState, showAnimate);
@@ -728,7 +737,8 @@ function applyFieldData(fieldData) {
     if (fieldData.showRedemptionAnnouncements != null && typeof fieldData.showRedemptionAnnouncements === "boolean") {
         showRedemptionAnnouncements = fieldData.showRedemptionAnnouncements;
     }
-    if (fieldData.numberOfSecondsBetweenReports != null && typeof fieldData.numberOfSecondsBetweenReports === "number") {
+    if (fieldData.numberOfSecondsBetweenReports != null &&
+        typeof fieldData.numberOfSecondsBetweenReports === "number") {
         numberOfSecondsBetweenReports = Math.max(0, Math.floor(fieldData.numberOfSecondsBetweenReports));
     }
     if (fieldData.reportsShouldDisplay != null && typeof fieldData.reportsShouldDisplay === "boolean") {
@@ -775,8 +785,8 @@ function parseEmoteNamesCsv(csv) {
     }
     return csv
         .split(",")
-        .map(part => part.trim())
-        .filter(part => part.length > 0);
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0);
 }
 /**
  * @param emoteName - Raw emote name from chat or config.
@@ -822,7 +832,7 @@ function findMatchingTrackedEmotesInChat(message, trackedLower) {
  */
 function pruneEmoteWindowEntries(nowMs, windowMs) {
     const cutoff = nowMs - windowMs;
-    emoteWindowEntries = emoteWindowEntries.filter(entry => entry.timestamp >= cutoff);
+    emoteWindowEntries = emoteWindowEntries.filter((entry) => entry.timestamp >= cutoff);
 }
 /**
  * Returns distinct display names among entries in the current emote window.
@@ -913,12 +923,10 @@ function triggerEmoteBlessReward(distinctDisplayNames, matchCount) {
  */
 function buildEmoteBlessAnnouncementSegments(distinctDisplayNames, matchCount) {
     // userSummary is currently unused, but may be used in the future.
-    const userSummary = distinctDisplayNames.length === 0
-        ? "chat"
-        : distinctDisplayNames.join(", ");
+    const userSummary = distinctDisplayNames.length === 0 ? "chat" : distinctDisplayNames.join(", ");
     return [
-        { text: formatEmoteBlessHeadline(emoteBlessHeadlineText), },
-        { text: "Impact: ", },
+        { text: formatEmoteBlessHeadline(emoteBlessHeadlineText) },
+        { text: "Impact: " },
         { text: "+1 BLESS", colorClass: "redemption-text-bless" },
     ];
 }
@@ -1018,8 +1026,8 @@ function processDisplay(widgetState, showAnimate) {
         updateToggleButtonDisplay(isShowingAll(widgetState));
     }
     else {
-        const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
-        const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
+        const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * 2;
+        const effectiveCurses = numberOfCurses + numberOfBlursesThatCursed * 2;
         const effectiveTotal = effectiveBlesses + effectiveCurses;
         console.log("Computing widths for the meters");
         console.log(`Current widths are bless: ${blessMeterFill.css("width")}, curse: ${curseMeterFill.css("width")}`);
@@ -1032,8 +1040,10 @@ function processDisplay(widgetState, showAnimate) {
         }
         else {
             console.log(`Showing run so meter length is based on ${meterMaximum} max`);
-            blessWidth = ((effectiveBlesses >= meterMaximum ? 100 : (effectiveBlesses / meterMaximum) * 100)).toFixed(2) + "%";
-            curseWidth = ((effectiveCurses >= meterMaximum ? 100 : (effectiveCurses / meterMaximum) * 100)).toFixed(2) + "%";
+            blessWidth =
+                (effectiveBlesses >= meterMaximum ? 100 : (effectiveBlesses / meterMaximum) * 100).toFixed(2) + "%";
+            curseWidth =
+                (effectiveCurses >= meterMaximum ? 100 : (effectiveCurses / meterMaximum) * 100).toFixed(2) + "%";
         }
         updateToggleButtonDisplay(isShowingAll(widgetState));
         console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}`);
@@ -1087,11 +1097,11 @@ function getRedemptionAnnouncementId(widgetState) {
     return (_a = lastRedemption.id) !== null && _a !== void 0 ? _a : null;
 }
 function hasValidLastRedemption(lastRedemption) {
-    return lastRedemption != undefined
-        && typeof lastRedemption["redeemingUser"] === "string"
-        && typeof lastRedemption["charType"] === "string"
-        && typeof lastRedemption["meterTarget"] === "string"
-        && typeof lastRedemption["meterAmount"] === "number";
+    return (lastRedemption != undefined &&
+        typeof lastRedemption["redeemingUser"] === "string" &&
+        typeof lastRedemption["charType"] === "string" &&
+        typeof lastRedemption["meterTarget"] === "string" &&
+        typeof lastRedemption["meterAmount"] === "number");
 }
 /**
  * Hides the meter panel, types a redemption summary letter-by-letter into the
@@ -1157,10 +1167,7 @@ function animateOverlayTypewriter(segments, options) {
             liftAnnouncementText(textContainer, { pinToTop: true });
         }
         yield waitMs(redemptionHoldAfterTypeMs);
-        announcement
-            .removeClass("visible is-headline is-list")
-            .attr("aria-hidden", "true")
-            .empty();
+        announcement.removeClass("visible is-headline is-list").attr("aria-hidden", "true").empty();
         meterPanel.removeClass("hidden");
     });
 }
@@ -1237,21 +1244,18 @@ function buildTopRedeemersListSegments(redeemers) {
     if (redeemers.length === 0) {
         return [{ text: "No redeems yet" }];
     }
-    return [{
-            text: redeemers
-                .map((row, index) => `${index + 1}. ${row.userName} - ${row.count}`)
-                .join("\n"),
-        }];
+    return [
+        {
+            text: redeemers.map((row, index) => `${index + 1}. ${row.userName} - ${row.count}`).join("\n"),
+        },
+    ];
 }
 /**
  * Builds typewriter segments for a top-redeemers leaderboard overlay.
  * @deprecated Prefer {@link buildTopRedeemersTitleSegments} and {@link buildTopRedeemersListSegments}.
  */
 function buildTopRedeemersReportSegments(title, redeemers) {
-    return [
-        { text: `${title}\n` },
-        ...buildTopRedeemersListSegments(redeemers),
-    ];
+    return [{ text: `${title}\n` }, ...buildTopRedeemersListSegments(redeemers)];
 }
 /**
  * Builds the redemption summary as colored segments for the typewriter animation.
@@ -1334,7 +1338,7 @@ function typewriterSegments(element, segments, letterDelayMs) {
             flatChars.push({ char: char, colorClass: segment.colorClass });
         }
     }
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
         element.innerHTML = "";
         if (flatChars.length === 0) {
             resolve();
@@ -1378,7 +1382,10 @@ function renderTypewriterChars(element, flatChars, visibleCount) {
         if (colorClass) {
             span.className = colorClass;
         }
-        span.textContent = flatChars.slice(index, end).map(entry => entry.char).join("");
+        span.textContent = flatChars
+            .slice(index, end)
+            .map((entry) => entry.char)
+            .join("");
         element.appendChild(span);
         index = end;
     }
@@ -1418,7 +1425,7 @@ function liftAnnouncementText(element, options) {
 }
 /** @param durationMs - How long to wait before resolving. */
 function waitMs(durationMs) {
-    return new Promise(resolve => window.setTimeout(resolve, durationMs));
+    return new Promise((resolve) => window.setTimeout(resolve, durationMs));
 }
 /**
  * Returns the count for the named key from the appropriate portion of state:
@@ -1519,9 +1526,7 @@ function animateMeterFill(ele, targetWidth, durationOfAnimation, type) {
         return () => Promise.resolve();
     }
     const parentWidth = (_b = (_a = ele.parentElement) === null || _a === void 0 ? void 0 : _a.clientWidth) !== null && _b !== void 0 ? _b : 0;
-    const currentWidth = parentWidth > 0
-        ? `${((ele.offsetWidth / parentWidth) * 100).toFixed(2)}%`
-        : (ele.style.width || "0%");
+    const currentWidth = parentWidth > 0 ? `${((ele.offsetWidth / parentWidth) * 100).toFixed(2)}%` : ele.style.width || "0%";
     return animateChange(ele, currentWidth, targetWidth, durationOfAnimation, type);
 }
 function animateChange(ele, currentWidth, targetWidth, durationOfAnimation, type) {
@@ -1542,11 +1547,8 @@ function animateChange(ele, currentWidth, targetWidth, durationOfAnimation, type
     }
     const fromWidth = fromPercent != null ? `${fromPercent.toFixed(2)}%` : currentWidth;
     const toWidth = toPercent != null ? `${toPercent.toFixed(2)}%` : targetWidth;
-    return () => new Promise(resolve => {
-        const animation = ele.animate([
-            { width: fromWidth },
-            { width: toWidth },
-        ], {
+    return () => new Promise((resolve) => {
+        const animation = ele.animate([{ width: fromWidth }, { width: toWidth }], {
             duration: durationOfAnimation, // 1 second
             easing: "ease-in-out", // Optional easing function
             fill: "forwards", // Keep the final state after animation
@@ -1618,7 +1620,7 @@ function endGlowForever(ele, type) {
  * Intended to be called between speedrun attempts via the reset button.
  */
 function resetCurrentState() {
-    SE_API.store.get(STORE_KEY_NAME).then(obj => {
+    SE_API.store.get(STORE_KEY_NAME).then((obj) => {
         if (!obj)
             return;
         obj.lastUpdated = new Date();
@@ -1707,7 +1709,7 @@ function updateBackgroundThemeButtonDisplay(theme) {
  * kvstore:update re-renders every widget instance with the new theme.
  */
 function toggleBackgroundThemeState() {
-    SE_API.store.get(STORE_KEY_NAME).then(obj => {
+    SE_API.store.get(STORE_KEY_NAME).then((obj) => {
         if (!storeHasBeenInitialized(obj)) {
             console.log("Toggling theme: the store object has not yet been initialized. Setting up initial values.");
             obj = initialWidgetState;
@@ -1733,9 +1735,7 @@ function toggleBackgroundTheme() {
  * @param widgetState - The state to check, or null/undefined.
  */
 function isShowingAll(widgetState) {
-    const result = widgetState != undefined
-        && widgetState[ATTRIBUTE_SHOW_ALL] != undefined
-        && widgetState[ATTRIBUTE_SHOW_ALL];
+    const result = widgetState != undefined && widgetState[ATTRIBUTE_SHOW_ALL] != undefined && widgetState[ATTRIBUTE_SHOW_ALL];
     console.log(`isShowingAll? ${result}`);
     return result;
 }
@@ -1778,7 +1778,7 @@ function mockRedeemEvent(redemptionName) {
                 data: {
                     redemption: redemptionName,
                 },
-                name: "testUserName"
+                name: "testUserName",
             },
         },
     });

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -85,12 +85,14 @@
         /* checkerboard so transparent widget regions are obvious, like OBS */
         background-color: #2a2a33;
         background-image:
-          linear-gradient(45deg, #23232b 25%, transparent 25%),
-          linear-gradient(-45deg, #23232b 25%, transparent 25%),
-          linear-gradient(45deg, transparent 75%, #23232b 75%),
-          linear-gradient(-45deg, transparent 75%, #23232b 75%);
+          linear-gradient(45deg, #23232b 25%, transparent 25%), linear-gradient(-45deg, #23232b 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #23232b 75%), linear-gradient(-45deg, transparent 75%, #23232b 75%);
         background-size: 24px 24px;
-        background-position: 0 0, 0 12px, 12px -12px, -12px 0px;
+        background-position:
+          0 0,
+          0 12px,
+          12px -12px,
+          -12px 0px;
       }
 
       #stage iframe {
@@ -256,8 +258,8 @@
       <fieldset>
         <legend>Redeem</legend>
         <p class="hint">
-          Dispatches an <code>onEventReceived</code> event on the widget window, the same way
-          StreamElements delivers a channel point redemption.
+          Dispatches an <code>onEventReceived</code> event on the widget window, the same way StreamElements delivers a
+          channel point redemption.
         </p>
         <div class="row">
           <button class="bless" data-redeem="Bless the Run">Bless the Run</button>
@@ -299,8 +301,8 @@
       <fieldset>
         <legend>Field data</legend>
         <p class="hint">
-          Defaults come from <code>widgetFields.json</code>. Firing
-          <code>onWidgetLoad</code> re-applies them, as StreamElements does when the overlay loads.
+          Defaults come from <code>widgetFields.json</code>. Firing <code>onWidgetLoad</code> re-applies them, as
+          StreamElements does when the overlay loads.
         </p>
         <div class="row">
           <label for="field-meter-maximum">meterMaximum</label>
@@ -345,10 +347,9 @@
       <fieldset>
         <legend>Chat / emotes</legend>
         <p class="hint">
-          Dispatches an <code>onEventReceived</code> chat <code>message</code>, matching
-          StreamElements. Enable <code>emoteBlessEnabled</code> and fire
-          <code>onWidgetLoad</code> first. Matching uses <code>event.data.emotes</code>
-          when present, otherwise whitespace tokens in <code>text</code>.
+          Dispatches an <code>onEventReceived</code> chat <code>message</code>, matching StreamElements. Enable
+          <code>emoteBlessEnabled</code> and fire <code>onWidgetLoad</code> first. Matching uses
+          <code>event.data.emotes</code> when present, otherwise whitespace tokens in <code>text</code>.
         </p>
         <div class="row">
           <label for="chat-user">User</label>
@@ -380,9 +381,7 @@
 
       <fieldset>
         <legend>Store</legend>
-        <p class="hint">
-          The mocked <code>SE_API.store</code> is backed by localStorage, so state survives reloads.
-        </p>
+        <p class="hint">The mocked <code>SE_API.store</code> is backed by localStorage, so state survives reloads.</p>
         <div class="row">
           <select id="preset" class="grow">
             <option value="empty">Empty (all zeros)</option>
@@ -408,8 +407,8 @@
       <fieldset>
         <legend>Background theme</legend>
         <p class="hint">
-          The theme lives in the store alongside <code>showAll</code>, so switching it
-          travels through a <code>kvstore:update</code> just like it does on StreamElements.
+          The theme lives in the store alongside <code>showAll</code>, so switching it travels through a
+          <code>kvstore:update</code> just like it does on StreamElements.
         </p>
         <div class="row">
           <button id="theme-click-button">Click widget button</button>
@@ -700,7 +699,7 @@
       /** Resolves after the configured fake store latency. */
       function delay() {
         const ms = Number(document.getElementById("store-latency").value) || 0;
-        return ms > 0 ? new Promise(resolve => window.setTimeout(resolve, ms)) : Promise.resolve();
+        return ms > 0 ? new Promise((resolve) => window.setTimeout(resolve, ms)) : Promise.resolve();
       }
 
       // =====================================================================
@@ -832,7 +831,7 @@
         };
         if (options.includeEmotesArray !== false) {
           const names = options.emoteNames || [];
-          data.emotes = names.map(name => ({ name: name }));
+          data.emotes = names.map((name) => ({ name: name }));
         }
         return { listener: "message", event: { data: data } };
       }
@@ -845,7 +844,10 @@
         if (!csv || !csv.trim()) {
           return [];
         }
-        return csv.split(",").map(part => part.trim()).filter(part => part.length > 0);
+        return csv
+          .split(",")
+          .map((part) => part.trim())
+          .filter((part) => part.length > 0);
       }
 
       /**
@@ -939,12 +941,14 @@
       function fireRedemption(redemptionName) {
         const win = widgetWindow();
         if (!win) return;
-        const path = /** @type {"eventData"|"session"|"itemId"} */ (
-          document.getElementById("payload-path").value
-        );
+        const path = /** @type {"eventData"|"session"|"itemId"} */ (document.getElementById("payload-path").value);
         const user = document.getElementById("redeem-user").value.trim();
         log(`dispatch onEventReceived redemption "${redemptionName}" (${path}, user "${user}")`, "event");
-        dispatchToWidget(win, "onEventReceived", makeRedemptionDetail({ name: redemptionName, user: user, path: path }));
+        dispatchToWidget(
+          win,
+          "onEventReceived",
+          makeRedemptionDetail({ name: redemptionName, user: user, path: path })
+        );
       }
 
       /** Fires onWidgetLoad using the current field data inputs. */
@@ -973,12 +977,16 @@
           `dispatch onEventReceived message from "${displayName}" text="${text}" emotes=[${emoteNames.join(",")}] array=${includeEmotesArray}`,
           "event"
         );
-        dispatchToWidget(win, "onEventReceived", makeChatMessageDetail({
-          displayName: displayName,
-          text: text,
-          emoteNames: emoteNames,
-          includeEmotesArray: includeEmotesArray,
-        }));
+        dispatchToWidget(
+          win,
+          "onEventReceived",
+          makeChatMessageDetail({
+            displayName: displayName,
+            text: text,
+            emoteNames: emoteNames,
+            includeEmotesArray: includeEmotesArray,
+          })
+        );
       }
 
       /**
@@ -997,14 +1005,18 @@
         log(`chat burst of ${count} matching messages, ${gap}ms apart`, "event");
         for (let index = 0; index < count; index++) {
           const displayName = `${baseUser}${index + 1}`;
-          dispatchToWidget(win, "onEventReceived", makeChatMessageDetail({
-            displayName: displayName,
-            text: text,
-            emoteNames: emoteNames,
-            includeEmotesArray: includeEmotesArray,
-          }));
+          dispatchToWidget(
+            win,
+            "onEventReceived",
+            makeChatMessageDetail({
+              displayName: displayName,
+              text: text,
+              emoteNames: emoteNames,
+              includeEmotesArray: includeEmotesArray,
+            })
+          );
           if (gap > 0 && index < count - 1) {
-            await new Promise(resolve => window.setTimeout(resolve, gap));
+            await new Promise((resolve) => window.setTimeout(resolve, gap));
           }
         }
       }
@@ -1048,12 +1060,10 @@
         const type = document.getElementById("burst-type").value;
         log(`burst of ${count} (${type}), ${gap}ms apart`, "event");
         for (let index = 0; index < count; index++) {
-          const name = type === "random"
-            ? REDEMPTION_NAMES[Math.floor(Math.random() * REDEMPTION_NAMES.length)]
-            : type;
+          const name = type === "random" ? REDEMPTION_NAMES[Math.floor(Math.random() * REDEMPTION_NAMES.length)] : type;
           fireRedemption(name);
           if (gap > 0) {
-            await new Promise(resolve => window.setTimeout(resolve, gap));
+            await new Promise((resolve) => window.setTimeout(resolve, gap));
           }
         }
       }
@@ -1124,7 +1134,7 @@
         win.console.log = function (...args) {
           original(...args);
           if (document.getElementById("log-console").checked) {
-            log(args.map(arg => (typeof arg === "string" ? arg : JSON.stringify(arg))).join(" "), "console");
+            log(args.map((arg) => (typeof arg === "string" ? arg : JSON.stringify(arg))).join(" "), "console");
           }
         };
       }
@@ -1146,7 +1156,9 @@
         applyFrameSize(frame);
         const loaded = new Promise((resolve, reject) => {
           frame.addEventListener("load", () => resolve(), { once: true });
-          frame.addEventListener("error", () => reject(new Error("widget.html failed to load")), { once: true });
+          frame.addEventListener("error", () => reject(new Error("widget.html failed to load")), {
+            once: true,
+          });
         });
         const cacheBust = Date.now();
         frame.src = `${WIDGET_HTML_URL}?t=${cacheBust}`;
@@ -1211,10 +1223,13 @@
             document.getElementById("field-show-chars").checked = fields.showChars.value;
           }
           if (fields.showRedemptionAnnouncements && typeof fields.showRedemptionAnnouncements.value === "boolean") {
-            document.getElementById("field-show-redemption-announcements").checked = fields.showRedemptionAnnouncements.value;
+            document.getElementById("field-show-redemption-announcements").checked =
+              fields.showRedemptionAnnouncements.value;
           }
           if (fields.numberOfSecondsBetweenReports && typeof fields.numberOfSecondsBetweenReports.value === "number") {
-            document.getElementById("field-seconds-between-reports").value = String(fields.numberOfSecondsBetweenReports.value);
+            document.getElementById("field-seconds-between-reports").value = String(
+              fields.numberOfSecondsBetweenReports.value
+            );
           }
           if (fields.reportsShouldDisplay && typeof fields.reportsShouldDisplay.value === "boolean") {
             document.getElementById("field-reports-should-display").checked = fields.reportsShouldDisplay.value;
@@ -1229,10 +1244,14 @@
             document.getElementById("field-emote-bless-window").value = String(fields.emoteBlessWindowSeconds.value);
           }
           if (fields.emoteBlessRequiredMatches && typeof fields.emoteBlessRequiredMatches.value === "number") {
-            document.getElementById("field-emote-bless-required").value = String(fields.emoteBlessRequiredMatches.value);
+            document.getElementById("field-emote-bless-required").value = String(
+              fields.emoteBlessRequiredMatches.value
+            );
           }
           if (fields.emoteBlessCooldownSeconds && typeof fields.emoteBlessCooldownSeconds.value === "number") {
-            document.getElementById("field-emote-bless-cooldown").value = String(fields.emoteBlessCooldownSeconds.value);
+            document.getElementById("field-emote-bless-cooldown").value = String(
+              fields.emoteBlessCooldownSeconds.value
+            );
           }
           if (fields.emoteBlessHeadlineText && typeof fields.emoteBlessHeadlineText.value === "string") {
             document.getElementById("field-emote-bless-headline").value = fields.emoteBlessHeadlineText.value;
@@ -1332,7 +1351,12 @@
             redemptionHistory: {
               testUserName: { numberOfBlesses: 4, numberOfCurses: 2, numberOfBlurses: 3 },
             },
-            lastRedemption: { redeemingUser: "testUserName", charType: "blurse", meterTarget: "curse", meterAmount: 2 },
+            lastRedemption: {
+              redeemingUser: "testUserName",
+              charType: "blurse",
+              meterTarget: "curse",
+              meterAmount: 2,
+            },
           });
         }
         if (name === "blessMaxed") {
@@ -1391,7 +1415,7 @@
       // Wiring
       // =====================================================================
 
-      document.querySelectorAll("button[data-redeem]").forEach(button => {
+      document.querySelectorAll("button[data-redeem]").forEach((button) => {
         button.addEventListener("click", () => fireRedemption(button.dataset.redeem));
       });
 

@@ -92,7 +92,7 @@ server.listen(port, () => {
   console.log(`v1 test harness: http://localhost:${port}${HARNESS_PATH}`);
 });
 
-server.on("error", error => {
+server.on("error", (error) => {
   if (error.code === "EADDRINUSE") {
     console.error(`Port ${port} is already in use. Try: node scripts/devServer.js --port ${port + 1}`);
     process.exit(1);
