@@ -1138,7 +1138,7 @@ function animateOverlayTypewriter(segments, options) {
             textContainer.classList.add("redemption-announcement-list");
         }
         announcement
-            .removeClass("is-headline is-list")
+            .removeClass("is-headline is-list is-redemption")
             .addClass("visible")
             .attr("aria-hidden", "false")
             .empty()
@@ -1149,8 +1149,11 @@ function animateOverlayTypewriter(segments, options) {
         else if (layout === "list") {
             announcement.addClass("is-list");
         }
+        else {
+            announcement.addClass("is-redemption");
+        }
         meterPanel.addClass("hidden");
-        if (layout === "list" && announcementElement) {
+        if ((layout === "list" || layout === "default") && announcementElement) {
             textContainer.style.maxHeight = `${announcementElement.clientHeight}px`;
         }
         yield typewriterSegments(textContainer, segments, redemptionLetterDelayMs);
@@ -1158,7 +1161,7 @@ function animateOverlayTypewriter(segments, options) {
             liftAnnouncementText(textContainer, { pinToTop: true });
         }
         yield waitMs(redemptionHoldAfterTypeMs);
-        announcement.removeClass("visible is-headline is-list").attr("aria-hidden", "true").empty();
+        announcement.removeClass("visible is-headline is-list is-redemption").attr("aria-hidden", "true").empty();
         meterPanel.removeClass("hidden");
     });
 }
@@ -1385,9 +1388,11 @@ function renderTypewriterChars(element, flatChars, visibleCount) {
         liftAnnouncementText(element);
     }
 }
-/** Headline and report list overlays keep a stable position while typewriting. */
+/** Overlays that must not vertically recenter on every typed character. */
 function usesFixedOverlayLayout(parent) {
-    return parent.classList.contains("is-headline") || parent.classList.contains("is-list");
+    return (parent.classList.contains("is-headline") ||
+        parent.classList.contains("is-list") ||
+        parent.classList.contains("is-redemption"));
 }
 /**
  * Positions overlay copy inside the fixed announcement window. Short messages

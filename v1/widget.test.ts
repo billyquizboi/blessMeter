@@ -879,6 +879,22 @@ describe("typewriterSegments", () => {
     expect(container.style.maxHeight).toBe("");
   });
 
+  it("does not vertically recenter redemption overlays while typing", async () => {
+    const parent = w.document.createElement("div");
+    parent.className = "redemption-announcement visible is-redemption";
+    Object.defineProperty(parent, "clientHeight", { value: 60, configurable: true });
+    const container = w.document.createElement("div");
+    container.className = "redemption-announcement-text";
+    container.style.maxHeight = "60px";
+    parent.appendChild(container);
+    w.document.body.appendChild(parent);
+
+    const segments = w.buildRedemptionAnnouncementSegments(makeLastRedemption());
+    await w.typewriterSegments(container, segments, 0);
+
+    expect(container.style.marginTop).toBe("");
+  });
+
   it("does not vertically recenter list overlays while typing top redeemers", async () => {
     const parent = w.document.createElement("div");
     parent.className = "redemption-announcement visible is-list";

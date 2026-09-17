@@ -1246,7 +1246,7 @@ async function animateOverlayTypewriter(
   }
 
   announcement
-    .removeClass("is-headline is-list")
+    .removeClass("is-headline is-list is-redemption")
     .addClass("visible")
     .attr("aria-hidden", "false")
     .empty()
@@ -1255,11 +1255,13 @@ async function animateOverlayTypewriter(
     announcement.addClass("is-headline");
   } else if (layout === "list") {
     announcement.addClass("is-list");
+  } else {
+    announcement.addClass("is-redemption");
   }
 
   meterPanel.addClass("hidden");
 
-  if (layout === "list" && announcementElement) {
+  if ((layout === "list" || layout === "default") && announcementElement) {
     textContainer.style.maxHeight = `${announcementElement.clientHeight}px`;
   }
 
@@ -1269,7 +1271,7 @@ async function animateOverlayTypewriter(
   }
   await waitMs(redemptionHoldAfterTypeMs);
 
-  announcement.removeClass("visible is-headline is-list").attr("aria-hidden", "true").empty();
+  announcement.removeClass("visible is-headline is-list is-redemption").attr("aria-hidden", "true").empty();
   meterPanel.removeClass("hidden");
 }
 
@@ -1531,9 +1533,13 @@ function renderTypewriterChars(
   }
 }
 
-/** Headline and report list overlays keep a stable position while typewriting. */
+/** Overlays that must not vertically recenter on every typed character. */
 function usesFixedOverlayLayout(parent: HTMLElement): boolean {
-  return parent.classList.contains("is-headline") || parent.classList.contains("is-list");
+  return (
+    parent.classList.contains("is-headline") ||
+    parent.classList.contains("is-list") ||
+    parent.classList.contains("is-redemption")
+  );
 }
 
 /**
