@@ -877,6 +877,25 @@ describe("typewriterSegments", () => {
     expect(container.style.maxHeight).toBe("");
   });
 
+  it("does not vertically recenter list overlays while typing top redeemers", async () => {
+    const parent = w.document.createElement("div");
+    parent.className = "redemption-announcement visible is-list";
+    Object.defineProperty(parent, "clientHeight", { value: 60, configurable: true });
+    const container = w.document.createElement("div");
+    container.className = "redemption-announcement-text redemption-announcement-list";
+    container.style.maxHeight = "60px";
+    parent.appendChild(container);
+    w.document.body.appendChild(parent);
+
+    await w.typewriterSegments(
+      container,
+      [{ text: "1. alice - 3\n2. bob - 2\n3. carol - 1" }],
+      0
+    );
+
+    expect(container.style.marginTop).toBe("");
+  });
+
   it("reveals text one character at a time", async () => {
     const container = w.document.createElement("div");
     const promise = w.typewriterSegments(container, [{ text: "abc" }], 10);

@@ -1244,6 +1244,10 @@ async function animateOverlayTypewriter(
 
     meterPanel.addClass("hidden");
 
+    if (layout === "list" && announcementElement) {
+        textContainer.style.maxHeight = `${announcementElement.clientHeight}px`;
+    }
+
     await typewriterSegments(textContainer, segments, redemptionLetterDelayMs);
     if (layout !== "headline") {
         liftAnnouncementText(textContainer, { pinToTop: true });
@@ -1508,9 +1512,15 @@ function renderTypewriterChars(
         element.appendChild(span);
         index = end;
     }
-    if (!element.parentElement?.classList.contains("is-headline")) {
+    const parent = element.parentElement;
+    if (parent != null && !usesFixedOverlayLayout(parent)) {
         liftAnnouncementText(element);
     }
+}
+
+/** Headline and report list overlays keep a stable position while typewriting. */
+function usesFixedOverlayLayout(parent: HTMLElement): boolean {
+    return parent.classList.contains("is-headline") || parent.classList.contains("is-list");
 }
 
 /**
@@ -1527,9 +1537,11 @@ function liftAnnouncementText(element: HTMLElement, options?: { pinToTop?: boole
     element.style.maxHeight = `${parent.clientHeight}px`;
     const overflows = element.scrollHeight > element.clientHeight;
     if (!overflows) {
-        const extraSpace = parent.clientHeight - element.scrollHeight;
-        if (extraSpace > 0) {
-            element.style.marginTop = `${Math.floor(extraSpace / 2)}px`;
+        if (!usesFixedOverlayLayout(parent)) {
+            const extraSpace = parent.clientHeight - element.scrollHeight;
+            if (extraSpace > 0) {
+                element.style.marginTop = `${Math.floor(extraSpace / 2)}px`;
+            }
         }
         element.scrollTop = 0;
         return;

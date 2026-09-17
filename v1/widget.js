@@ -1149,6 +1149,9 @@ function animateOverlayTypewriter(segments, options) {
             announcement.addClass("is-list");
         }
         meterPanel.addClass("hidden");
+        if (layout === "list" && announcementElement) {
+            textContainer.style.maxHeight = `${announcementElement.clientHeight}px`;
+        }
         yield typewriterSegments(textContainer, segments, redemptionLetterDelayMs);
         if (layout !== "headline") {
             liftAnnouncementText(textContainer, { pinToTop: true });
@@ -1363,7 +1366,6 @@ function typewriterSegments(element, segments, letterDelayMs) {
  * @param visibleCount - How many characters from the start to show.
  */
 function renderTypewriterChars(element, flatChars, visibleCount) {
-    var _a;
     element.innerHTML = "";
     let index = 0;
     while (index < visibleCount) {
@@ -1380,9 +1382,14 @@ function renderTypewriterChars(element, flatChars, visibleCount) {
         element.appendChild(span);
         index = end;
     }
-    if (!((_a = element.parentElement) === null || _a === void 0 ? void 0 : _a.classList.contains("is-headline"))) {
+    const parent = element.parentElement;
+    if (parent != null && !usesFixedOverlayLayout(parent)) {
         liftAnnouncementText(element);
     }
+}
+/** Headline and report list overlays keep a stable position while typewriting. */
+function usesFixedOverlayLayout(parent) {
+    return parent.classList.contains("is-headline") || parent.classList.contains("is-list");
 }
 /**
  * Positions overlay copy inside the fixed announcement window. Short messages
@@ -1398,9 +1405,11 @@ function liftAnnouncementText(element, options) {
     element.style.maxHeight = `${parent.clientHeight}px`;
     const overflows = element.scrollHeight > element.clientHeight;
     if (!overflows) {
-        const extraSpace = parent.clientHeight - element.scrollHeight;
-        if (extraSpace > 0) {
-            element.style.marginTop = `${Math.floor(extraSpace / 2)}px`;
+        if (!usesFixedOverlayLayout(parent)) {
+            const extraSpace = parent.clientHeight - element.scrollHeight;
+            if (extraSpace > 0) {
+                element.style.marginTop = `${Math.floor(extraSpace / 2)}px`;
+            }
         }
         element.scrollTop = 0;
         return;
