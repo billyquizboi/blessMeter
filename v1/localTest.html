@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -85,12 +85,14 @@
         /* checkerboard so transparent widget regions are obvious, like OBS */
         background-color: #2a2a33;
         background-image:
-          linear-gradient(45deg, #23232b 25%, transparent 25%),
-          linear-gradient(-45deg, #23232b 25%, transparent 25%),
-          linear-gradient(45deg, transparent 75%, #23232b 75%),
-          linear-gradient(-45deg, transparent 75%, #23232b 75%);
+          linear-gradient(45deg, #23232b 25%, transparent 25%), linear-gradient(-45deg, #23232b 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #23232b 75%), linear-gradient(-45deg, transparent 75%, #23232b 75%);
         background-size: 24px 24px;
-        background-position: 0 0, 0 12px, 12px -12px, -12px 0px;
+        background-position:
+          0 0,
+          0 12px,
+          12px -12px,
+          -12px 0px;
       }
 
       #stage iframe {
@@ -256,8 +258,8 @@
       <fieldset>
         <legend>Redeem</legend>
         <p class="hint">
-          Dispatches an <code>onEventReceived</code> event on the widget window, the same way
-          StreamElements delivers a channel point redemption.
+          Dispatches an <code>onEventReceived</code> event on the widget window, the same way StreamElements delivers a
+          channel point redemption.
         </p>
         <div class="row">
           <button class="bless" data-redeem="Bless the Run">Bless the Run</button>
@@ -299,8 +301,8 @@
       <fieldset>
         <legend>Field data</legend>
         <p class="hint">
-          Defaults come from <code>widgetFields.json</code>. Firing
-          <code>onWidgetLoad</code> re-applies them, as StreamElements does when the overlay loads.
+          Defaults come from <code>widgetFields.json</code>. Firing <code>onWidgetLoad</code> re-applies them, as
+          StreamElements does when the overlay loads.
         </p>
         <div class="row">
           <label for="field-meter-maximum">meterMaximum</label>
@@ -309,10 +311,32 @@
           <input id="field-show-chars" type="checkbox" checked />
           <label for="field-show-redemption-announcements">showRedemptionAnnouncements</label>
           <input id="field-show-redemption-announcements" type="checkbox" checked />
+        </div>
+        <div class="row">
           <label for="field-seconds-between-reports">numberOfSecondsBetweenReports</label>
           <input id="field-seconds-between-reports" type="number" min="0" value="90" />
           <label for="field-reports-should-display">reportsShouldDisplay</label>
           <input id="field-reports-should-display" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <label for="field-emote-bless-enabled">emoteBlessEnabled</label>
+          <input id="field-emote-bless-enabled" type="checkbox" />
+        </div>
+        <div class="row">
+          <label for="field-emote-bless-window">emoteBlessWindowSeconds</label>
+          <input id="field-emote-bless-window" type="number" min="1" value="120" />
+          <label for="field-emote-bless-required">emoteBlessRequiredMatches</label>
+          <input id="field-emote-bless-required" type="number" min="1" value="5" />
+          <label for="field-emote-bless-cooldown">emoteBlessCooldownSeconds</label>
+          <input id="field-emote-bless-cooldown" type="number" min="0" value="300" />
+        </div>
+        <div class="row">
+          <label for="field-emote-bless-csv">emoteBlessEmoteNamesCsv</label>
+          <input id="field-emote-bless-csv" class="grow" type="text" value="Kappa,PogChamp" />
+        </div>
+        <div class="row">
+          <label for="field-emote-bless-headline">emoteBlessHeadlineText</label>
+          <input id="field-emote-bless-headline" class="grow" type="text" value="Mustache man blesses the run" />
         </div>
         <div class="row">
           <button id="fire-widget-load">Fire onWidgetLoad</button>
@@ -321,10 +345,43 @@
       </fieldset>
 
       <fieldset>
-        <legend>Store</legend>
+        <legend>Chat / emotes</legend>
         <p class="hint">
-          The mocked <code>SE_API.store</code> is backed by localStorage, so state survives reloads.
+          Dispatches an <code>onEventReceived</code> chat <code>message</code>, matching StreamElements. Enable
+          <code>emoteBlessEnabled</code> and fire <code>onWidgetLoad</code> first. Matching uses
+          <code>event.data.emotes</code> when present, otherwise whitespace tokens in <code>text</code>.
         </p>
+        <div class="row">
+          <label for="chat-user">User</label>
+          <input id="chat-user" class="grow" type="text" value="emoteFan" />
+        </div>
+        <div class="row">
+          <label for="chat-text">Text</label>
+          <input id="chat-text" class="grow" type="text" value="Kappa" />
+        </div>
+        <div class="row">
+          <label for="chat-emotes">Emotes CSV</label>
+          <input id="chat-emotes" class="grow" type="text" value="Kappa" />
+        </div>
+        <div class="row">
+          <label for="chat-include-emotes">include emotes array</label>
+          <input id="chat-include-emotes" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <button id="fire-chat">Fire chat message</button>
+        </div>
+        <div class="row">
+          <label for="chat-burst-count">Burst</label>
+          <input id="chat-burst-count" type="number" min="1" max="100" value="5" />
+          <label for="chat-burst-gap">gap ms</label>
+          <input id="chat-burst-gap" type="number" min="0" max="5000" value="0" />
+          <button id="fire-chat-burst">Fire matching burst</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Store</legend>
+        <p class="hint">The mocked <code>SE_API.store</code> is backed by localStorage, so state survives reloads.</p>
         <div class="row">
           <select id="preset" class="grow">
             <option value="empty">Empty (all zeros)</option>
@@ -344,6 +401,22 @@
           <button id="store-refresh">Refresh</button>
           <button id="store-write">Write to store</button>
           <button id="store-clear">Clear store</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Background theme</legend>
+        <p class="hint">
+          The theme lives in the store alongside <code>showAll</code>, so switching it travels through a
+          <code>kvstore:update</code> just like it does on StreamElements.
+        </p>
+        <div class="row">
+          <button id="theme-click-button">Click widget button</button>
+          <button id="theme-set-ffvi">Set FFVI</button>
+          <button id="theme-set-ct">Set CT</button>
+        </div>
+        <div class="row">
+          <span class="hint">Stored theme: <code id="theme-current">-</code></span>
         </div>
       </fieldset>
 
@@ -431,9 +504,15 @@
        * @property {CurrentState} current
        * @property {AllTimeState} allTime
        * @property {boolean} [showAll]
+       * @property {string} [backgroundTheme] "ffvi" (default) or "ct"
        * @property {Date|string} lastUpdated
        * @property {RedemptionHistory} [redemptionHistory]
        * @property {LastRedemption} [lastRedemption]
+       */
+
+      /**
+       * @typedef {Object} ChatEmote
+       * @property {string} [name]
        */
 
       /**
@@ -441,6 +520,11 @@
        * @property {string} [redemption]
        * @property {string} [key]
        * @property {WidgetState} [value]
+       * @property {string} [text]
+       * @property {string} [displayName]
+       * @property {string} [nick]
+       * @property {string} [userId]
+       * @property {ChatEmote[]} [emotes]
        */
 
       /**
@@ -463,6 +547,12 @@
        * @property {boolean} [showRedemptionAnnouncements]
        * @property {number} [numberOfSecondsBetweenReports]
        * @property {boolean} [reportsShouldDisplay]
+       * @property {boolean} [emoteBlessEnabled]
+       * @property {string} [emoteBlessEmoteNamesCsv]
+       * @property {number} [emoteBlessWindowSeconds]
+       * @property {number} [emoteBlessRequiredMatches]
+       * @property {number} [emoteBlessCooldownSeconds]
+       * @property {string} [emoteBlessHeadlineText]
        */
 
       /**
@@ -609,7 +699,7 @@
       /** Resolves after the configured fake store latency. */
       function delay() {
         const ms = Number(document.getElementById("store-latency").value) || 0;
-        return ms > 0 ? new Promise(resolve => window.setTimeout(resolve, ms)) : Promise.resolve();
+        return ms > 0 ? new Promise((resolve) => window.setTimeout(resolve, ms)) : Promise.resolve();
       }
 
       // =====================================================================
@@ -660,7 +750,23 @@
           return String(state);
         }
         const current = state.current;
-        return `{bless:${current.numberOfBlesses} curse:${current.numberOfCurses} blurse:${current.numberOfBlurses} showAll:${!!state.showAll}}`;
+        return `{bless:${current.numberOfBlesses} curse:${current.numberOfCurses} blurse:${current.numberOfBlurses} showAll:${!!state.showAll} theme:${normalizeHarnessTheme(state.backgroundTheme)}}`;
+      }
+
+      /**
+       * Mirrors normalizeBackgroundTheme in widget.ts so the harness labels
+       * unknown values the same way the widget renders them.
+       * @param {unknown} value
+       * @returns {string} "ffvi" or "ct"
+       */
+      function normalizeHarnessTheme(value) {
+        return value === "ct" ? "ct" : "ffvi";
+      }
+
+      /** @returns {string} The theme currently persisted in the mocked store. */
+      function storedBackgroundTheme() {
+        const state = readStore(STORE_KEY);
+        return normalizeHarnessTheme(state && state.backgroundTheme);
       }
 
       // =====================================================================
@@ -709,6 +815,42 @@
       }
 
       /**
+       * Builds an onEventReceived chat payload matching StreamElements' message listener.
+       * @param {{ displayName: string, text: string, emoteNames?: string[], includeEmotesArray?: boolean }} options
+       * @returns {SEEventDetail}
+       */
+      function makeChatMessageDetail(options) {
+        const displayName = options.displayName || "emoteFan";
+        const nick = displayName.toLowerCase().replace(/\s+/g, "");
+        /** @type {SEEventData} */
+        const data = {
+          text: options.text,
+          displayName: displayName,
+          nick: nick,
+          userId: nick,
+        };
+        if (options.includeEmotesArray !== false) {
+          const names = options.emoteNames || [];
+          data.emotes = names.map((name) => ({ name: name }));
+        }
+        return { listener: "message", event: { data: data } };
+      }
+
+      /**
+       * @param {string} csv
+       * @returns {string[]}
+       */
+      function parseCsvNames(csv) {
+        if (!csv || !csv.trim()) {
+          return [];
+        }
+        return csv
+          .split(",")
+          .map((part) => part.trim())
+          .filter((part) => part.length > 0);
+      }
+
+      /**
        * Builds a complete WidgetState with every field the widget expects.
        * @param {{ current?: Partial<CurrentState>, allTime?: Partial<AllTimeState>, showAll?: boolean, redemptionHistory?: RedemptionHistory, lastRedemption?: LastRedemption }} [overrides]
        * @returns {WidgetState}
@@ -743,6 +885,11 @@
             options.allTime
           ),
           showAll: options.showAll === true,
+          // Presets should not yank the background out from under you, so the
+          // theme defaults to whatever is already stored.
+          backgroundTheme: normalizeHarnessTheme(
+            options.backgroundTheme !== undefined ? options.backgroundTheme : storedBackgroundTheme()
+          ),
           lastUpdated: new Date(),
           redemptionHistory: options.redemptionHistory || {},
         };
@@ -794,12 +941,14 @@
       function fireRedemption(redemptionName) {
         const win = widgetWindow();
         if (!win) return;
-        const path = /** @type {"eventData"|"session"|"itemId"} */ (
-          document.getElementById("payload-path").value
-        );
+        const path = /** @type {"eventData"|"session"|"itemId"} */ (document.getElementById("payload-path").value);
         const user = document.getElementById("redeem-user").value.trim();
         log(`dispatch onEventReceived redemption "${redemptionName}" (${path}, user "${user}")`, "event");
-        dispatchToWidget(win, "onEventReceived", makeRedemptionDetail({ name: redemptionName, user: user, path: path }));
+        dispatchToWidget(
+          win,
+          "onEventReceived",
+          makeRedemptionDetail({ name: redemptionName, user: user, path: path })
+        );
       }
 
       /** Fires onWidgetLoad using the current field data inputs. */
@@ -807,8 +956,69 @@
         const win = widgetWindow();
         if (!win) return;
         const fieldData = readFieldDataInputs();
-        log(`dispatch onWidgetLoad (meterMaximum ${fieldData.meterMaximum}, showChars ${fieldData.showChars})`, "event");
+        log(
+          `dispatch onWidgetLoad (meterMaximum ${fieldData.meterMaximum}, emoteBlessEnabled ${fieldData.emoteBlessEnabled})`,
+          "event"
+        );
         dispatchToWidget(win, "onWidgetLoad", makeWidgetLoadDetail(fieldData));
+      }
+
+      /**
+       * Fires a single chat message using the Chat / emotes inputs.
+       */
+      function fireChatMessage() {
+        const win = widgetWindow();
+        if (!win) return;
+        const displayName = document.getElementById("chat-user").value.trim() || "emoteFan";
+        const text = document.getElementById("chat-text").value;
+        const includeEmotesArray = document.getElementById("chat-include-emotes").checked;
+        const emoteNames = parseCsvNames(document.getElementById("chat-emotes").value);
+        log(
+          `dispatch onEventReceived message from "${displayName}" text="${text}" emotes=[${emoteNames.join(",")}] array=${includeEmotesArray}`,
+          "event"
+        );
+        dispatchToWidget(
+          win,
+          "onEventReceived",
+          makeChatMessageDetail({
+            displayName: displayName,
+            text: text,
+            emoteNames: emoteNames,
+            includeEmotesArray: includeEmotesArray,
+          })
+        );
+      }
+
+      /**
+       * Fires several matching chat messages from distinct users, to fill the
+       * emote-bless window without clicking Fire chat message repeatedly.
+       */
+      async function fireChatBurst() {
+        const win = widgetWindow();
+        if (!win) return;
+        const count = Number(document.getElementById("chat-burst-count").value) || 1;
+        const gap = Number(document.getElementById("chat-burst-gap").value) || 0;
+        const includeEmotesArray = document.getElementById("chat-include-emotes").checked;
+        const emoteNames = parseCsvNames(document.getElementById("chat-emotes").value);
+        const text = document.getElementById("chat-text").value || emoteNames.join(" ");
+        const baseUser = document.getElementById("chat-user").value.trim() || "emoteFan";
+        log(`chat burst of ${count} matching messages, ${gap}ms apart`, "event");
+        for (let index = 0; index < count; index++) {
+          const displayName = `${baseUser}${index + 1}`;
+          dispatchToWidget(
+            win,
+            "onEventReceived",
+            makeChatMessageDetail({
+              displayName: displayName,
+              text: text,
+              emoteNames: emoteNames,
+              includeEmotesArray: includeEmotesArray,
+            })
+          );
+          if (gap > 0 && index < count - 1) {
+            await new Promise((resolve) => window.setTimeout(resolve, gap));
+          }
+        }
       }
 
       /** Enqueues the top-redeemer report animations on the widget display queue. */
@@ -831,6 +1041,12 @@
           showRedemptionAnnouncements: document.getElementById("field-show-redemption-announcements").checked,
           numberOfSecondsBetweenReports: Number(document.getElementById("field-seconds-between-reports").value),
           reportsShouldDisplay: document.getElementById("field-reports-should-display").checked,
+          emoteBlessEnabled: document.getElementById("field-emote-bless-enabled").checked,
+          emoteBlessEmoteNamesCsv: document.getElementById("field-emote-bless-csv").value,
+          emoteBlessWindowSeconds: Number(document.getElementById("field-emote-bless-window").value),
+          emoteBlessRequiredMatches: Number(document.getElementById("field-emote-bless-required").value),
+          emoteBlessCooldownSeconds: Number(document.getElementById("field-emote-bless-cooldown").value),
+          emoteBlessHeadlineText: document.getElementById("field-emote-bless-headline").value,
         };
       }
 
@@ -844,12 +1060,10 @@
         const type = document.getElementById("burst-type").value;
         log(`burst of ${count} (${type}), ${gap}ms apart`, "event");
         for (let index = 0; index < count; index++) {
-          const name = type === "random"
-            ? REDEMPTION_NAMES[Math.floor(Math.random() * REDEMPTION_NAMES.length)]
-            : type;
+          const name = type === "random" ? REDEMPTION_NAMES[Math.floor(Math.random() * REDEMPTION_NAMES.length)] : type;
           fireRedemption(name);
           if (gap > 0) {
-            await new Promise(resolve => window.setTimeout(resolve, gap));
+            await new Promise((resolve) => window.setTimeout(resolve, gap));
           }
         }
       }
@@ -920,7 +1134,7 @@
         win.console.log = function (...args) {
           original(...args);
           if (document.getElementById("log-console").checked) {
-            log(args.map(arg => (typeof arg === "string" ? arg : JSON.stringify(arg))).join(" "), "console");
+            log(args.map((arg) => (typeof arg === "string" ? arg : JSON.stringify(arg))).join(" "), "console");
           }
         };
       }
@@ -942,7 +1156,9 @@
         applyFrameSize(frame);
         const loaded = new Promise((resolve, reject) => {
           frame.addEventListener("load", () => resolve(), { once: true });
-          frame.addEventListener("error", () => reject(new Error("widget.html failed to load")), { once: true });
+          frame.addEventListener("error", () => reject(new Error("widget.html failed to load")), {
+            once: true,
+          });
         });
         const cacheBust = Date.now();
         frame.src = `${WIDGET_HTML_URL}?t=${cacheBust}`;
@@ -1007,13 +1223,38 @@
             document.getElementById("field-show-chars").checked = fields.showChars.value;
           }
           if (fields.showRedemptionAnnouncements && typeof fields.showRedemptionAnnouncements.value === "boolean") {
-            document.getElementById("field-show-redemption-announcements").checked = fields.showRedemptionAnnouncements.value;
+            document.getElementById("field-show-redemption-announcements").checked =
+              fields.showRedemptionAnnouncements.value;
           }
           if (fields.numberOfSecondsBetweenReports && typeof fields.numberOfSecondsBetweenReports.value === "number") {
-            document.getElementById("field-seconds-between-reports").value = String(fields.numberOfSecondsBetweenReports.value);
+            document.getElementById("field-seconds-between-reports").value = String(
+              fields.numberOfSecondsBetweenReports.value
+            );
           }
           if (fields.reportsShouldDisplay && typeof fields.reportsShouldDisplay.value === "boolean") {
             document.getElementById("field-reports-should-display").checked = fields.reportsShouldDisplay.value;
+          }
+          if (fields.emoteBlessEnabled && typeof fields.emoteBlessEnabled.value === "boolean") {
+            document.getElementById("field-emote-bless-enabled").checked = fields.emoteBlessEnabled.value;
+          }
+          if (fields.emoteBlessEmoteNamesCsv && typeof fields.emoteBlessEmoteNamesCsv.value === "string") {
+            document.getElementById("field-emote-bless-csv").value = fields.emoteBlessEmoteNamesCsv.value;
+          }
+          if (fields.emoteBlessWindowSeconds && typeof fields.emoteBlessWindowSeconds.value === "number") {
+            document.getElementById("field-emote-bless-window").value = String(fields.emoteBlessWindowSeconds.value);
+          }
+          if (fields.emoteBlessRequiredMatches && typeof fields.emoteBlessRequiredMatches.value === "number") {
+            document.getElementById("field-emote-bless-required").value = String(
+              fields.emoteBlessRequiredMatches.value
+            );
+          }
+          if (fields.emoteBlessCooldownSeconds && typeof fields.emoteBlessCooldownSeconds.value === "number") {
+            document.getElementById("field-emote-bless-cooldown").value = String(
+              fields.emoteBlessCooldownSeconds.value
+            );
+          }
+          if (fields.emoteBlessHeadlineText && typeof fields.emoteBlessHeadlineText.value === "string") {
+            document.getElementById("field-emote-bless-headline").value = fields.emoteBlessHeadlineText.value;
           }
           log("Loaded field defaults from widgetFields.json");
         } catch (error) {
@@ -1029,6 +1270,44 @@
       function renderStoreJson() {
         const state = readStore(STORE_KEY);
         document.getElementById("store-json").value = state === null ? "" : JSON.stringify(state, null, 2);
+        renderCurrentTheme(state);
+      }
+
+      /**
+       * Mirrors the stored theme into the panel readout.
+       * @param {WidgetState|null} state
+       */
+      function renderCurrentTheme(state) {
+        document.getElementById("theme-current").textContent =
+          state === null ? "-" : normalizeHarnessTheme(state.backgroundTheme);
+      }
+
+      /**
+       * Writes a theme into the store, which reaches the widget through the same
+       * kvstore:update path StreamElements uses.
+       * @param {string} theme "ffvi" or "ct"
+       */
+      function setBackgroundTheme(theme) {
+        const state = readStore(STORE_KEY) || makeWidgetState({});
+        state.backgroundTheme = theme;
+        log(`set backgroundTheme to "${theme}"`, "event");
+        pushStateToWidget(state);
+      }
+
+      /**
+       * Clicks the widget's own theme button inside the iframe, exercising the
+       * same path a streamer takes on the overlay.
+       */
+      function clickWidgetThemeButton() {
+        const win = widgetWindow();
+        if (!win) return;
+        const button = win.document.getElementById("background-theme-toggle");
+        if (!button) {
+          log("background-theme-toggle button not found in the widget", "error");
+          return;
+        }
+        log(`click widget theme button (currently labelled "${button.textContent.trim()}")`, "event");
+        button.click();
       }
 
       /**
@@ -1072,7 +1351,12 @@
             redemptionHistory: {
               testUserName: { numberOfBlesses: 4, numberOfCurses: 2, numberOfBlurses: 3 },
             },
-            lastRedemption: { redeemingUser: "testUserName", charType: "blurse", meterTarget: "curse", meterAmount: 2 },
+            lastRedemption: {
+              redeemingUser: "testUserName",
+              charType: "blurse",
+              meterTarget: "curse",
+              meterAmount: 2,
+            },
           });
         }
         if (name === "blessMaxed") {
@@ -1131,7 +1415,7 @@
       // Wiring
       // =====================================================================
 
-      document.querySelectorAll("button[data-redeem]").forEach(button => {
+      document.querySelectorAll("button[data-redeem]").forEach((button) => {
         button.addEventListener("click", () => fireRedemption(button.dataset.redeem));
       });
 
@@ -1147,6 +1431,8 @@
       document.getElementById("fire-burst").addEventListener("click", fireBurst);
       document.getElementById("fire-widget-load").addEventListener("click", fireWidgetLoad);
       document.getElementById("fire-report").addEventListener("click", fireReport);
+      document.getElementById("fire-chat").addEventListener("click", fireChatMessage);
+      document.getElementById("fire-chat-burst").addEventListener("click", fireChatBurst);
 
       document.getElementById("apply-preset").addEventListener("click", () => {
         const preset = document.getElementById("preset").value;
@@ -1174,6 +1460,10 @@
         renderStoreJson();
         log("Cleared the mocked store; reload the widget to start from scratch");
       });
+
+      document.getElementById("theme-click-button").addEventListener("click", clickWidgetThemeButton);
+      document.getElementById("theme-set-ffvi").addEventListener("click", () => setBackgroundTheme("ffvi"));
+      document.getElementById("theme-set-ct").addEventListener("click", () => setBackgroundTheme("ct"));
 
       document.getElementById("frame-apply").addEventListener("click", () => {
         if (widgetFrame) {

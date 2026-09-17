@@ -1,7 +1,7 @@
 :root {
   --secondary-color: #6c757d;
   --barline-color: lightgray;
-  --font-stack: 'Open Sans', sans-serif;
+  --font-stack: "Open Sans", sans-serif;
   --container-padding: 30px;
   --font-color: #717171;
   --blessed-color: rgba(237, 221, 83, 1);
@@ -58,7 +58,8 @@ body {
   position: relative;
 }
 
-.labels, .meters {
+.labels,
+.meters {
   display: flex;
   flex-direction: column;
 }
@@ -74,7 +75,7 @@ body {
   margin: 0;
   padding: 0;
   position: absolute;
-  top:0;
+  top: 0;
   left: 0;
   z-index: 2;
   border: 1px solid var(--barline-color);
@@ -147,7 +148,7 @@ body {
 .bar-line:nth-child(8) {
   position: absolute;
   width: 100%;
-  top: 399.335px;;
+  top: 399.335px;
   border: 1px solid var(--secondary-color);
 }
 
@@ -195,7 +196,7 @@ body {
 }
 
 .bless-meter-fill {
-  background: linear-gradient(0deg,var(--ok-color) 0%, var(--blessed-color) 85%);
+  background: linear-gradient(0deg, var(--ok-color) 0%, var(--blessed-color) 85%);
   width: 100%;
   height: 100%;
   margin: 0;
@@ -213,7 +214,7 @@ body {
 }
 
 .curse-meter-fill {
-  background: linear-gradient(0deg,var(--cursed-color) 0%, var(--warn-color) 50%, var(--start-warn-color) 100%);
+  background: linear-gradient(0deg, var(--cursed-color) 0%, var(--warn-color) 50%, var(--start-warn-color) 100%);
   width: 100%;
   height: 100%;
 }
@@ -234,19 +235,19 @@ body {
 
 .label:nth-child(2) {
   position: absolute;
-  top: 42.5px;;
+  top: 42.5px;
   left: 0;
 }
 
 .label:nth-child(3) {
   position: absolute;
-  top: 92.5px;;
+  top: 92.5px;
   left: 0;
 }
 
 .label:nth-child(4) {
   position: absolute;
-  top: 142.5px;;
+  top: 142.5px;
   left: 0;
 }
 

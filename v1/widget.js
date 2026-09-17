@@ -16,6 +16,12 @@ const curseGlowForeverClass = "animated-curse-glow";
 const TYPE_BLESS = "bless";
 const TYPE_CURSE = "curse";
 const TYPE_BLURSE = "blurse";
+/** Final Fantasy VI styled dialogue window, the widget's original look. */
+const THEME_FFVI = "ffvi";
+/** Chrono Trigger styled dialogue window. */
+const THEME_CT = "ct";
+/** Added to <body> to select {@link THEME_CT}; absent means {@link THEME_FFVI}. */
+const CT_THEME_BODY_CLASS = "theme-ct";
 const StateKeys = {
     numberOfBlesses: "numberOfBlesses",
     numberOfCurses: "numberOfCurses",
@@ -28,7 +34,7 @@ const StateKeys = {
     numberOfBlursesThatCursedPreReset: "numberOfBlursesThatCursedPreReset",
     numberOfBlursesThatBlessedPreReset: "numberOfBlursesThatBlessedPreReset",
     redemptionHistory: "redemptionHistory",
-    lastRedemption: "lastRedemption"
+    lastRedemption: "lastRedemption",
 };
 // Lines 25–50 in original: object literal + separate lastUpdated assignment merged here
 const initialWidgetState = {
@@ -54,11 +60,13 @@ const initialWidgetState = {
         numberOfBlursesThatBlessed: 0,
     },
     showAll: false,
+    backgroundTheme: THEME_FFVI,
     lastUpdated: new Date(),
-    redemptionHistory: {}
+    redemptionHistory: {},
 };
 const STORE_KEY_NAME = "blessCurseMeterState";
 const ATTRIBUTE_SHOW_ALL = "showAll";
+const ATTRIBUTE_BACKGROUND_THEME = "backgroundTheme";
 const animationDuration = 1000;
 const shortAnimationDuration = 1;
 const redemptionLetterDelayMs = 45;
@@ -70,9 +78,25 @@ let showChars = true;
 let showRedemptionAnnouncements = true;
 let numberOfSecondsBetweenReports = 90;
 let reportsShouldDisplay = true;
+let emoteBlessEnabled = false;
+let emoteBlessEmoteNamesCsv = "Kappa,PogChamp";
+let emoteBlessWindowSeconds = 120;
+let emoteBlessRequiredMatches = 5;
+let emoteBlessCooldownSeconds = 300;
+let emoteBlessHeadlineText = "Mustache man blesses the run";
+let trackedEmoteNamesLower = new Set();
+let emoteWindowEntries = [];
+/** Timestamp of the last successful emote-bless trigger; 0 means never fired. */
+let lastEmoteBlessTriggeredAt = 0;
 let lastWidgetState = null;
-/** Set by {@link incrementState} so only fresh redemptions trigger the announcement. */
-let shouldAnnounceRedemption = false;
+/**
+ * Id of the most recently announced redemption. Announcement intent travels
+ * inside the persisted state via {@link LastRedemption.id} rather than through
+ * a module-level flag, so whichever `kvstore:update` renders a redemption
+ * announces it exactly once regardless of event ordering.
+ */
+let lastAnnouncedRedemptionId = null;
+let redemptionIdCounter = 0;
 let periodicReportTimerId = null;
 /**
  * Runs enqueued async tasks one at a time, in order — each task completes
@@ -85,13 +109,19 @@ class SequentialQueue {
     }
     enqueue(task) {
         const result = this.tail.then(() => task());
-        this.tail = result.catch(err => {
+        this.tail = result.catch((err) => {
             console.error("Queued display task failed:", err);
         });
         return result;
     }
 }
 const displayQueue = new SequentialQueue();
+/**
+ * Serializes SE_API.store get-modify-set work so overlapping redemptions
+ * (for example a harness burst with gap 0) cannot read the same snapshot
+ * and overwrite each other's increments.
+ */
+const storeMutationQueue = new SequentialQueue();
 /** Returns the jQuery-wrapped meter fill element for the bless meter. */
 function getBlessMeterFill() {
     return $("div.bless-container div.meter div.meter-fill");
@@ -125,14 +155,14 @@ function getBlurseSvg() {
 function initializeLastWidgetState() {
     console.log("Trying to initialize last widget state");
     try {
-        SE_API.store.get(STORE_KEY_NAME).then(obj => {
+        SE_API.store.get(STORE_KEY_NAME).then((obj) => {
             lastWidgetState = obj;
         });
     }
     catch (error) {
         console.log(`Received error ${error}`);
     }
-    if (lastWidgetState == null || lastWidgetState == undefined) {
+    if (lastWidgetState == null) {
         lastWidgetState = initialWidgetState;
     }
 }
@@ -145,7 +175,7 @@ initializeLastWidgetState();
  */
 function toggleShowAllState() {
     console.log(`Toggling state showAll`);
-    SE_API.store.get(STORE_KEY_NAME).then(obj => {
+    SE_API.store.get(STORE_KEY_NAME).then((obj) => {
         console.log(`Toggling showAll: Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
         if (!storeHasBeenInitialized(obj)) {
             console.log(`Toggling state showAll: The store object has not yet been initialized. Setting up initial values.`);
@@ -174,9 +204,11 @@ function toggleShowAllState() {
  * before saving.
  * @param toIncrement - A {@link StateKeys} value identifying the counter to increment.
  */
-function incrementState(toIncrement, name) {
+function incrementState(toIncrement, name, options) {
+    var _a;
     console.log(`Incrementing ${toIncrement}`);
-    SE_API.store.get(STORE_KEY_NAME).then(obj => {
+    const recordRedemption = (_a = options === null || options === void 0 ? void 0 : options.recordRedemption) !== null && _a !== void 0 ? _a : true;
+    void storeMutationQueue.enqueue(() => SE_API.store.get(STORE_KEY_NAME).then((obj) => {
         console.log(`Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
         if (storeHasBeenInitialized(obj)) {
             if (!canIncrement(obj, toIncrement)) {
@@ -244,41 +276,53 @@ function incrementState(toIncrement, name) {
         if (name != null && name !== "" && obj[redemptionHistoryKey][name] != null) {
             if (toIncrement == StateKeys.numberOfBlesses) {
                 console.log("Incrementing blesses for user " + name);
-                obj[redemptionHistoryKey][name][StateKeys.numberOfBlesses] = obj[redemptionHistoryKey][name]["numberOfBlesses"] + 1;
+                obj[redemptionHistoryKey][name][StateKeys.numberOfBlesses] =
+                    obj[redemptionHistoryKey][name]["numberOfBlesses"] + 1;
                 charType = TYPE_BLESS;
                 meterTarget = TYPE_BLESS;
                 meterAmount = 1;
             }
             else if (toIncrement == StateKeys.numberOfCurses) {
                 console.log("Incrementing curses for user " + name);
-                obj[redemptionHistoryKey][name][StateKeys.numberOfCurses] = obj[redemptionHistoryKey][name]["numberOfCurses"] + 1;
+                obj[redemptionHistoryKey][name][StateKeys.numberOfCurses] =
+                    obj[redemptionHistoryKey][name]["numberOfCurses"] + 1;
                 charType = TYPE_CURSE;
                 meterTarget = TYPE_CURSE;
                 meterAmount = 1;
             }
         }
-        if (name != null && name !== "" && meterTarget != undefined && meterAmount != undefined && charType != undefined) {
+        // Reusing this id on the new lastRedemption marks it as already announced.
+        const previousRedemptionId = getRedemptionAnnouncementId(obj);
+        const metersReset = bothMetersAreAtMax(obj);
+        if (recordRedemption &&
+            name != null &&
+            name !== "" &&
+            meterTarget != undefined &&
+            meterAmount != undefined &&
+            charType != undefined) {
             obj["lastRedemption"] = {
-                "redeemingUser": name,
-                "charType": charType,
-                "meterTarget": meterTarget,
-                "meterAmount": meterAmount,
+                redeemingUser: name,
+                charType: charType,
+                meterTarget: meterTarget,
+                meterAmount: meterAmount,
+                // A reset swallows the announcement, so keep the prior id instead
+                // of minting one that would read as "not yet announced".
+                id: metersReset ? previousRedemptionId : createRedemptionId(),
             };
         }
-        if (bothMetersAreAtMax(obj)) {
-            shouldAnnounceRedemption = false;
+        if (metersReset) {
             const newState = resetMetersButKeepCurrentState(obj);
             if (newState) {
-                SE_API.store.set(STORE_KEY_NAME, newState);
+                lastWidgetState = newState;
+                return SE_API.store.set(STORE_KEY_NAME, newState);
             }
+            lastWidgetState = obj;
+            return;
         }
-        else {
-            shouldAnnounceRedemption = true;
-            SE_API.store.set(STORE_KEY_NAME, obj);
-        }
-        // the SE.store.set function emits an onEventReceived for every custom widget
         lastWidgetState = obj;
-    });
+        // the SE.store.set function emits an onEventReceived for every custom widget
+        return SE_API.store.set(STORE_KEY_NAME, obj);
+    }));
 }
 /**
  * Builds a new {@link WidgetState} where all current counters are zeroed and
@@ -311,6 +355,7 @@ function resetMetersButKeepCurrentState(widgetState) {
         lastUpdated: new Date(),
         allTime: widgetState.allTime,
         showAll: widgetState.showAll,
+        backgroundTheme: getBackgroundTheme(widgetState),
         redemptionHistory: widgetState.redemptionHistory,
         lastRedemption: widgetState.lastRedemption,
         current: {
@@ -334,9 +379,7 @@ function resetMetersButKeepCurrentState(widgetState) {
  * @param obj - The value to test.
  */
 function storeHasBeenInitialized(obj) {
-    return obj != undefined
-        && obj.current != undefined
-        && obj.allTime != undefined;
+    return obj != undefined && obj.current != undefined && obj.allTime != undefined;
 }
 /**
  * Returns true when {@link obj} is a valid {@link WidgetState} and the named
@@ -346,11 +389,11 @@ function storeHasBeenInitialized(obj) {
  * @param toIncrement - The field name to verify.
  */
 function canIncrement(obj, toIncrement) {
-    return obj != undefined
-        && obj.current != undefined
-        && obj.allTime != undefined
-        && obj.current[toIncrement] != undefined
-        && obj.allTime[toIncrement] != undefined;
+    return (obj != undefined &&
+        obj.current != undefined &&
+        obj.allTime != undefined &&
+        obj.current[toIncrement] != undefined &&
+        obj.allTime[toIncrement] != undefined);
 }
 /**
  * Ensures the named field exists as a numeric value in both
@@ -412,17 +455,22 @@ function eventReceivedHandler(event) {
         console.log(JSON.stringify(detail));
         handleRedemption(detail);
     }
+    else if (detail.listener === "message") {
+        handleChatMessage(detail);
+    }
     else if (detail.listener === "kvstore:update") {
         console.log(`Key store was updated so update the widget display ${JSON.stringify(obj)}`);
-        if (seEvent != undefined && seEvent.data != undefined
-            && seEvent.data.key === STORE_KEY_NAME && seEvent.data.value != undefined) {
+        if (seEvent != undefined &&
+            seEvent.data != undefined &&
+            seEvent.data.key === STORE_KEY_NAME &&
+            seEvent.data.value != undefined) {
             console.log("Updating widget display");
             updateDisplay(seEvent.data.value, true);
         }
         else {
             console.log(`This kvstore update may be invalid or not for us but we are going to check current state anyway as a fallback. This was necessary during testing on SE site.`);
             console.log(`A different key store item was saved ${JSON.stringify(obj)}`);
-            SE_API.store.get(STORE_KEY_NAME).then(state => {
+            SE_API.store.get(STORE_KEY_NAME).then((state) => {
                 console.log(`Retrieved widget state: ${JSON.stringify(state)}`);
                 lastWidgetState = state;
                 updateDisplay(state, true);
@@ -449,15 +497,19 @@ function widgetLoadHandler(event) {
         applyFieldData(obj.detail.fieldData);
     }
     try {
-        SE_API.store.get(STORE_KEY_NAME).then(retrieved => {
+        SE_API.store.get(STORE_KEY_NAME).then((retrieved) => {
             console.log(`Initializing with retrieved widgetState from store: ${JSON.stringify(retrieved)}`);
             if (storeHasBeenInitialized(retrieved)) {
+                // Treat whatever is already stored as announced so a refresh does
+                // not replay the previous session's redemption.
+                lastAnnouncedRedemptionId = getRedemptionAnnouncementId(retrieved);
                 updateDisplay(retrieved, true);
             }
             else {
                 console.log("The store object has not yet been initialized. Setting up initial values.");
                 initialWidgetState.lastUpdated = new Date();
                 const toSave = initialWidgetState;
+                applyBackgroundTheme(getBackgroundTheme(toSave));
                 SE_API.store.set(STORE_KEY_NAME, toSave);
                 // the SE.store.set function emits an onEventReceived for every custom widget
                 lastWidgetState = toSave;
@@ -520,12 +572,8 @@ function showCharSvg(type) {
         console.log("Not running the showChars functionality");
         return Promise.resolve();
     }
-    let target = null;
-    const targets = [
-        getBlessSvg(),
-        getCurseSvg(),
-        getBlurseSvg(),
-    ];
+    let target;
+    const targets = [getBlessSvg(), getCurseSvg(), getBlurseSvg()];
     if (type === TYPE_BLESS) {
         target = targets[0];
     }
@@ -543,7 +591,7 @@ function showCharSvg(type) {
     if (target && target.length > 0) {
         console.log(`Showing ${JSON.stringify(target.get(0))}`);
         const finalTarget = target;
-        return new Promise(resolve => {
+        return new Promise((resolve) => {
             finalTarget.show({
                 duration: 0,
                 queue: true,
@@ -568,8 +616,8 @@ function bothMetersAreAtMax(widgetState) {
     const numberOfCurses = getOrDefaultCount(widgetState.current[StateKeys.numberOfCurses]);
     const numberOfBlursesThatBlessed = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatBlessed]);
     const numberOfBlursesThatCursed = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatCursed]);
-    const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
-    const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
+    const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * 2;
+    const effectiveCurses = numberOfCurses + numberOfBlursesThatCursed * 2;
     return effectiveBlesses >= meterMaximum && effectiveCurses >= meterMaximum;
 }
 /**
@@ -592,9 +640,10 @@ function getRedemptionName(detail) {
         redemptionName = (_a = detail.event.data.redemption) !== null && _a !== void 0 ? _a : null;
     }
     // the rest of this is where I thought the redemption name would be either from the SE docs or SE mock redeems
-    if (redemptionName == null && detail.session != undefined
-        && detail.session.data != undefined
-        && detail.session.data["channel-points-latest"] != undefined) {
+    if (redemptionName == null &&
+        detail.session != undefined &&
+        detail.session.data != undefined &&
+        detail.session.data["channel-points-latest"] != undefined) {
         // the name in this case is here
         // the stream elements docs for twitch suggest this is where it would be
         // but the emulate function on stream elements always has it in detail.event.itemId
@@ -619,7 +668,7 @@ function getRedeemingUserName(detail) {
     if (detail == null || detail.event == null) {
         return null;
     }
-    let name = detail.event.name;
+    const name = detail.event.name;
     if (name == undefined || name.length == 0) {
         return null;
     }
@@ -635,16 +684,23 @@ function getRedeemingUserName(detail) {
  * @param widgetState - The state to render, or null to skip the update.
  * @param showAnimate - When true uses the full {@link animationDuration};
  *   when false uses {@link shortAnimationDuration} for an instant update.
- * @param announceRedemption - When omitted, uses {@link shouldAnnounceRedemption}
- *   (set by {@link incrementState}). Pass explicitly in tests.
+ * @param announceRedemption - When omitted, derives the intent from
+ *   {@link LastRedemption.id} on the supplied state. Pass explicitly in tests.
  */
 function updateDisplay(widgetState, showAnimate, announceRedemption) {
-    // Capture and clear before any async work so rapid redemptions don't bleed over.
-    const announce = announceRedemption !== null && announceRedemption !== void 0 ? announceRedemption : shouldAnnounceRedemption;
-    shouldAnnounceRedemption = false;
     if (widgetState == null || widgetState.current == undefined) {
         console.log(`Current widget state is undefined! Feels bad man ${JSON.stringify(widgetState)}`);
         return;
+    }
+    // Applied outside the queue so a theme switch lands immediately instead of
+    // waiting behind any in-flight announcement or meter animation.
+    applyBackgroundTheme(getBackgroundTheme(widgetState));
+    // Claim the announcement synchronously so concurrent updates carrying the
+    // same redemption id cannot both play it.
+    const announcementId = getRedemptionAnnouncementId(widgetState);
+    const announce = announceRedemption !== null && announceRedemption !== void 0 ? announceRedemption : (announcementId != null && announcementId !== lastAnnouncedRedemptionId);
+    if (announce && announcementId != null) {
+        lastAnnouncedRedemptionId = announcementId;
     }
     displayQueue.enqueue(() => __awaiter(this, void 0, void 0, function* () {
         if (showAnimate && announce && showRedemptionAnnouncements && hasValidLastRedemption(widgetState.lastRedemption)) {
@@ -681,7 +737,201 @@ function applyFieldData(fieldData) {
     if (fieldData.reportsShouldDisplay != null && typeof fieldData.reportsShouldDisplay === "boolean") {
         reportsShouldDisplay = fieldData.reportsShouldDisplay;
     }
-    configurePeriodicReports();
+    if (fieldData.emoteBlessEnabled != null && typeof fieldData.emoteBlessEnabled === "boolean") {
+        emoteBlessEnabled = fieldData.emoteBlessEnabled;
+    }
+    if (fieldData.emoteBlessEmoteNamesCsv != null && typeof fieldData.emoteBlessEmoteNamesCsv === "string") {
+        emoteBlessEmoteNamesCsv = fieldData.emoteBlessEmoteNamesCsv;
+    }
+    if (fieldData.emoteBlessWindowSeconds != null && typeof fieldData.emoteBlessWindowSeconds === "number") {
+        emoteBlessWindowSeconds = Math.max(1, Math.floor(fieldData.emoteBlessWindowSeconds));
+    }
+    if (fieldData.emoteBlessRequiredMatches != null && typeof fieldData.emoteBlessRequiredMatches === "number") {
+        emoteBlessRequiredMatches = Math.max(1, Math.floor(fieldData.emoteBlessRequiredMatches));
+    }
+    if (fieldData.emoteBlessCooldownSeconds != null && typeof fieldData.emoteBlessCooldownSeconds === "number") {
+        emoteBlessCooldownSeconds = Math.max(0, Math.floor(fieldData.emoteBlessCooldownSeconds));
+    }
+    if (fieldData.emoteBlessHeadlineText != null && typeof fieldData.emoteBlessHeadlineText === "string") {
+        emoteBlessHeadlineText = fieldData.emoteBlessHeadlineText;
+    }
+    rebuildTrackedEmoteNameSet();
+    // Only (re)start the report interval when those fields are in this payload.
+    // Partial updates (headline, emote list, …) must not resurrect a 90s timer
+    // from the module defaults — that leaks open handles in Jest.
+    if (fieldData.reportsShouldDisplay != null || fieldData.numberOfSecondsBetweenReports != null) {
+        configurePeriodicReports();
+    }
+}
+/**
+ * Parses {@link emoteBlessEmoteNamesCsv} into a lowercase lookup set for matching.
+ */
+function rebuildTrackedEmoteNameSet() {
+    trackedEmoteNamesLower = new Set(parseEmoteNamesCsv(emoteBlessEmoteNamesCsv).map(normalizeEmoteNameForMatch));
+}
+/**
+ * @param csv - Comma-separated emote names from widget field data.
+ */
+function parseEmoteNamesCsv(csv) {
+    if (csv == null || csv.trim() === "") {
+        return [];
+    }
+    return csv
+        .split(",")
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0);
+}
+/**
+ * @param emoteName - Raw emote name from chat or config.
+ */
+function normalizeEmoteNameForMatch(emoteName) {
+    return emoteName.trim().toLowerCase();
+}
+/**
+ * Returns tracked emote names found in a chat message (one entry per occurrence).
+ * @param message - StreamElements chat payload at `event.data`.
+ * @param trackedLower - Lowercase emote names to match.
+ */
+function findMatchingTrackedEmotesInChat(message, trackedLower) {
+    if (trackedLower.size === 0) {
+        return [];
+    }
+    const matches = [];
+    if (message.emotes != null && message.emotes.length > 0) {
+        for (const emote of message.emotes) {
+            if (emote.name == null) {
+                continue;
+            }
+            if (trackedLower.has(normalizeEmoteNameForMatch(emote.name))) {
+                matches.push(emote.name);
+            }
+        }
+        return matches;
+    }
+    if (message.text != null && message.text.trim() !== "") {
+        const tokens = message.text.split(/\s+/);
+        for (const token of tokens) {
+            if (trackedLower.has(normalizeEmoteNameForMatch(token))) {
+                matches.push(token);
+            }
+        }
+    }
+    return matches;
+}
+/**
+ * Drops emote window entries older than {@link windowMs}.
+ * @param nowMs - Current timestamp.
+ * @param windowMs - Rolling window length in milliseconds.
+ */
+function pruneEmoteWindowEntries(nowMs, windowMs) {
+    const cutoff = nowMs - windowMs;
+    emoteWindowEntries = emoteWindowEntries.filter((entry) => entry.timestamp >= cutoff);
+}
+/**
+ * Returns distinct display names among entries in the current emote window.
+ */
+function getDistinctUsersInEmoteWindow() {
+    const seen = new Set();
+    const names = [];
+    for (const entry of emoteWindowEntries) {
+        if (seen.has(entry.displayName)) {
+            continue;
+        }
+        seen.add(entry.displayName);
+        names.push(entry.displayName);
+    }
+    return names;
+}
+/**
+ * Handles Twitch/YouTube chat messages for the emote-triggered bless feature.
+ * @param detail - `onEventReceived` payload with `listener === "message"`.
+ */
+function handleChatMessage(detail) {
+    var _a, _b, _c, _d, _e;
+    if (!emoteBlessEnabled) {
+        return;
+    }
+    const message = (_a = detail.event) === null || _a === void 0 ? void 0 : _a.data;
+    if (message == null) {
+        return;
+    }
+    const matchedEmotes = findMatchingTrackedEmotesInChat(message, trackedEmoteNamesLower);
+    if (matchedEmotes.length === 0) {
+        return;
+    }
+    const nowMs = Date.now();
+    const userId = (_c = (_b = message.userId) !== null && _b !== void 0 ? _b : message.nick) !== null && _c !== void 0 ? _c : "unknown";
+    const displayName = (_e = (_d = message.displayName) !== null && _d !== void 0 ? _d : message.nick) !== null && _e !== void 0 ? _e : userId;
+    const windowMs = emoteBlessWindowSeconds * 1000;
+    pruneEmoteWindowEntries(nowMs, windowMs);
+    for (const emoteName of matchedEmotes) {
+        emoteWindowEntries.push({
+            timestamp: nowMs,
+            userId,
+            displayName,
+            emoteName,
+        });
+    }
+    if (emoteWindowEntries.length < emoteBlessRequiredMatches) {
+        return;
+    }
+    if (isEmoteBlessOnCooldown(nowMs)) {
+        console.log("Emote bless is on cooldown; ignoring this matching window");
+        emoteWindowEntries = [];
+        return;
+    }
+    const distinctUsers = getDistinctUsersInEmoteWindow();
+    const matchCount = emoteWindowEntries.length;
+    emoteWindowEntries = [];
+    lastEmoteBlessTriggeredAt = nowMs;
+    triggerEmoteBlessReward(distinctUsers, matchCount);
+}
+/**
+ * @param nowMs - Current timestamp.
+ * @returns True when a successful trigger happened recently enough that another
+ *   must wait for {@link emoteBlessCooldownSeconds}.
+ */
+function isEmoteBlessOnCooldown(nowMs) {
+    if (emoteBlessCooldownSeconds <= 0 || lastEmoteBlessTriggeredAt <= 0) {
+        return false;
+    }
+    return nowMs - lastEmoteBlessTriggeredAt < emoteBlessCooldownSeconds * 1000;
+}
+/**
+ * Enqueues the emote-bless typewriter, then applies a +1 bless without a second announcement.
+ * @param distinctDisplayNames - Unique chatters who contributed matching emotes.
+ * @param matchCount - Total matching emotes that filled the window.
+ */
+function triggerEmoteBlessReward(distinctDisplayNames, matchCount) {
+    displayQueue.enqueue(() => __awaiter(this, void 0, void 0, function* () {
+        yield animateOverlayTypewriter(buildEmoteBlessAnnouncementSegments(distinctDisplayNames, matchCount));
+        const creditedUser = distinctDisplayNames.length === 1 ? distinctDisplayNames[0] : null;
+        // The typewriter above is this feature's announcement, so skip stamping a
+        // redemption id that would trigger a second one.
+        incrementState(StateKeys.numberOfBlesses, creditedUser, { recordRedemption: false });
+    }));
+}
+/**
+ * Typewriter copy for the emote-triggered bless animation.
+ */
+function buildEmoteBlessAnnouncementSegments(distinctDisplayNames, matchCount) {
+    // userSummary is currently unused, but may be used in the future.
+    const userSummary = distinctDisplayNames.length === 0 ? "chat" : distinctDisplayNames.join(", ");
+    return [
+        { text: formatEmoteBlessHeadline(emoteBlessHeadlineText) },
+        { text: "Impact: " },
+        { text: "+1 BLESS", colorClass: "redemption-text-bless" },
+    ];
+}
+/**
+ * Ensures the configured headline is followed by a newline for the typewriter.
+ * Empty or whitespace-only values fall back to the default "Mustache man blesses the run".
+ * @param configuredText - Headline from widget field data.
+ */
+function formatEmoteBlessHeadline(configuredText) {
+    const body = configuredText.replace(/[\s\r\n]+$/g, "");
+    const headline = body.length > 0 ? body : "Mustache man blesses the run";
+    return `${headline}\n`;
 }
 /** Starts or stops the interval that enqueues top-redeemer report cycles. */
 function configurePeriodicReports() {
@@ -719,13 +969,13 @@ function enqueuePeriodicReportCycle(force = false) {
     }
     displayQueue.enqueue(() => __awaiter(this, void 0, void 0, function* () {
         const history = widgetState.redemptionHistory;
-        yield animateOverlayTypewriter(buildTopRedeemersReportSegments("TOP BLESS REDEEMERS", getTopRedeemers(history, "bless"), "redemption-text-bless"));
-        yield animateOverlayTypewriter(buildTopRedeemersReportSegments("TOP CURSE REDEEMERS", getTopRedeemers(history, "curse"), "redemption-text-curse"));
-        yield animateOverlayTypewriter(buildTopRedeemersReportSegments("TOP BLURSE REDEEMERS", getTopRedeemers(history, "blurse"), "redemption-text-blurse"));
-        yield animateOverlayTypewriter([{ "text": "ALL TIME" }]);
+        yield animateTopRedeemersReport("TOP BLESS REDEEMERS", getTopRedeemers(history, "bless"));
+        yield animateTopRedeemersReport("TOP CURSE REDEEMERS", getTopRedeemers(history, "curse"));
+        yield animateTopRedeemersReport("TOP BLURSE REDEEMERS", getTopRedeemers(history, "blurse"));
+        yield animateReportHeadline("ALL TIME");
         yield processDisplay(Object.assign(Object.assign({}, widgetState), { showAll: true }), true);
         yield waitMs(reportAllTimeHoldMs);
-        yield animateOverlayTypewriter([{ "text": "CURRENT RUN" }]);
+        yield animateReportHeadline("CURRENT RUN");
         yield processDisplay(Object.assign(Object.assign({}, widgetState), { showAll: false }), true);
     }));
 }
@@ -761,16 +1011,16 @@ function processDisplay(widgetState, showAnimate) {
     if (total === 0) {
         console.log("No blesses, curses, or blurses. Hopefully this is expected in this scenario...");
         // Build factories now (captures current widths; glow class changes happen immediately).
-        blessFactory = animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime, TYPE_BLESS);
-        curseFactory = animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime, TYPE_CURSE);
+        blessFactory = animateMeterFill(blessMeterFill.get(0), "0%", animationTime, TYPE_BLESS);
+        curseFactory = animateMeterFill(curseMeterFill.get(0), "0%", animationTime, TYPE_CURSE);
         blessCountText = preResetBlesses;
         curseCountText = preResetCurses;
         blurseCountText = `${preResetBlursesThatBlessed} / ${preResetBlursesThatCursed}`;
         updateToggleButtonDisplay(isShowingAll(widgetState));
     }
     else {
-        const effectiveBlesses = numberOfBlesses + (numberOfBlursesThatBlessed * 2);
-        const effectiveCurses = numberOfCurses + (numberOfBlursesThatCursed * 2);
+        const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * 2;
+        const effectiveCurses = numberOfCurses + numberOfBlursesThatCursed * 2;
         const effectiveTotal = effectiveBlesses + effectiveCurses;
         console.log("Computing widths for the meters");
         console.log(`Current widths are bless: ${blessMeterFill.css("width")}, curse: ${curseMeterFill.css("width")}`);
@@ -783,14 +1033,14 @@ function processDisplay(widgetState, showAnimate) {
         }
         else {
             console.log(`Showing run so meter length is based on ${meterMaximum} max`);
-            blessWidth = ((effectiveBlesses >= meterMaximum ? 100 : (effectiveBlesses / meterMaximum) * 100)).toFixed(2) + "%";
-            curseWidth = ((effectiveCurses >= meterMaximum ? 100 : (effectiveCurses / meterMaximum) * 100)).toFixed(2) + "%";
+            blessWidth = (effectiveBlesses >= meterMaximum ? 100 : (effectiveBlesses / meterMaximum) * 100).toFixed(2) + "%";
+            curseWidth = (effectiveCurses >= meterMaximum ? 100 : (effectiveCurses / meterMaximum) * 100).toFixed(2) + "%";
         }
         updateToggleButtonDisplay(isShowingAll(widgetState));
         console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}`);
         // Build factories now (captures current widths; glow class changes happen immediately).
-        blessFactory = animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime, TYPE_BLESS);
-        curseFactory = animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime, TYPE_CURSE);
+        blessFactory = animateMeterFill(blessMeterFill.get(0), blessWidth, animationTime, TYPE_BLESS);
+        curseFactory = animateMeterFill(curseMeterFill.get(0), curseWidth, animationTime, TYPE_CURSE);
         // update lastCount attributes
         let blessCounterText = numberOfBlesses;
         let curseCounterText = numberOfCurses;
@@ -817,12 +1067,32 @@ function processDisplay(widgetState, showAnimate) {
         getBlurseInfoValue().text(blurseCountText);
     });
 }
+/** @returns A process-unique id used to mark a redemption as awaiting announcement. */
+function createRedemptionId() {
+    redemptionIdCounter += 1;
+    // The random suffix keeps ids distinct across widget instances, which each
+    // keep their own counter but share the store.
+    return `${Date.now()}-${redemptionIdCounter}-${Math.random().toString(36).slice(2, 8)}`;
+}
+/**
+ * Reads the announcement id carried by a state's lastRedemption.
+ * @param widgetState - State to inspect.
+ * @returns The id, or null when there is nothing announceable.
+ */
+function getRedemptionAnnouncementId(widgetState) {
+    var _a;
+    const lastRedemption = widgetState === null || widgetState === void 0 ? void 0 : widgetState.lastRedemption;
+    if (!hasValidLastRedemption(lastRedemption)) {
+        return null;
+    }
+    return (_a = lastRedemption.id) !== null && _a !== void 0 ? _a : null;
+}
 function hasValidLastRedemption(lastRedemption) {
-    return lastRedemption != undefined
-        && typeof lastRedemption["redeemingUser"] === "string"
-        && typeof lastRedemption["charType"] === "string"
-        && typeof lastRedemption["meterTarget"] === "string"
-        && typeof lastRedemption["meterAmount"] === "number";
+    return (lastRedemption != undefined &&
+        typeof lastRedemption["redeemingUser"] === "string" &&
+        typeof lastRedemption["charType"] === "string" &&
+        typeof lastRedemption["meterTarget"] === "string" &&
+        typeof lastRedemption["meterAmount"] === "number");
 }
 /**
  * Hides the meter panel, types a redemption summary letter-by-letter into the
@@ -834,13 +1104,25 @@ function animateRedemptionAnnouncement(redemption) {
         yield animateOverlayTypewriter(buildRedemptionAnnouncementSegments(redemption));
     });
 }
-/**
- * Hides the meter panel, runs a typewriter animation in the announcement overlay,
- * holds briefly, then restores the meter panel.
- * @param segments - Colored text segments to type out.
- */
-function animateOverlayTypewriter(segments) {
+/** Centered headline overlay used for report titles and meter view transitions. */
+function animateReportHeadline(text) {
     return __awaiter(this, void 0, void 0, function* () {
+        yield animateOverlayTypewriter(buildReportHeadlineSegments(text), { layout: "headline" });
+    });
+}
+/**
+ * Shows a report category title, then the ranked rows in a separate overlay step.
+ */
+function animateTopRedeemersReport(title, redeemers) {
+    return __awaiter(this, void 0, void 0, function* () {
+        yield animateReportHeadline(title);
+        yield animateOverlayTypewriter(buildTopRedeemersListSegments(redeemers), { layout: "list" });
+    });
+}
+function animateOverlayTypewriter(segments, options) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a;
+        const layout = (_a = options === null || options === void 0 ? void 0 : options.layout) !== null && _a !== void 0 ? _a : "default";
         const meterPanel = getMeterPanelContent();
         const announcement = getRedemptionAnnouncement();
         const announcementElement = announcement.get(0);
@@ -849,18 +1131,37 @@ function animateOverlayTypewriter(segments) {
         }
         const textContainer = document.createElement("div");
         textContainer.className = "redemption-announcement-text";
+        if (layout === "headline") {
+            textContainer.classList.add("redemption-announcement-headline");
+        }
+        else if (layout === "list") {
+            textContainer.classList.add("redemption-announcement-list");
+        }
         announcement
+            .removeClass("is-headline is-list is-redemption")
             .addClass("visible")
             .attr("aria-hidden", "false")
             .empty()
             .append(textContainer);
+        if (layout === "headline") {
+            announcement.addClass("is-headline");
+        }
+        else if (layout === "list") {
+            announcement.addClass("is-list");
+        }
+        else {
+            announcement.addClass("is-redemption");
+        }
         meterPanel.addClass("hidden");
+        if ((layout === "list" || layout === "default") && announcementElement) {
+            textContainer.style.maxHeight = `${announcementElement.clientHeight}px`;
+        }
         yield typewriterSegments(textContainer, segments, redemptionLetterDelayMs);
+        if (layout !== "headline") {
+            liftAnnouncementText(textContainer, { pinToTop: true });
+        }
         yield waitMs(redemptionHoldAfterTypeMs);
-        announcement
-            .removeClass("visible")
-            .attr("aria-hidden", "true")
-            .empty();
+        announcement.removeClass("visible is-headline is-list is-redemption").attr("aria-hidden", "true").empty();
         meterPanel.removeClass("hidden");
     });
 }
@@ -924,26 +1225,31 @@ function getTopRedeemers(redemptionHistory, category, limit = topRedeemerLimit) 
     ranked.sort((left, right) => right.count - left.count || left.userName.localeCompare(right.userName));
     return ranked.slice(0, limit);
 }
+/** Segments for centered report headlines (category titles, ALL TIME, CURRENT RUN). */
+function buildReportHeadlineSegments(text) {
+    return [{ text }];
+}
+/** @deprecated Use {@link buildReportHeadlineSegments}. */
+function buildTopRedeemersTitleSegments(title) {
+    return buildReportHeadlineSegments(title);
+}
+/** Ranked rows for the list overlay that follows a report header. */
+function buildTopRedeemersListSegments(redeemers) {
+    if (redeemers.length === 0) {
+        return [{ text: "No redeems yet" }];
+    }
+    return [
+        {
+            text: redeemers.map((row, index) => `${index + 1}. ${row.userName} - ${row.count}`).join("\n"),
+        },
+    ];
+}
 /**
  * Builds typewriter segments for a top-redeemers leaderboard overlay.
- * @param title - Heading shown at the top of the report.
- * @param redeemers - Ranked rows from {@link getTopRedeemers}.
- * @param titleColorClass - CSS class for the heading color.
+ * @deprecated Prefer {@link buildTopRedeemersTitleSegments} and {@link buildTopRedeemersListSegments}.
  */
-function buildTopRedeemersReportSegments(title, redeemers, titleColorClass) {
-    const segments = [
-        { text: `${title}\n`, colorClass: titleColorClass },
-    ];
-    if (redeemers.length === 0) {
-        segments.push({ text: "No redeems yet" });
-        return segments;
-    }
-    segments.push({
-        text: redeemers
-            .map((row, index) => `${index + 1}. ${row.userName} - ${row.count}`)
-            .join("\n"),
-    });
-    return segments;
+function buildTopRedeemersReportSegments(title, redeemers) {
+    return [{ text: `${title}\n` }, ...buildTopRedeemersListSegments(redeemers)];
 }
 /**
  * Builds the redemption summary as colored segments for the typewriter animation.
@@ -1026,7 +1332,7 @@ function typewriterSegments(element, segments, letterDelayMs) {
             flatChars.push({ char: char, colorClass: segment.colorClass });
         }
     }
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
         element.innerHTML = "";
         if (flatChars.length === 0) {
             resolve();
@@ -1070,14 +1376,52 @@ function renderTypewriterChars(element, flatChars, visibleCount) {
         if (colorClass) {
             span.className = colorClass;
         }
-        span.textContent = flatChars.slice(index, end).map(entry => entry.char).join("");
+        span.textContent = flatChars
+            .slice(index, end)
+            .map((entry) => entry.char)
+            .join("");
         element.appendChild(span);
         index = end;
     }
+    const parent = element.parentElement;
+    if (parent != null && !usesFixedOverlayLayout(parent)) {
+        liftAnnouncementText(element);
+    }
+}
+/** Overlays that must not vertically recenter on every typed character. */
+function usesFixedOverlayLayout(parent) {
+    return (parent.classList.contains("is-headline") ||
+        parent.classList.contains("is-list") ||
+        parent.classList.contains("is-redemption"));
+}
+/**
+ * Positions overlay copy inside the fixed announcement window. Short messages
+ * are vertically centered; taller reports stay top-aligned and scroll so the
+ * latest typed line stays visible without clipping the header or footer rows.
+ */
+function liftAnnouncementText(element, options) {
+    const parent = element.parentElement;
+    if (!parent) {
+        return;
+    }
+    element.style.marginTop = "0px";
+    element.style.maxHeight = `${parent.clientHeight}px`;
+    const overflows = element.scrollHeight > element.clientHeight;
+    if (!overflows) {
+        if (!usesFixedOverlayLayout(parent)) {
+            const extraSpace = parent.clientHeight - element.scrollHeight;
+            if (extraSpace > 0) {
+                element.style.marginTop = `${Math.floor(extraSpace / 2)}px`;
+            }
+        }
+        element.scrollTop = 0;
+        return;
+    }
+    element.scrollTop = (options === null || options === void 0 ? void 0 : options.pinToTop) ? 0 : element.scrollHeight - element.clientHeight;
 }
 /** @param durationMs - How long to wait before resolving. */
 function waitMs(durationMs) {
-    return new Promise(resolve => window.setTimeout(resolve, durationMs));
+    return new Promise((resolve) => window.setTimeout(resolve, durationMs));
 }
 /**
  * Returns the count for the named key from the appropriate portion of state:
@@ -1162,6 +1506,9 @@ function updateToggleButtonDisplay(showAll) {
  * The returned factory is invoked immediately inside {@link processDisplay}
  * so the animation only starts once the previous redemption's display cycle
  * has fully completed.
+ * Percent units are used on both keyframes. jQuery's `.css("width")` is
+ * pixels, so interpolating `"40px"` → `"13.33%"` makes an unchanged bar twitch.
+ * Unchanged percents skip the animation.
  * @param ele - The meter fill element to animate, or undefined (no-op).
  * @param currentWidth - CSS width string representing the starting width.
  * @param targetWidth - CSS width string representing the ending width.
@@ -1169,6 +1516,15 @@ function updateToggleButtonDisplay(showAll) {
  * @param type - `TYPE_BLESS` or `TYPE_CURSE`, used to select the glow class.
  * @returns A factory that starts the animation and resolves when it finishes.
  */
+function animateMeterFill(ele, targetWidth, durationOfAnimation, type) {
+    var _a, _b;
+    if (!ele) {
+        return () => Promise.resolve();
+    }
+    const parentWidth = (_b = (_a = ele.parentElement) === null || _a === void 0 ? void 0 : _a.clientWidth) !== null && _b !== void 0 ? _b : 0;
+    const currentWidth = parentWidth > 0 ? `${((ele.offsetWidth / parentWidth) * 100).toFixed(2)}%` : ele.style.width || "0%";
+    return animateChange(ele, currentWidth, targetWidth, durationOfAnimation, type);
+}
 function animateChange(ele, currentWidth, targetWidth, durationOfAnimation, type) {
     // Guard added for TypeScript: jQuery's .get(0) returns HTMLElement | undefined
     if (!ele)
@@ -1179,17 +1535,43 @@ function animateChange(ele, currentWidth, targetWidth, durationOfAnimation, type
     else {
         endGlowForever(ele, type);
     }
-    return () => new Promise(resolve => {
-        const animation = ele.animate([
-            { width: currentWidth }, // Start width & color
-            { width: targetWidth }, // End width
-        ], {
+    const fromPercent = parseCssWidthAsPercent(currentWidth, ele);
+    const toPercent = parseCssWidthAsPercent(targetWidth, ele);
+    if (fromPercent != null && toPercent != null && Math.abs(fromPercent - toPercent) < 0.05) {
+        ele.style.width = `${toPercent.toFixed(2)}%`;
+        return () => Promise.resolve();
+    }
+    const fromWidth = fromPercent != null ? `${fromPercent.toFixed(2)}%` : currentWidth;
+    const toWidth = toPercent != null ? `${toPercent.toFixed(2)}%` : targetWidth;
+    return () => new Promise((resolve) => {
+        const animation = ele.animate([{ width: fromWidth }, { width: toWidth }], {
             duration: durationOfAnimation, // 1 second
             easing: "ease-in-out", // Optional easing function
             fill: "forwards", // Keep the final state after animation
         });
         animation.finished.then(() => resolve());
     });
+}
+/**
+ * Interprets a CSS width as a percentage of the fill's parent meter.
+ * @returns null when the width cannot be converted.
+ */
+function parseCssWidthAsPercent(width, element) {
+    var _a, _b;
+    const trimmed = String(width !== null && width !== void 0 ? width : "").trim();
+    if (trimmed.endsWith("%")) {
+        const value = parseFloat(trimmed);
+        return Number.isFinite(value) ? value : null;
+    }
+    const parentWidth = (_b = (_a = element.parentElement) === null || _a === void 0 ? void 0 : _a.clientWidth) !== null && _b !== void 0 ? _b : 0;
+    if (parentWidth <= 0) {
+        return null;
+    }
+    const pixels = parseFloat(trimmed);
+    if (!Number.isFinite(pixels)) {
+        return null;
+    }
+    return (pixels / parentWidth) * 100;
 }
 /**
  * Adds the glow-forever CSS class to the parent container of the given meter
@@ -1234,7 +1616,7 @@ function endGlowForever(ele, type) {
  * Intended to be called between speedrun attempts via the reset button.
  */
 function resetCurrentState() {
-    SE_API.store.get(STORE_KEY_NAME).then(obj => {
+    SE_API.store.get(STORE_KEY_NAME).then((obj) => {
         if (!obj)
             return;
         obj.lastUpdated = new Date();
@@ -1261,6 +1643,8 @@ function resetCurrentState() {
  */
 function resetAllTimeState() {
     initialWidgetState.lastUpdated = new Date();
+    // The theme is a display preference rather than run data, so it survives a reset.
+    initialWidgetState[ATTRIBUTE_BACKGROUND_THEME] = getBackgroundTheme(lastWidgetState);
     SE_API.store.set(STORE_KEY_NAME, initialWidgetState);
     lastWidgetState = initialWidgetState;
 }
@@ -1275,15 +1659,79 @@ function toggleAllTime() {
     console.log(`Toggling display ${JSON.stringify(lastWidgetState)}`);
     toggleShowAllState();
 }
+//////////////////////
+// BACKGROUND THEME
+//////////////////////
+/**
+ * Coerces a stored or user-supplied value to a known theme, defaulting to
+ * {@link THEME_FFVI} so legacy and malformed states render the original look.
+ * @param value - Candidate theme value.
+ */
+function normalizeBackgroundTheme(value) {
+    return value === THEME_CT ? THEME_CT : THEME_FFVI;
+}
+/**
+ * @param widgetState - The state to read the theme from, or null/undefined.
+ * @returns {@link THEME_FFVI} or {@link THEME_CT}.
+ */
+function getBackgroundTheme(widgetState) {
+    return normalizeBackgroundTheme(widgetState === null || widgetState === void 0 ? void 0 : widgetState[ATTRIBUTE_BACKGROUND_THEME]);
+}
+/**
+ * Applies the theme to the document and syncs the toggle button label.
+ * @param theme - The theme to render.
+ */
+function applyBackgroundTheme(theme) {
+    const normalized = normalizeBackgroundTheme(theme);
+    if (normalized === THEME_CT) {
+        document.body.classList.add(CT_THEME_BODY_CLASS);
+    }
+    else {
+        document.body.classList.remove(CT_THEME_BODY_CLASS);
+    }
+    updateBackgroundThemeButtonDisplay(normalized);
+}
+/**
+ * Labels the toggle with the theme a click switches to, matching how the
+ * all-time button advertises its action rather than its current state.
+ * @param theme - The theme currently applied.
+ */
+function updateBackgroundThemeButtonDisplay(theme) {
+    const label = normalizeBackgroundTheme(theme) === THEME_CT ? "FF6" : "CT";
+    $("#background-theme-toggle").text(label);
+}
+/**
+ * Flips {@link ATTRIBUTE_BACKGROUND_THEME} in SE_API.store. The resulting
+ * kvstore:update re-renders every widget instance with the new theme.
+ */
+function toggleBackgroundThemeState() {
+    SE_API.store.get(STORE_KEY_NAME).then((obj) => {
+        if (!storeHasBeenInitialized(obj)) {
+            console.log("Toggling theme: the store object has not yet been initialized. Setting up initial values.");
+            obj = initialWidgetState;
+        }
+        obj.lastUpdated = new Date();
+        obj[ATTRIBUTE_BACKGROUND_THEME] = getBackgroundTheme(obj) === THEME_CT ? THEME_FFVI : THEME_CT;
+        console.log(`Toggled background theme to ${obj[ATTRIBUTE_BACKGROUND_THEME]}`);
+        SE_API.store.set(STORE_KEY_NAME, obj);
+        // the SE.store.set function emits an onEventReceived for every custom widget
+        lastWidgetState = obj;
+    });
+}
+/**
+ * Toggles between the FFVI and Chrono Trigger backgrounds.
+ * Wired to the theme button's onclick handler.
+ */
+function toggleBackgroundTheme() {
+    toggleBackgroundThemeState();
+}
 /**
  * Returns true when the widget is currently displaying all-time counts
  * (i.e. {@link ATTRIBUTE_SHOW_ALL} is present and truthy on `widgetState`).
  * @param widgetState - The state to check, or null/undefined.
  */
 function isShowingAll(widgetState) {
-    const result = widgetState != undefined
-        && widgetState[ATTRIBUTE_SHOW_ALL] != undefined
-        && !!widgetState[ATTRIBUTE_SHOW_ALL];
+    const result = widgetState != undefined && widgetState[ATTRIBUTE_SHOW_ALL] != undefined && widgetState[ATTRIBUTE_SHOW_ALL];
     console.log(`isShowingAll? ${result}`);
     return result;
 }
@@ -1326,7 +1774,7 @@ function mockRedeemEvent(redemptionName) {
                 data: {
                     redemption: redemptionName,
                 },
-                name: "testUserName"
+                name: "testUserName",
             },
         },
     });

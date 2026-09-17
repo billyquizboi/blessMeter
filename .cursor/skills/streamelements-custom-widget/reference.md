@@ -4,18 +4,18 @@ Condensed from StreamElements docs and [v1/se-api.d.ts](../../../v1/se-api.d.ts)
 
 ## FIELDS JSON — supported types
 
-| type | value type | notes |
-|------|------------|-------|
-| text | string | |
-| checkbox | boolean | |
-| colorpicker | string (`#RRGGBB`) | |
-| number | number | `min`, `max`, `step` |
-| slider | number | `min`, `max`, `step` |
-| dropdown | string (option key) | `options`: `{ "key": "Label" }` |
-| image-input, video-input, sound-input | url or url[] | `"multiple": true` → array |
-| googleFont | font name | e.g. `"Roboto"` |
-| button | string | click → `widget-button` event |
-| hidden | any | `widgetName`, `widgetAuthor`, `widgetDuration` |
+| type                                  | value type          | notes                                          |
+| ------------------------------------- | ------------------- | ---------------------------------------------- |
+| text                                  | string              |                                                |
+| checkbox                              | boolean             |                                                |
+| colorpicker                           | string (`#RRGGBB`)  |                                                |
+| number                                | number              | `min`, `max`, `step`                           |
+| slider                                | number              | `min`, `max`, `step`                           |
+| dropdown                              | string (option key) | `options`: `{ "key": "Label" }`                |
+| image-input, video-input, sound-input | url or url[]        | `"multiple": true` → array                     |
+| googleFont                            | font name           | e.g. `"Roboto"`                                |
+| button                                | string              | click → `widget-button` event                  |
+| hidden                                | any                 | `widgetName`, `widgetAuthor`, `widgetDuration` |
 
 Invalid `type` falls back to `text`. Group fields with `"group": "Section name"`.
 
@@ -24,47 +24,47 @@ Template in HTML/CSS/JS: `{{fieldKey}}` or `{fieldKey}` (docs prefer HTML/CSS on
 ## `onWidgetLoad` detail shape
 
 ```javascript
-obj.detail.fieldData   // current field values
-obj.detail.session.data // session dashboard stats
-obj.detail.recents     // last ~25 events, chronological
-obj.detail.currency    // { code, name, symbol }
-obj.detail.channel     // { username, apiToken, ... }
+obj.detail.fieldData; // current field values
+obj.detail.session.data; // session dashboard stats
+obj.detail.recents; // last ~25 events, chronological
+obj.detail.currency; // { code, name, symbol }
+obj.detail.channel; // { username, apiToken, ... }
 ```
 
 Session keys vary by platform; see [Session Data Reference](https://docs.streamelements.com/overlays/session-data).
 
 ## `onEventReceived` listeners
 
-| listener | when |
-|----------|------|
-| `follower-latest` | new follower |
-| `subscriber-latest` | new sub |
-| `host-latest` | host |
-| `cheer-latest` | cheer |
-| `kicks-latest` | Kick KICKs gift |
-| `tip-latest` | tip |
-| `raid-latest` | raid |
-| `message` | chat message |
-| `delete-message` | single message removed (`msgId`) |
-| `delete-messages` | all messages from `userId` removed |
-| `event:skip` | skip alert (activity feed) |
-| `alertService:toggleSound` | mute/unmute alerts |
-| `bot:counter` | bot counter changed (`counter`, `value`) |
-| `kvstore:update` | `SE_API.store.set` on account |
-| `widget-button` | FIELDS `button` clicked (`field`, `value`) |
+| listener                   | when                                       |
+| -------------------------- | ------------------------------------------ |
+| `follower-latest`          | new follower                               |
+| `subscriber-latest`        | new sub                                    |
+| `host-latest`              | host                                       |
+| `cheer-latest`             | cheer                                      |
+| `kicks-latest`             | Kick KICKs gift                            |
+| `tip-latest`               | tip                                        |
+| `raid-latest`              | raid                                       |
+| `message`                  | chat message                               |
+| `delete-message`           | single message removed (`msgId`)           |
+| `delete-messages`          | all messages from `userId` removed         |
+| `event:skip`               | skip alert (activity feed)                 |
+| `alertService:toggleSound` | mute/unmute alerts                         |
+| `bot:counter`              | bot counter changed (`counter`, `value`)   |
+| `kvstore:update`           | `SE_API.store.set` on account              |
+| `widget-button`            | FIELDS `button` clicked (`field`, `value`) |
 
 ### `-latest` event fields (`obj.detail.event`)
 
-| field | meaning |
-|-------|---------|
-| `name` | user who triggered |
-| `amount` | count / amount |
-| `message` | attached message |
-| `gifted` | gift to viewer |
-| `sender` | gifter |
-| `bulkGifted` | start of community gift |
-| `isCommunityGift` | one gift in community train |
-| `playedAsCommunityGift` | cumulative sub bomb alert |
+| field                   | meaning                     |
+| ----------------------- | --------------------------- |
+| `name`                  | user who triggered          |
+| `amount`                | count / amount              |
+| `message`               | attached message            |
+| `gifted`                | gift to viewer              |
+| `sender`                | gifter                      |
+| `bulkGifted`            | start of community gift     |
+| `isCommunityGift`       | one gift in community train |
+| `playedAsCommunityGift` | cumulative sub bomb alert   |
 
 Tips may include `userCurrency` (with `.symbol`, etc.).
 
@@ -135,9 +135,14 @@ Releases alert queue before `widgetDuration` expires.
 
 ```javascript
 const skippable = [
-  "message", "delete-message", "delete-messages",
-  "kvstore:update", "bot:counter", "widget-button",
-  "event:skip", "alertService:toggleSound"
+  "message",
+  "delete-message",
+  "delete-messages",
+  "kvstore:update",
+  "bot:counter",
+  "widget-button",
+  "event:skip",
+  "alertService:toggleSound",
 ];
 
 window.addEventListener("onEventReceived", (obj) => {
@@ -201,7 +206,7 @@ interface SEEventDetail {
 interface SEEvent {
   type?: string;
   itemId?: string;
-  data?: SEEventData;  // redemption?, key?, value?: WidgetState
+  data?: SEEventData; // redemption?, key?, value?: WidgetState
   name?: string;
 }
 ```
@@ -233,11 +238,13 @@ new CustomEvent("onEventReceived", {
 
 ```javascript
 if (listener === "widget-button" && data.field === "myButton") {
-  window.dispatchEvent(new CustomEvent("onEventReceived", {
-    detail: {
-      listener: "message",
-      event: { data: { text: "Test", displayName: "SE" } },
-    },
-  }));
+  window.dispatchEvent(
+    new CustomEvent("onEventReceived", {
+      detail: {
+        listener: "message",
+        event: { data: { text: "Test", displayName: "SE" } },
+      },
+    })
+  );
 }
 ```

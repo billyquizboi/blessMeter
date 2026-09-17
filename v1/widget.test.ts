@@ -24,15 +24,7 @@ import * as path from "path";
 // ---------------------------------------------------------------------------
 const WIDGET_HTML_PATH = path.resolve(__dirname, "widget.html");
 const WIDGET_JS_PATH = path.resolve(__dirname, "widget.js");
-const JQUERY_PATH = path.resolve(
-  __dirname,
-  "..",
-  "node_modules",
-  "jquery",
-  "dist",
-  "jquery.js"
-);
-
+const JQUERY_PATH = path.resolve(__dirname, "..", "node_modules", "jquery", "dist", "jquery.js");
 
 declare global {
   // interface Window {
@@ -70,9 +62,17 @@ declare global {
     updateToggleButtonDisplay: UpdateToggleButtonDisplayFn;
     showCharSvg: ShowCharSvgFn;
     animateChange: AnimateChangeFn;
+    parseCssWidthAsPercent: (width: string, element: HTMLElement) => number | null;
     animateGlowForever: GlowFn;
     endGlowForever: GlowFn;
     toggleAllTime: NoArgVoidFunction;
+    // Background theme
+    normalizeBackgroundTheme: NormalizeBackgroundThemeFn;
+    getBackgroundTheme: GetBackgroundThemeFn;
+    applyBackgroundTheme: ApplyBackgroundThemeFn;
+    updateBackgroundThemeButtonDisplay: UpdateBackgroundThemeButtonDisplayFn;
+    toggleBackgroundThemeState: NoArgVoidFunction;
+    toggleBackgroundTheme: NoArgVoidFunction;
     // Predicates
     storeHasBeenInitialized: StoreHasBeenInitializedFn;
     canIncrement: CanIncrementFn;
@@ -91,14 +91,40 @@ declare global {
     getTypeColorClass: (charType: string) => string;
     getMeterTargetColorClass: (meterTarget: string) => string;
     buildRedemptionAnnouncementSegments: (redemption: LastRedemption) => { text: string; colorClass?: string }[];
-    typewriterSegments: (element: HTMLElement, segments: { text: string; colorClass?: string }[], letterDelayMs: number) => Promise<void>;
+    typewriterSegments: (
+      element: HTMLElement,
+      segments: { text: string; colorClass?: string }[],
+      letterDelayMs: number
+    ) => Promise<void>;
+    liftAnnouncementText: (element: HTMLElement, options?: { pinToTop?: boolean }) => void;
     animateRedemptionAnnouncement: (redemption: LastRedemption) => Promise<void>;
     animateOverlayTypewriter: (segments: { text: string; colorClass?: string }[]) => Promise<void>;
     createEmptyRedemptionHistoryEntry: () => RedemptionHistoryEntry;
     normalizeRedemptionHistoryEntry: (entry: RedemptionHistoryEntry) => RedemptionHistoryEntry;
-    getTopRedeemers: (history: RedemptionHistory | undefined, category: "bless" | "curse" | "blurse", limit?: number) => { userName: string; count: number }[];
-    buildTopRedeemersReportSegments: (title: string, redeemers: { userName: string; count: number }[], titleColorClass: string) => { text: string; colorClass?: string }[];
+    getTopRedeemers: (
+      history: RedemptionHistory | undefined,
+      category: "bless" | "curse" | "blurse",
+      limit?: number
+    ) => { userName: string; count: number }[];
+    buildReportHeadlineSegments: (text: string) => { text: string; colorClass?: string }[];
+    buildTopRedeemersTitleSegments: (title: string) => { text: string; colorClass?: string }[];
+    buildTopRedeemersListSegments: (
+      redeemers: { userName: string; count: number }[]
+    ) => { text: string; colorClass?: string }[];
+    buildTopRedeemersReportSegments: (
+      title: string,
+      redeemers: { userName: string; count: number }[]
+    ) => { text: string; colorClass?: string }[];
     applyFieldData: (fieldData: FieldData) => void;
+    getRedemptionAnnouncementId: (widgetState: WidgetState | null | undefined) => string | null;
+    parseEmoteNamesCsv: (csv: string) => string[];
+    findMatchingTrackedEmotesInChat: (message: ChatMessageData, trackedLower: Set<string>) => string[];
+    handleChatMessage: (detail: SEEventDetail) => void;
+    buildEmoteBlessAnnouncementSegments: (
+      distinctDisplayNames: string[],
+      matchCount: number
+    ) => { text: string; colorClass?: string }[];
+    formatEmoteBlessHeadline: (configuredText: string) => string;
     configurePeriodicReports: () => void;
     stopPeriodicReports: () => void;
     enqueuePeriodicReportCycle: (force?: boolean) => void;
@@ -140,7 +166,6 @@ function createMockSEAPI(initialState?: WidgetState): MockSEAPI {
   };
 }
 
-
 // ---------------------------------------------------------------------------
 // JSDOM setup helper
 // ---------------------------------------------------------------------------
@@ -148,7 +173,7 @@ interface TestEnv {
   dom: JSDOM;
   mockSEAPI: MockSEAPI;
   /** Convenience shortcut: dom.window cast to any for calling widget globals */
-  w: Window; // eslint-disable-line @typescript-eslint/no-explicit-any
+  w: Window;
 }
 
 function setupTestDOM(initialState?: WidgetState): TestEnv {
@@ -183,8 +208,21 @@ function setupTestDOM(initialState?: WidgetState): TestEnv {
   widgetScript.textContent = widgetContent;
   dom.window.document.head.appendChild(widgetScript);
 
-  return { dom, mockSEAPI, w: dom.window as any as Window };
+  const env: TestEnv = { dom, mockSEAPI, w: dom.window as any as Window };
+  openTestEnvs.push(env);
+  return env;
 }
+
+/** JSDOMs whose report intervals must be cleared so Jest can exit cleanly. */
+const openTestEnvs: TestEnv[] = [];
+
+afterEach(() => {
+  for (const env of openTestEnvs) {
+    env.w.stopPeriodicReports();
+    env.dom.window.close();
+  }
+  openTestEnvs.length = 0;
+});
 
 /** Flush the microtask queue so Promise .then() callbacks have run. */
 const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -536,9 +574,7 @@ describe("resetMetersButKeepCurrentState", () => {
   });
 
   it("returns undefined when state has no current", () => {
-    expect(
-      w.resetMetersButKeepCurrentState({ allTime: {}, showAll: false } as any as WidgetState)
-    ).toBeUndefined();
+    expect(w.resetMetersButKeepCurrentState({ allTime: {}, showAll: false } as any as WidgetState)).toBeUndefined();
   });
 
   it("resets current counters to 0", () => {
@@ -561,7 +597,7 @@ describe("resetMetersButKeepCurrentState", () => {
     const result = w.resetMetersButKeepCurrentState(state);
     expect(result).toBeDefined();
     expect(result!.current.numberOfBlessesPreReset).toBe(3 + 8); // 11
-    expect(result!.current.numberOfCursesPreReset).toBe(2 + 6);  // 8
+    expect(result!.current.numberOfCursesPreReset).toBe(2 + 6); // 8
   });
 
   it("preserves allTime and showAll from the original state", () => {
@@ -582,7 +618,7 @@ describe("resetMetersButKeepCurrentState", () => {
     const result = w.resetMetersButKeepCurrentState(state);
     expect(result).toBeDefined();
     expect(result!.current.numberOfBlursesThatBlessedPreReset).toBe(1 + 4); // 5
-    expect(result!.current.numberOfBlursesThatCursedPreReset).toBe(0 + 2);  // 2
+    expect(result!.current.numberOfBlursesThatCursedPreReset).toBe(0 + 2); // 2
   });
 });
 
@@ -829,6 +865,51 @@ describe("typewriterSegments", () => {
     expect(colored).toContain("redemption-text-bless");
   });
 
+  it("does not apply liftAnnouncementText margins while typing in headline overlays", async () => {
+    const parent = w.document.createElement("div");
+    parent.className = "redemption-announcement visible is-headline";
+    const container = w.document.createElement("div");
+    container.className = "redemption-announcement-text redemption-announcement-headline";
+    parent.appendChild(container);
+    w.document.body.appendChild(parent);
+
+    await w.typewriterSegments(container, [{ text: "CURRENT RUN" }], 0);
+
+    expect(container.style.marginTop).toBe("");
+    expect(container.style.maxHeight).toBe("");
+  });
+
+  it("does not vertically recenter redemption overlays while typing", async () => {
+    const parent = w.document.createElement("div");
+    parent.className = "redemption-announcement visible is-redemption";
+    Object.defineProperty(parent, "clientHeight", { value: 60, configurable: true });
+    const container = w.document.createElement("div");
+    container.className = "redemption-announcement-text";
+    container.style.maxHeight = "60px";
+    parent.appendChild(container);
+    w.document.body.appendChild(parent);
+
+    const segments = w.buildRedemptionAnnouncementSegments(makeLastRedemption());
+    await w.typewriterSegments(container, segments, 0);
+
+    expect(container.style.marginTop).toBe("");
+  });
+
+  it("does not vertically recenter list overlays while typing top redeemers", async () => {
+    const parent = w.document.createElement("div");
+    parent.className = "redemption-announcement visible is-list";
+    Object.defineProperty(parent, "clientHeight", { value: 60, configurable: true });
+    const container = w.document.createElement("div");
+    container.className = "redemption-announcement-text redemption-announcement-list";
+    container.style.maxHeight = "60px";
+    parent.appendChild(container);
+    w.document.body.appendChild(parent);
+
+    await w.typewriterSegments(container, [{ text: "1. alice - 3\n2. bob - 2\n3. carol - 1" }], 0);
+
+    expect(container.style.marginTop).toBe("");
+  });
+
   it("reveals text one character at a time", async () => {
     const container = w.document.createElement("div");
     const promise = w.typewriterSegments(container, [{ text: "abc" }], 10);
@@ -840,6 +921,29 @@ describe("typewriterSegments", () => {
     await jest.runAllTimersAsync();
     await promise;
     expect(container.textContent).toBe("abc");
+  });
+});
+
+describe("liftAnnouncementText", () => {
+  it("centers short copy and scrolls when the copy outgrows the window", () => {
+    const { w } = setupTestDOM();
+    const parent = w.document.createElement("div");
+    const child = w.document.createElement("div");
+    parent.appendChild(child);
+    Object.defineProperty(parent, "clientHeight", { value: 60, configurable: true });
+    Object.defineProperty(child, "scrollHeight", { value: 20, configurable: true });
+    Object.defineProperty(child, "clientHeight", { value: 20, configurable: true });
+
+    w.liftAnnouncementText(child);
+    expect(child.style.marginTop).toBe("20px");
+    expect(child.style.maxHeight).toBe("60px");
+    expect(child.scrollTop).toBe(0);
+
+    Object.defineProperty(child, "scrollHeight", { value: 80, configurable: true });
+    Object.defineProperty(child, "clientHeight", { value: 60, configurable: true });
+    w.liftAnnouncementText(child);
+    expect(child.style.marginTop).toBe("0px");
+    expect(child.scrollTop).toBe(20);
   });
 });
 
@@ -886,8 +990,12 @@ describe("animateRedemptionAnnouncement", () => {
     );
     await w.typewriterSegments(container, segments, 0);
     const spans = Array.from(container.querySelectorAll("span"));
-    expect(spans.some((span) => span.className === "redemption-text-curse" && span.textContent === "CURSED")).toBe(true);
-    expect(spans.some((span) => span.className === "redemption-text-curse" && span.textContent === "+1 CURSE")).toBe(true);
+    expect(spans.some((span) => span.className === "redemption-text-curse" && span.textContent === "CURSED")).toBe(
+      true
+    );
+    expect(spans.some((span) => span.className === "redemption-text-curse" && span.textContent === "+1 CURSE")).toBe(
+      true
+    );
   });
 });
 
@@ -1040,9 +1148,7 @@ describe("incrementState", () => {
     await flushPromises();
 
     const blurseOutcomes = [0.1, 0.9];
-    const randomSpy = jest
-      .spyOn(dom.window.Math, "random")
-      .mockImplementation(() => blurseOutcomes.shift() ?? 0.5);
+    const randomSpy = jest.spyOn(dom.window.Math, "random").mockImplementation(() => blurseOutcomes.shift() ?? 0.5);
     w.incrementState("numberOfBlurses", "carol");
     await flushPromises();
     w.incrementState("numberOfBlurses", "carol");
@@ -1052,11 +1158,13 @@ describe("incrementState", () => {
     const saved = mockSEAPI.store._data["blessCurseMeterState"];
     expect(saved?.redemptionHistory?.alice).toEqual(makeRedemptionHistoryEntry({ numberOfBlesses: 1 }));
     expect(saved?.redemptionHistory?.bob).toEqual(makeRedemptionHistoryEntry({ numberOfCurses: 1 }));
-    expect(saved?.redemptionHistory?.carol).toEqual(makeRedemptionHistoryEntry({
-      numberOfBlurses: 2,
-      numberOfBlursesThatBlessed: 1,
-      numberOfBlursesThatCursed: 1,
-    }));
+    expect(saved?.redemptionHistory?.carol).toEqual(
+      makeRedemptionHistoryEntry({
+        numberOfBlurses: 2,
+        numberOfBlursesThatBlessed: 1,
+        numberOfBlursesThatCursed: 1,
+      })
+    );
   });
 
   it("resets meters when both are at max and calls set with reset state", async () => {
@@ -1076,6 +1184,58 @@ describe("incrementState", () => {
     // After reset, current counts should be 0
     const saved = mockSEAPI.store._data["blessCurseMeterState"];
     expect(saved?.current.numberOfBlesses).toBe(0);
+  });
+
+  it("applies overlapping increments instead of letting the last write win", async () => {
+    const state = makeState();
+    const { w, mockSEAPI } = setupTestDOM(state);
+    mockSEAPI.store.get.mockImplementation(
+      (key: string) =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve(mockSEAPI.store._data[key] ?? null), 15);
+        })
+    );
+
+    w.incrementState("numberOfBlesses", "alice");
+    w.incrementState("numberOfBlesses", "alice");
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    const saved = mockSEAPI.store._data["blessCurseMeterState"];
+    expect(saved?.current.numberOfBlesses).toBe(2);
+    expect(saved?.allTime.numberOfBlesses).toBe(2);
+    expect(saved?.redemptionHistory?.alice.numberOfBlesses).toBe(2);
+  });
+});
+
+describe("animateChange", () => {
+  it("skips interpolation when the fill is already at the target percent", async () => {
+    const { w, dom } = setupTestDOM(makeState());
+    const meter = dom.window.document.createElement("div");
+    const fill = dom.window.document.createElement("div");
+    meter.appendChild(fill);
+    Object.defineProperty(meter, "clientWidth", { value: 200, configurable: true });
+    w.document.body.appendChild(meter);
+
+    await w.animateChange(fill, "40px", "20.00%", 1000, "bless")();
+
+    expect(fill.animate).not.toHaveBeenCalled();
+    expect(parseFloat(fill.style.width)).toBe(20);
+  });
+
+  it("animates percent-to-percent when the fill actually changes", async () => {
+    const { w, dom } = setupTestDOM(makeState());
+    const meter = dom.window.document.createElement("div");
+    const fill = dom.window.document.createElement("div");
+    meter.appendChild(fill);
+    Object.defineProperty(meter, "clientWidth", { value: 200, configurable: true });
+    w.document.body.appendChild(meter);
+
+    await w.animateChange(fill, "40px", "40.00%", 1000, "curse")();
+
+    expect(fill.animate).toHaveBeenCalledWith(
+      [{ width: "20.00%" }, { width: "40.00%" }],
+      expect.objectContaining({ fill: "forwards" })
+    );
   });
 });
 
@@ -1350,6 +1510,31 @@ describe("getTopRedeemers", () => {
   });
 });
 
+describe("buildTopRedeemersTitleSegments / buildTopRedeemersListSegments", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("builds a plain headline segment matching ALL TIME / CURRENT RUN", () => {
+    expect(w.buildReportHeadlineSegments("CURRENT RUN")).toEqual([{ text: "CURRENT RUN" }]);
+    expect(w.buildTopRedeemersTitleSegments("TOP BLESS REDEEMERS")).toEqual([{ text: "TOP BLESS REDEEMERS" }]);
+  });
+
+  it("builds ranked rows for the list overlay", () => {
+    const segments = w.buildTopRedeemersListSegments([
+      { userName: "alice", count: 3 },
+      { userName: "bob", count: 1 },
+    ]);
+    expect(segments).toEqual([{ text: "1. alice - 3\n2. bob - 1" }]);
+  });
+
+  it("shows a fallback when there are no redeems", () => {
+    expect(w.buildTopRedeemersListSegments([])).toEqual([{ text: "No redeems yet" }]);
+  });
+});
+
 describe("buildTopRedeemersReportSegments", () => {
   let w: Window;
 
@@ -1357,19 +1542,414 @@ describe("buildTopRedeemersReportSegments", () => {
     ({ w } = setupTestDOM());
   });
 
-  it("builds a colored title and ranked rows", () => {
-    const segments = w.buildTopRedeemersReportSegments(
-      "TOP BLESS REDEEMERS",
-      [{ userName: "alice", count: 3 }, { userName: "bob", count: 1 }],
-      "redemption-text-bless"
-    );
-    expect(segments[0]).toEqual({ text: "TOP BLESS REDEEMERS\n", colorClass: "redemption-text-bless" });
+  it("combines title and list segments for legacy callers", () => {
+    const segments = w.buildTopRedeemersReportSegments("TOP BLESS REDEEMERS", [
+      { userName: "alice", count: 3 },
+      { userName: "bob", count: 1 },
+    ]);
+    expect(segments[0]).toEqual({ text: "TOP BLESS REDEEMERS\n" });
     expect(segments[1].text).toBe("1. alice - 3\n2. bob - 1");
   });
+});
 
-  it("shows a fallback when there are no redeems", () => {
-    const segments = w.buildTopRedeemersReportSegments("TOP CURSE REDEEMERS", [], "redemption-text-curse");
-    expect(segments[1]).toEqual({ text: "No redeems yet" });
+// ===========================================================================
+// Emote-triggered bless
+// ===========================================================================
+describe("emote bless helpers", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("parseEmoteNamesCsv splits and trims entries", () => {
+    expect(w.parseEmoteNamesCsv(" Kappa , PogChamp, ")).toEqual(["Kappa", "PogChamp"]);
+    expect(w.parseEmoteNamesCsv("")).toEqual([]);
+  });
+
+  it("findMatchingTrackedEmotesInChat matches emote objects case-insensitively", () => {
+    const tracked = new Set(["kappa", "pogchamp"]);
+    const fromEmotes = w.findMatchingTrackedEmotesInChat({ emotes: [{ name: "Kappa" }, { name: "LUL" }] }, tracked);
+    expect(fromEmotes).toEqual(["Kappa"]);
+
+    const fromText = w.findMatchingTrackedEmotesInChat({ text: "hello PogChamp world" }, tracked);
+    expect(fromText).toEqual(["PogChamp"]);
+  });
+
+  it("buildEmoteBlessAnnouncementSegments includes match and user summary", () => {
+    const segments = w.buildEmoteBlessAnnouncementSegments(["alice", "bob"], 5);
+    expect(segments[0].text).toBe("Mustache man blesses the run\n");
+    expect(segments[1].text).toContain("Impact:");
+    expect(segments[2].text).toBe("+1 BLESS");
+  });
+
+  it("uses the configured headline and always appends a newline", () => {
+    w.applyFieldData({ emoteBlessHeadlineText: "POGGERS" });
+    const segments = w.buildEmoteBlessAnnouncementSegments(["alice"], 1);
+    expect(segments[0].text).toBe("POGGERS\n");
+    expect(w.formatEmoteBlessHeadline("")).toBe("Mustache man blesses the run\n");
+    expect(w.formatEmoteBlessHeadline("Custom\n")).toBe("Custom\n");
+  });
+});
+
+describe("handleChatMessage emote bless", () => {
+  const emoteFieldData: FieldData = {
+    emoteBlessEnabled: true,
+    emoteBlessEmoteNamesCsv: "Kappa",
+    emoteBlessWindowSeconds: 120,
+    emoteBlessRequiredMatches: 2,
+  };
+
+  it("increments bless after enough matching emotes in the window", async () => {
+    const state = makeState();
+    const { w, mockSEAPI } = setupTestDOM(state);
+    w.applyFieldData(emoteFieldData);
+    w.animateOverlayTypewriter = jest.fn().mockResolvedValue(undefined);
+
+    const makeMessageDetail = (displayName: string, emoteName: string): SEEventDetail => ({
+      listener: "message",
+      event: {
+        data: {
+          displayName,
+          userId: displayName,
+          emotes: [{ name: emoteName }],
+          text: emoteName,
+        },
+      },
+    });
+
+    w.handleChatMessage(makeMessageDetail("alice", "Kappa"));
+    w.handleChatMessage(makeMessageDetail("bob", "Kappa"));
+    await flushPromises();
+    await flushPromises();
+
+    const saved = mockSEAPI.store._data["blessCurseMeterState"];
+    expect(saved?.current.numberOfBlesses).toBe(1);
+    expect(w.animateOverlayTypewriter).toHaveBeenCalled();
+  });
+
+  it("ignores chat when the feature is disabled", async () => {
+    const state = makeState();
+    const { w, mockSEAPI } = setupTestDOM(state);
+    w.applyFieldData({ ...emoteFieldData, emoteBlessEnabled: false });
+
+    w.handleChatMessage({
+      listener: "message",
+      event: { data: { displayName: "alice", emotes: [{ name: "Kappa" }] } },
+    });
+    w.handleChatMessage({
+      listener: "message",
+      event: { data: { displayName: "bob", emotes: [{ name: "Kappa" }] } },
+    });
+    await flushPromises();
+
+    expect(mockSEAPI.store._data["blessCurseMeterState"]?.current.numberOfBlesses).toBe(0);
+  });
+
+  it("does not trigger again until the cooldown elapses", async () => {
+    const state = makeState();
+    const { w, mockSEAPI } = setupTestDOM(state);
+    const now = jest.spyOn((w as unknown as { Date: DateConstructor }).Date, "now");
+    now.mockReturnValue(1_000_000);
+    try {
+      w.applyFieldData({ ...emoteFieldData, emoteBlessCooldownSeconds: 300 });
+      w.animateOverlayTypewriter = jest.fn().mockResolvedValue(undefined);
+
+      const makeMessageDetail = (displayName: string): SEEventDetail => ({
+        listener: "message",
+        event: {
+          data: {
+            displayName,
+            userId: displayName,
+            emotes: [{ name: "Kappa" }],
+            text: "Kappa",
+          },
+        },
+      });
+
+      w.handleChatMessage(makeMessageDetail("alice"));
+      w.handleChatMessage(makeMessageDetail("bob"));
+      await flushPromises();
+      await flushPromises();
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.current.numberOfBlesses).toBe(1);
+
+      w.handleChatMessage(makeMessageDetail("carol"));
+      w.handleChatMessage(makeMessageDetail("dave"));
+      await flushPromises();
+      await flushPromises();
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.current.numberOfBlesses).toBe(1);
+
+      now.mockReturnValue(1_000_000 + 299_000);
+      w.handleChatMessage(makeMessageDetail("erin"));
+      w.handleChatMessage(makeMessageDetail("frank"));
+      await flushPromises();
+      await flushPromises();
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.current.numberOfBlesses).toBe(1);
+
+      now.mockReturnValue(1_000_000 + 300_000);
+      w.handleChatMessage(makeMessageDetail("gina"));
+      w.handleChatMessage(makeMessageDetail("hank"));
+      await flushPromises();
+      await flushPromises();
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.current.numberOfBlesses).toBe(2);
+    } finally {
+      now.mockRestore();
+    }
+  });
+});
+
+// ===========================================================================
+// Background theme toggle (FFVI <-> Chrono Trigger)
+// ===========================================================================
+describe("background theme", () => {
+  const themeClass = "theme-ct";
+  const themeButtonText = (w: Window) => w.document.getElementById("background-theme-toggle")?.textContent;
+  const hasCtTheme = (w: Window) => w.document.body.classList.contains(themeClass);
+
+  describe("normalizeBackgroundTheme", () => {
+    it("passes through the Chrono Trigger theme", () => {
+      const { w } = setupTestDOM();
+      expect(w.normalizeBackgroundTheme("ct")).toBe("ct");
+    });
+
+    it("falls back to ffvi for unknown, missing, or malformed values", () => {
+      const { w } = setupTestDOM();
+      expect(w.normalizeBackgroundTheme("ffvi")).toBe("ffvi");
+      expect(w.normalizeBackgroundTheme(undefined)).toBe("ffvi");
+      expect(w.normalizeBackgroundTheme(null)).toBe("ffvi");
+      expect(w.normalizeBackgroundTheme("chrono")).toBe("ffvi");
+      expect(w.normalizeBackgroundTheme(7)).toBe("ffvi");
+    });
+  });
+
+  describe("getBackgroundTheme", () => {
+    it("defaults to ffvi for states saved before the theme existed", () => {
+      const { w } = setupTestDOM();
+      expect(w.getBackgroundTheme(makeState())).toBe("ffvi");
+      expect(w.getBackgroundTheme(null)).toBe("ffvi");
+    });
+
+    it("reads ct from state", () => {
+      const { w } = setupTestDOM();
+      expect(w.getBackgroundTheme(makeState({ backgroundTheme: "ct" }))).toBe("ct");
+    });
+  });
+
+  describe("applyBackgroundTheme", () => {
+    it("adds the body class and labels the button FF6 for ct", () => {
+      const { w } = setupTestDOM();
+
+      w.applyBackgroundTheme("ct");
+
+      expect(hasCtTheme(w)).toBe(true);
+      expect(themeButtonText(w)).toBe("FF6");
+    });
+
+    it("removes the body class and labels the button CT for ffvi", () => {
+      const { w } = setupTestDOM();
+      w.applyBackgroundTheme("ct");
+
+      w.applyBackgroundTheme("ffvi");
+
+      expect(hasCtTheme(w)).toBe(false);
+      expect(themeButtonText(w)).toBe("CT");
+    });
+
+    it("treats an unknown theme as ffvi", () => {
+      const { w } = setupTestDOM();
+      w.applyBackgroundTheme("ct");
+
+      w.applyBackgroundTheme("nonsense");
+
+      expect(hasCtTheme(w)).toBe(false);
+    });
+  });
+
+  describe("toggleBackgroundThemeState", () => {
+    it("persists ct when the stored theme is ffvi", async () => {
+      const { w, mockSEAPI } = setupTestDOM(makeState());
+
+      w.toggleBackgroundThemeState();
+      await flushPromises();
+
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.backgroundTheme).toBe("ct");
+    });
+
+    it("persists ffvi when the stored theme is ct", async () => {
+      const { w, mockSEAPI } = setupTestDOM(makeState({ backgroundTheme: "ct" }));
+
+      w.toggleBackgroundThemeState();
+      await flushPromises();
+
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.backgroundTheme).toBe("ffvi");
+    });
+
+    it("leaves the run counters untouched", async () => {
+      const state = makeState();
+      state.current.numberOfBlesses = 4;
+      state.allTime.numberOfBlesses = 9;
+      const { w, mockSEAPI } = setupTestDOM(state);
+
+      w.toggleBackgroundThemeState();
+      await flushPromises();
+
+      const saved = mockSEAPI.store._data["blessCurseMeterState"];
+      expect(saved?.current.numberOfBlesses).toBe(4);
+      expect(saved?.allTime.numberOfBlesses).toBe(9);
+    });
+  });
+
+  describe("updateDisplay", () => {
+    it("applies the theme carried by the rendered state", async () => {
+      const { w } = setupTestDOM(makeState());
+
+      w.updateDisplay(makeState({ backgroundTheme: "ct" }), false);
+      await flushPromises();
+
+      expect(hasCtTheme(w)).toBe(true);
+      expect(themeButtonText(w)).toBe("FF6");
+    });
+
+    it("switches back when a later state carries ffvi", async () => {
+      const { w } = setupTestDOM(makeState());
+      w.updateDisplay(makeState({ backgroundTheme: "ct" }), false);
+      await flushPromises();
+
+      w.updateDisplay(makeState(), false);
+      await flushPromises();
+
+      expect(hasCtTheme(w)).toBe(false);
+    });
+  });
+
+  describe("persistence across resets", () => {
+    it("keeps the theme through resetCurrentState", async () => {
+      const { w, mockSEAPI } = setupTestDOM(makeState({ backgroundTheme: "ct" }));
+
+      w.resetCurrentState();
+      await flushPromises();
+
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.backgroundTheme).toBe("ct");
+    });
+
+    it("keeps the theme through resetAllTimeState", async () => {
+      const { w, mockSEAPI } = setupTestDOM(makeState({ backgroundTheme: "ct" }));
+      // resetAllTimeState reads the theme from the last rendered state.
+      w.updateDisplay(makeState({ backgroundTheme: "ct" }), false);
+      await flushPromises();
+
+      w.resetAllTimeState();
+      await flushPromises();
+
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.backgroundTheme).toBe("ct");
+    });
+
+    it("keeps the theme when both meters max out and the run resets", async () => {
+      const state = makeState({ backgroundTheme: "ct" });
+      state.current.numberOfBlesses = 15;
+      state.current.numberOfCurses = 15;
+      const { w, mockSEAPI } = setupTestDOM(state);
+
+      w.incrementState("numberOfBlesses", "alice");
+      await flushPromises();
+
+      expect(mockSEAPI.store._data["blessCurseMeterState"]?.backgroundTheme).toBe("ct");
+    });
+  });
+});
+
+// ===========================================================================
+// Redemption announcement de-duplication (lastRedemption.id)
+// ===========================================================================
+describe("redemption announcement de-duplication", () => {
+  const isAnnouncementVisible = (w: Window) =>
+    w.document.querySelector(".redemption-announcement")?.classList.contains("visible");
+
+  const savedState = (mockSEAPI: MockSEAPI) => mockSEAPI.store._data["blessCurseMeterState"]!;
+
+  it("stamps a fresh announcement id on a recorded redemption", async () => {
+    const { w, mockSEAPI } = setupTestDOM(makeState());
+
+    w.incrementState("numberOfBlesses", "alice");
+    await flushPromises();
+
+    expect(w.getRedemptionAnnouncementId(savedState(mockSEAPI))).toEqual(expect.any(String));
+  });
+
+  it("does not stamp an id when recordRedemption is false", async () => {
+    const { w, mockSEAPI } = setupTestDOM(makeState());
+
+    w.incrementState("numberOfBlesses", "alice", { recordRedemption: false });
+    await flushPromises();
+
+    expect(w.getRedemptionAnnouncementId(savedState(mockSEAPI))).toBeNull();
+    w.updateDisplay(savedState(mockSEAPI), true);
+    await flushPromises();
+    expect(isAnnouncementVisible(w)).toBe(false);
+  });
+
+  it("announces only once when the same redemption is rendered twice", async () => {
+    const { w, mockSEAPI } = setupTestDOM(makeState());
+    w.incrementState("numberOfBlesses", "alice");
+    await flushPromises();
+    const state = savedState(mockSEAPI);
+
+    jest.useFakeTimers();
+    try {
+      w.updateDisplay(state, true);
+      await flushMicrotasks();
+      expect(isAnnouncementVisible(w)).toBe(true);
+      await jest.runAllTimersAsync();
+      await flushMicrotasks();
+
+      // A second kvstore:update carrying the same redemption must not replay it.
+      w.updateDisplay(state, true);
+      await flushMicrotasks();
+      expect(isAnnouncementVisible(w)).toBe(false);
+      await jest.runAllTimersAsync();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("still announces the next redemption after a non-recorded increment resets the meters", async () => {
+    const state = makeState({ lastRedemption: makeLastRedemption() });
+    state.current.numberOfBlesses = 15;
+    state.current.numberOfCurses = 15;
+    const { w, mockSEAPI } = setupTestDOM(state);
+
+    // Emote bless tips both meters to max, which swallows its own announcement.
+    w.incrementState("numberOfBlesses", "alice", { recordRedemption: false });
+    await flushPromises();
+
+    w.incrementState("numberOfBlesses", "bob");
+    await flushPromises();
+
+    jest.useFakeTimers();
+    try {
+      w.updateDisplay(savedState(mockSEAPI), true);
+      await flushMicrotasks();
+      expect(isAnnouncementVisible(w)).toBe(true);
+      await jest.runAllTimersAsync();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("does not replay a stored redemption on widget load", async () => {
+    const { w, mockSEAPI } = setupTestDOM(makeState());
+    w.incrementState("numberOfBlesses", "alice");
+    await flushPromises();
+    expect(w.getRedemptionAnnouncementId(savedState(mockSEAPI))).toEqual(expect.any(String));
+
+    const loadEvent = new (w as unknown as { CustomEvent: typeof CustomEvent }).CustomEvent("onWidgetLoad", {
+      detail: { fieldData: { reportsShouldDisplay: false, numberOfSecondsBetweenReports: 0 } },
+    });
+    w.widgetLoadHandler(loadEvent);
+    await flushPromises();
+
+    expect(isAnnouncementVisible(w)).toBe(false);
+    w.stopPeriodicReports();
   });
 });
 
@@ -1440,7 +2020,9 @@ describe("periodic top-redeemer reports", () => {
     w.enqueuePeriodicReportCycle(true);
     await flushMicrotasks();
 
-    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(true);
+    const announcement = w.document.querySelector(".redemption-announcement");
+    expect(announcement?.classList.contains("visible")).toBe(true);
+    expect(announcement?.classList.contains("is-headline")).toBe(true);
     w.stopPeriodicReports();
   });
 

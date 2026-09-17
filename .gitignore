@@ -2,3 +2,4 @@ node_modules/*
 coverage/*
 local_only/*
 .idea
+.vscode
