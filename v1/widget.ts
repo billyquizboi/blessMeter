@@ -133,6 +133,13 @@ class SequentialQueue {
 
 const displayQueue = new SequentialQueue();
 
+/**
+ * Serializes SE_API.store get-modify-set work so overlapping redemptions
+ * (for example a harness burst with gap 0) cannot read the same snapshot
+ * and overwrite each other's increments.
+ */
+const storeMutationQueue = new SequentialQueue();
+
 /** Returns the jQuery-wrapped meter fill element for the bless meter. */
 function getBlessMeterFill(): JQuery<HTMLElement> {
     return $("div.bless-container div.meter div.meter-fill");
@@ -224,7 +231,7 @@ function toggleShowAllState(): void {
 function incrementState(toIncrement: string, name: string | null, options?: IncrementStateOptions): void {
     console.log(`Incrementing ${toIncrement}`);
     const recordRedemption = options?.recordRedemption ?? true;
-    SE_API.store.get(STORE_KEY_NAME).then(obj => {
+    void storeMutationQueue.enqueue(() => SE_API.store.get(STORE_KEY_NAME).then(obj => {
         console.log(`Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
         if (storeHasBeenInitialized(obj)) {
             if (!canIncrement(obj, toIncrement)) {
@@ -325,15 +332,16 @@ function incrementState(toIncrement: string, name: string | null, options?: Incr
         if (metersReset) {
             const newState = resetMetersButKeepCurrentState(obj);
             if (newState) {
-                SE_API.store.set(STORE_KEY_NAME, newState);
+                lastWidgetState = newState;
+                return SE_API.store.set(STORE_KEY_NAME, newState);
             }
-        } else {
-            SE_API.store.set(STORE_KEY_NAME, obj);
+            lastWidgetState = obj;
+            return;
         }
-
-        // the SE.store.set function emits an onEventReceived for every custom widget
         lastWidgetState = obj;
-    });
+        // the SE.store.set function emits an onEventReceived for every custom widget
+        return SE_API.store.set(STORE_KEY_NAME, obj);
+    }));
 }
 
 /**
@@ -1025,23 +1033,13 @@ function enqueuePeriodicReportCycle(force = false): void {
 
     displayQueue.enqueue(async () => {
         const history = widgetState.redemptionHistory;
-        await animateOverlayTypewriter(
-            buildTopRedeemersReportSegments("TOP BLESS REDEEMERS", getTopRedeemers(history, "bless"), "redemption-text-bless")
-        );
-        await animateOverlayTypewriter(
-            buildTopRedeemersReportSegments("TOP CURSE REDEEMERS", getTopRedeemers(history, "curse"), "redemption-text-curse")
-        );
-        await animateOverlayTypewriter(
-            buildTopRedeemersReportSegments("TOP BLURSE REDEEMERS", getTopRedeemers(history, "blurse"), "redemption-text-blurse")
-        );
-        await animateOverlayTypewriter(
-            [ { "text": "ALL TIME" } ]
-        );
+        await animateTopRedeemersReport("TOP BLESS REDEEMERS", getTopRedeemers(history, "bless"));
+        await animateTopRedeemersReport("TOP CURSE REDEEMERS", getTopRedeemers(history, "curse"));
+        await animateTopRedeemersReport("TOP BLURSE REDEEMERS", getTopRedeemers(history, "blurse"));
+        await animateReportHeadline("ALL TIME");
         await processDisplay({ ...widgetState, showAll: true }, true);
         await waitMs(reportAllTimeHoldMs);
-        await animateOverlayTypewriter(
-            [ { "text": "CURRENT RUN" } ]
-        );
+        await animateReportHeadline("CURRENT RUN");
         await processDisplay({ ...widgetState, showAll: false }, true);
     });
 }
@@ -1084,8 +1082,8 @@ function processDisplay(widgetState: WidgetState, showAnimate: boolean): Promise
     if (total === 0) {
         console.log("No blesses, curses, or blurses. Hopefully this is expected in this scenario...");
         // Build factories now (captures current widths; glow class changes happen immediately).
-        blessFactory = animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), "0%", animationTime, TYPE_BLESS);
-        curseFactory = animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), "0%", animationTime, TYPE_CURSE);
+        blessFactory = animateMeterFill(blessMeterFill.get(0), "0%", animationTime, TYPE_BLESS);
+        curseFactory = animateMeterFill(curseMeterFill.get(0), "0%", animationTime, TYPE_CURSE);
         blessCountText = preResetBlesses;
         curseCountText = preResetCurses;
         blurseCountText = `${preResetBlursesThatBlessed} / ${preResetBlursesThatCursed}`;
@@ -1113,8 +1111,8 @@ function processDisplay(widgetState: WidgetState, showAnimate: boolean): Promise
         console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}`);
 
         // Build factories now (captures current widths; glow class changes happen immediately).
-        blessFactory = animateChange(blessMeterFill.get(0), blessMeterFill.css("width"), blessWidth, animationTime, TYPE_BLESS);
-        curseFactory = animateChange(curseMeterFill.get(0), curseMeterFill.css("width"), curseWidth, animationTime, TYPE_CURSE);
+        blessFactory = animateMeterFill(blessMeterFill.get(0), blessWidth, animationTime, TYPE_BLESS);
+        curseFactory = animateMeterFill(curseMeterFill.get(0), curseWidth, animationTime, TYPE_CURSE);
 
         // update lastCount attributes
         let blessCounterText = numberOfBlesses;
@@ -1187,7 +1185,36 @@ async function animateRedemptionAnnouncement(redemption: LastRedemption): Promis
  * holds briefly, then restores the meter panel.
  * @param segments - Colored text segments to type out.
  */
-async function animateOverlayTypewriter(segments: AnnouncementSegment[]): Promise<void> {
+type OverlayAnnouncementLayout = "default" | "headline" | "list";
+
+interface OverlayTypewriterOptions {
+    layout?: OverlayAnnouncementLayout;
+}
+
+/** Centered headline overlay used for report titles and meter view transitions. */
+async function animateReportHeadline(text: string): Promise<void> {
+    await animateOverlayTypewriter(buildReportHeadlineSegments(text), { layout: "headline" });
+}
+
+/**
+ * Shows a report category title, then the ranked rows in a separate overlay step.
+ */
+async function animateTopRedeemersReport(
+    title: string,
+    redeemers: { userName: string; count: number }[]
+): Promise<void> {
+    await animateReportHeadline(title);
+    await animateOverlayTypewriter(
+        buildTopRedeemersListSegments(redeemers),
+        { layout: "list" }
+    );
+}
+
+async function animateOverlayTypewriter(
+    segments: AnnouncementSegment[],
+    options?: OverlayTypewriterOptions
+): Promise<void> {
+    const layout = options?.layout ?? "default";
     const meterPanel = getMeterPanelContent();
     const announcement = getRedemptionAnnouncement();
     const announcementElement = announcement.get(0);
@@ -1197,19 +1224,34 @@ async function animateOverlayTypewriter(segments: AnnouncementSegment[]): Promis
 
     const textContainer = document.createElement("div");
     textContainer.className = "redemption-announcement-text";
+    if (layout === "headline") {
+        textContainer.classList.add("redemption-announcement-headline");
+    } else if (layout === "list") {
+        textContainer.classList.add("redemption-announcement-list");
+    }
+
     announcement
+        .removeClass("is-headline is-list")
         .addClass("visible")
         .attr("aria-hidden", "false")
         .empty()
         .append(textContainer);
+    if (layout === "headline") {
+        announcement.addClass("is-headline");
+    } else if (layout === "list") {
+        announcement.addClass("is-list");
+    }
 
     meterPanel.addClass("hidden");
 
     await typewriterSegments(textContainer, segments, redemptionLetterDelayMs);
+    if (layout !== "headline") {
+        liftAnnouncementText(textContainer, { pinToTop: true });
+    }
     await waitMs(redemptionHoldAfterTypeMs);
 
     announcement
-        .removeClass("visible")
+        .removeClass("visible is-headline is-list")
         .attr("aria-hidden", "true")
         .empty();
     meterPanel.removeClass("hidden");
@@ -1286,30 +1328,40 @@ function getTopRedeemers(
     return ranked.slice(0, limit);
 }
 
-/**
- * Builds typewriter segments for a top-redeemers leaderboard overlay.
- * @param title - Heading shown at the top of the report.
- * @param redeemers - Ranked rows from {@link getTopRedeemers}.
- * @param titleColorClass - CSS class for the heading color.
- */
-function buildTopRedeemersReportSegments(
-    title: string,
-    redeemers: { userName: string; count: number }[],
-    titleColorClass: string
-): AnnouncementSegment[] {
-    const segments: AnnouncementSegment[] = [
-        { text: `${title}\n`, colorClass: titleColorClass },
-    ];
+/** Segments for centered report headlines (category titles, ALL TIME, CURRENT RUN). */
+function buildReportHeadlineSegments(text: string): AnnouncementSegment[] {
+    return [{ text }];
+}
+
+/** @deprecated Use {@link buildReportHeadlineSegments}. */
+function buildTopRedeemersTitleSegments(title: string): AnnouncementSegment[] {
+    return buildReportHeadlineSegments(title);
+}
+
+/** Ranked rows for the list overlay that follows a report header. */
+function buildTopRedeemersListSegments(redeemers: { userName: string; count: number }[]): AnnouncementSegment[] {
     if (redeemers.length === 0) {
-        segments.push({ text: "No redeems yet" });
-        return segments;
+        return [{ text: "No redeems yet" }];
     }
-    segments.push({
+    return [{
         text: redeemers
             .map((row, index) => `${index + 1}. ${row.userName} - ${row.count}`)
             .join("\n"),
-    });
-    return segments;
+    }];
+}
+
+/**
+ * Builds typewriter segments for a top-redeemers leaderboard overlay.
+ * @deprecated Prefer {@link buildTopRedeemersTitleSegments} and {@link buildTopRedeemersListSegments}.
+ */
+function buildTopRedeemersReportSegments(
+    title: string,
+    redeemers: { userName: string; count: number }[]
+): AnnouncementSegment[] {
+    return [
+        { text: `${title}\n` },
+        ...buildTopRedeemersListSegments(redeemers),
+    ];
 }
 
 interface AnnouncementSegment {
@@ -1456,6 +1508,33 @@ function renderTypewriterChars(
         element.appendChild(span);
         index = end;
     }
+    if (!element.parentElement?.classList.contains("is-headline")) {
+        liftAnnouncementText(element);
+    }
+}
+
+/**
+ * Positions overlay copy inside the fixed announcement window. Short messages
+ * are vertically centered; taller reports stay top-aligned and scroll so the
+ * latest typed line stays visible without clipping the header or footer rows.
+ */
+function liftAnnouncementText(element: HTMLElement, options?: { pinToTop?: boolean }): void {
+    const parent = element.parentElement;
+    if (!parent) {
+        return;
+    }
+    element.style.marginTop = "0px";
+    element.style.maxHeight = `${parent.clientHeight}px`;
+    const overflows = element.scrollHeight > element.clientHeight;
+    if (!overflows) {
+        const extraSpace = parent.clientHeight - element.scrollHeight;
+        if (extraSpace > 0) {
+            element.style.marginTop = `${Math.floor(extraSpace / 2)}px`;
+        }
+        element.scrollTop = 0;
+        return;
+    }
+    element.scrollTop = options?.pinToTop ? 0 : element.scrollHeight - element.clientHeight;
 }
 
 /** @param durationMs - How long to wait before resolving. */
@@ -1551,6 +1630,9 @@ function updateToggleButtonDisplay(showAll: boolean): void {
  * The returned factory is invoked immediately inside {@link processDisplay}
  * so the animation only starts once the previous redemption's display cycle
  * has fully completed.
+ * Percent units are used on both keyframes. jQuery's `.css("width")` is
+ * pixels, so interpolating `"40px"` → `"13.33%"` makes an unchanged bar twitch.
+ * Unchanged percents skip the animation.
  * @param ele - The meter fill element to animate, or undefined (no-op).
  * @param currentWidth - CSS width string representing the starting width.
  * @param targetWidth - CSS width string representing the ending width.
@@ -1558,6 +1640,22 @@ function updateToggleButtonDisplay(showAll: boolean): void {
  * @param type - `TYPE_BLESS` or `TYPE_CURSE`, used to select the glow class.
  * @returns A factory that starts the animation and resolves when it finishes.
  */
+function animateMeterFill(
+    ele: HTMLElement | undefined,
+    targetWidth: string,
+    durationOfAnimation: number,
+    type: string
+): () => Promise<void> {
+    if (!ele) {
+        return () => Promise.resolve();
+    }
+    const parentWidth = ele.parentElement?.clientWidth ?? 0;
+    const currentWidth = parentWidth > 0
+        ? `${((ele.offsetWidth / parentWidth) * 100).toFixed(2)}%`
+        : (ele.style.width || "0%");
+    return animateChange(ele, currentWidth, targetWidth, durationOfAnimation, type);
+}
+
 function animateChange(ele: HTMLElement | undefined, currentWidth: string, targetWidth: string, durationOfAnimation: number, type: string): () => Promise<void> {
     // Guard added for TypeScript: jQuery's .get(0) returns HTMLElement | undefined
     if (!ele) return () => Promise.resolve();
@@ -1567,11 +1665,22 @@ function animateChange(ele: HTMLElement | undefined, currentWidth: string, targe
     } else {
         endGlowForever(ele, type);
     }
+
+    const fromPercent = parseCssWidthAsPercent(currentWidth, ele);
+    const toPercent = parseCssWidthAsPercent(targetWidth, ele);
+    if (fromPercent != null && toPercent != null && Math.abs(fromPercent - toPercent) < 0.05) {
+        ele.style.width = `${toPercent.toFixed(2)}%`;
+        return () => Promise.resolve();
+    }
+
+    const fromWidth = fromPercent != null ? `${fromPercent.toFixed(2)}%` : currentWidth;
+    const toWidth = toPercent != null ? `${toPercent.toFixed(2)}%` : targetWidth;
+
     return () => new Promise<void>(resolve => {
         const animation = ele.animate(
             [
-                { width: currentWidth }, // Start width & color
-                { width: targetWidth }, // End width
+                { width: fromWidth },
+                { width: toWidth },
             ],
             {
                 duration: durationOfAnimation, // 1 second
@@ -1581,6 +1690,27 @@ function animateChange(ele: HTMLElement | undefined, currentWidth: string, targe
         );
         animation.finished.then(() => resolve());
     });
+}
+
+/**
+ * Interprets a CSS width as a percentage of the fill's parent meter.
+ * @returns null when the width cannot be converted.
+ */
+function parseCssWidthAsPercent(width: string, element: HTMLElement): number | null {
+    const trimmed = String(width ?? "").trim();
+    if (trimmed.endsWith("%")) {
+        const value = parseFloat(trimmed);
+        return Number.isFinite(value) ? value : null;
+    }
+    const parentWidth = element.parentElement?.clientWidth ?? 0;
+    if (parentWidth <= 0) {
+        return null;
+    }
+    const pixels = parseFloat(trimmed);
+    if (!Number.isFinite(pixels)) {
+        return null;
+    }
+    return (pixels / parentWidth) * 100;
 }
 
 /**

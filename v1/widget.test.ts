@@ -70,6 +70,7 @@ declare global {
     updateToggleButtonDisplay: UpdateToggleButtonDisplayFn;
     showCharSvg: ShowCharSvgFn;
     animateChange: AnimateChangeFn;
+    parseCssWidthAsPercent: (width: string, element: HTMLElement) => number | null;
     animateGlowForever: GlowFn;
     endGlowForever: GlowFn;
     toggleAllTime: NoArgVoidFunction;
@@ -99,12 +100,16 @@ declare global {
     getMeterTargetColorClass: (meterTarget: string) => string;
     buildRedemptionAnnouncementSegments: (redemption: LastRedemption) => { text: string; colorClass?: string }[];
     typewriterSegments: (element: HTMLElement, segments: { text: string; colorClass?: string }[], letterDelayMs: number) => Promise<void>;
+    liftAnnouncementText: (element: HTMLElement, options?: { pinToTop?: boolean }) => void;
     animateRedemptionAnnouncement: (redemption: LastRedemption) => Promise<void>;
     animateOverlayTypewriter: (segments: { text: string; colorClass?: string }[]) => Promise<void>;
     createEmptyRedemptionHistoryEntry: () => RedemptionHistoryEntry;
     normalizeRedemptionHistoryEntry: (entry: RedemptionHistoryEntry) => RedemptionHistoryEntry;
     getTopRedeemers: (history: RedemptionHistory | undefined, category: "bless" | "curse" | "blurse", limit?: number) => { userName: string; count: number }[];
-    buildTopRedeemersReportSegments: (title: string, redeemers: { userName: string; count: number }[], titleColorClass: string) => { text: string; colorClass?: string }[];
+    buildReportHeadlineSegments: (text: string) => { text: string; colorClass?: string }[];
+    buildTopRedeemersTitleSegments: (title: string) => { text: string; colorClass?: string }[];
+    buildTopRedeemersListSegments: (redeemers: { userName: string; count: number }[]) => { text: string; colorClass?: string }[];
+    buildTopRedeemersReportSegments: (title: string, redeemers: { userName: string; count: number }[]) => { text: string; colorClass?: string }[];
     applyFieldData: (fieldData: FieldData) => void;
     getRedemptionAnnouncementId: (widgetState: WidgetState | null | undefined) => string | null;
     parseEmoteNamesCsv: (csv: string) => string[];
@@ -858,6 +863,20 @@ describe("typewriterSegments", () => {
     expect(colored).toContain("redemption-text-bless");
   });
 
+  it("does not apply liftAnnouncementText margins while typing in headline overlays", async () => {
+    const parent = w.document.createElement("div");
+    parent.className = "redemption-announcement visible is-headline";
+    const container = w.document.createElement("div");
+    container.className = "redemption-announcement-text redemption-announcement-headline";
+    parent.appendChild(container);
+    w.document.body.appendChild(parent);
+
+    await w.typewriterSegments(container, [{ text: "CURRENT RUN" }], 0);
+
+    expect(container.style.marginTop).toBe("");
+    expect(container.style.maxHeight).toBe("");
+  });
+
   it("reveals text one character at a time", async () => {
     const container = w.document.createElement("div");
     const promise = w.typewriterSegments(container, [{ text: "abc" }], 10);
@@ -869,6 +888,29 @@ describe("typewriterSegments", () => {
     await jest.runAllTimersAsync();
     await promise;
     expect(container.textContent).toBe("abc");
+  });
+});
+
+describe("liftAnnouncementText", () => {
+  it("centers short copy and scrolls when the copy outgrows the window", () => {
+    const { w } = setupTestDOM();
+    const parent = w.document.createElement("div");
+    const child = w.document.createElement("div");
+    parent.appendChild(child);
+    Object.defineProperty(parent, "clientHeight", { value: 60, configurable: true });
+    Object.defineProperty(child, "scrollHeight", { value: 20, configurable: true });
+    Object.defineProperty(child, "clientHeight", { value: 20, configurable: true });
+
+    w.liftAnnouncementText(child);
+    expect(child.style.marginTop).toBe("20px");
+    expect(child.style.maxHeight).toBe("60px");
+    expect(child.scrollTop).toBe(0);
+
+    Object.defineProperty(child, "scrollHeight", { value: 80, configurable: true });
+    Object.defineProperty(child, "clientHeight", { value: 60, configurable: true });
+    w.liftAnnouncementText(child);
+    expect(child.style.marginTop).toBe("0px");
+    expect(child.scrollTop).toBe(20);
   });
 });
 
@@ -1105,6 +1147,57 @@ describe("incrementState", () => {
     // After reset, current counts should be 0
     const saved = mockSEAPI.store._data["blessCurseMeterState"];
     expect(saved?.current.numberOfBlesses).toBe(0);
+  });
+
+  it("applies overlapping increments instead of letting the last write win", async () => {
+    const state = makeState();
+    const { w, mockSEAPI } = setupTestDOM(state);
+    mockSEAPI.store.get.mockImplementation(
+      (key: string) => new Promise((resolve) => {
+        setTimeout(() => resolve(mockSEAPI.store._data[key] ?? null), 15);
+      })
+    );
+
+    w.incrementState("numberOfBlesses", "alice");
+    w.incrementState("numberOfBlesses", "alice");
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    const saved = mockSEAPI.store._data["blessCurseMeterState"];
+    expect(saved?.current.numberOfBlesses).toBe(2);
+    expect(saved?.allTime.numberOfBlesses).toBe(2);
+    expect(saved?.redemptionHistory?.alice.numberOfBlesses).toBe(2);
+  });
+});
+
+describe("animateChange", () => {
+  it("skips interpolation when the fill is already at the target percent", async () => {
+    const { w, dom } = setupTestDOM(makeState());
+    const meter = dom.window.document.createElement("div");
+    const fill = dom.window.document.createElement("div");
+    meter.appendChild(fill);
+    Object.defineProperty(meter, "clientWidth", { value: 200, configurable: true });
+    w.document.body.appendChild(meter);
+
+    await w.animateChange(fill, "40px", "20.00%", 1000, "bless")();
+
+    expect(fill.animate).not.toHaveBeenCalled();
+    expect(parseFloat(fill.style.width)).toBe(20);
+  });
+
+  it("animates percent-to-percent when the fill actually changes", async () => {
+    const { w, dom } = setupTestDOM(makeState());
+    const meter = dom.window.document.createElement("div");
+    const fill = dom.window.document.createElement("div");
+    meter.appendChild(fill);
+    Object.defineProperty(meter, "clientWidth", { value: 200, configurable: true });
+    w.document.body.appendChild(meter);
+
+    await w.animateChange(fill, "40px", "40.00%", 1000, "curse")();
+
+    expect(fill.animate).toHaveBeenCalledWith(
+      [{ width: "20.00%" }, { width: "40.00%" }],
+      expect.objectContaining({ fill: "forwards" })
+    );
   });
 });
 
@@ -1379,6 +1472,31 @@ describe("getTopRedeemers", () => {
   });
 });
 
+describe("buildTopRedeemersTitleSegments / buildTopRedeemersListSegments", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("builds a plain headline segment matching ALL TIME / CURRENT RUN", () => {
+    expect(w.buildReportHeadlineSegments("CURRENT RUN")).toEqual([{ text: "CURRENT RUN" }]);
+    expect(w.buildTopRedeemersTitleSegments("TOP BLESS REDEEMERS")).toEqual([{ text: "TOP BLESS REDEEMERS" }]);
+  });
+
+  it("builds ranked rows for the list overlay", () => {
+    const segments = w.buildTopRedeemersListSegments([
+      { userName: "alice", count: 3 },
+      { userName: "bob", count: 1 },
+    ]);
+    expect(segments).toEqual([{ text: "1. alice - 3\n2. bob - 1" }]);
+  });
+
+  it("shows a fallback when there are no redeems", () => {
+    expect(w.buildTopRedeemersListSegments([])).toEqual([{ text: "No redeems yet" }]);
+  });
+});
+
 describe("buildTopRedeemersReportSegments", () => {
   let w: Window;
 
@@ -1386,19 +1504,13 @@ describe("buildTopRedeemersReportSegments", () => {
     ({ w } = setupTestDOM());
   });
 
-  it("builds a colored title and ranked rows", () => {
+  it("combines title and list segments for legacy callers", () => {
     const segments = w.buildTopRedeemersReportSegments(
       "TOP BLESS REDEEMERS",
-      [{ userName: "alice", count: 3 }, { userName: "bob", count: 1 }],
-      "redemption-text-bless"
+      [{ userName: "alice", count: 3 }, { userName: "bob", count: 1 }]
     );
-    expect(segments[0]).toEqual({ text: "TOP BLESS REDEEMERS\n", colorClass: "redemption-text-bless" });
+    expect(segments[0]).toEqual({ text: "TOP BLESS REDEEMERS\n" });
     expect(segments[1].text).toBe("1. alice - 3\n2. bob - 1");
-  });
-
-  it("shows a fallback when there are no redeems", () => {
-    const segments = w.buildTopRedeemersReportSegments("TOP CURSE REDEEMERS", [], "redemption-text-curse");
-    expect(segments[1]).toEqual({ text: "No redeems yet" });
   });
 });
 
@@ -1879,7 +1991,9 @@ describe("periodic top-redeemer reports", () => {
     w.enqueuePeriodicReportCycle(true);
     await flushMicrotasks();
 
-    expect(w.document.querySelector(".redemption-announcement")?.classList.contains("visible")).toBe(true);
+    const announcement = w.document.querySelector(".redemption-announcement");
+    expect(announcement?.classList.contains("visible")).toBe(true);
+    expect(announcement?.classList.contains("is-headline")).toBe(true);
     w.stopPeriodicReports();
   });
 

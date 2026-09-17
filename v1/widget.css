@@ -187,28 +187,68 @@ h1,h2,h3,h4,h5{
     z-index: 1;
     box-sizing: border-box;
     padding: 2px 4px;
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
     color: var(--text-color);
 }
 
 .redemption-announcement.visible {
     display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-height: 0;
+}
+
+.redemption-announcement.visible.is-headline {
+    justify-content: center;
     align-items: center;
+}
+
+.redemption-announcement.visible.is-list {
+    justify-content: flex-start;
+    align-items: stretch;
 }
 
 .redemption-announcement-text {
     width: 100%;
-    font-size: 12px;
+    box-sizing: border-box;
+    max-height: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+    font-size: 11px;
     line-height: 1.5;
     text-align: left;
     white-space: pre-wrap;
     word-break: break-word;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+
+.redemption-announcement-text.redemption-announcement-headline {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 100%;
+    max-height: none;
+    margin: 0;
+    font-size: 20px;
+    line-height: 2;
+    text-align: center;
     overflow: visible;
+}
+
+.redemption-announcement-text.redemption-announcement-list {
+    font-size: 14px;
+    line-height: 1.4;
+    text-align: left;
+}
+
+.redemption-announcement-text::-webkit-scrollbar {
+    display: none;
 }
 
 .redemption-announcement-text span {
     font-size: inherit;
+    line-height: inherit;
     overflow: visible;
     display: inline;
 }
@@ -442,8 +482,12 @@ body.theme-ct .blurse-info-label {
     padding-top: 2px;
 }
 
-body.theme-ct .button-container {
-    /*height: 36px;*/
+body.theme-ct .button-container,
+body.theme-ct .button-container .text-button {
+    /* Rubik's line-height:normal is ~18.67px at 14px; Press Start 2P is 16px.
+       Buttons ignore inherited line-height (UA `normal`). Do not set a row height:
+       children use height:25%, which would collapse to 9px. */
+    line-height: 16px;
 }
 
 /**
