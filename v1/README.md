@@ -27,13 +27,6 @@ It uses a font [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P
 - Overwrite the contents of the Fields in the stream elements custom code editor with the contents of [widgetFields.json](./widgetFields.json). This allows configuring how many redeems it takes to fill the meter display by editing the 'Meter maximum count to be filled' field.
 - Click DONE in the custom code editor and click the SAVE button in the top right
 
-### One way to test on stream elements widget editor
-
-These two steps result in every test redeem being considered a blurse, curse, or bless. Revert these changes and reset the meters before using live.
-
-- Change this variable's value to true [widget.js line 11](./widget.js#L11) - this should only be used for testing and should be reverted when done.
-- This line [widget.js line 194](./widget.js#L194) can be changed to one of: `updateState(numberOfBlursesKey);` `updateState(numberOfCursesKey);` or `updateState(numberOfBlessesKey);`
-
 ### To add this overlay as a source to OBS
 
 - Copy the link to the widget from the top right link icon near the PREVIEW button
@@ -99,9 +92,26 @@ Use another port if 8080 is busy: `npm run serve -- --port 8090` (run `npm run b
 
 ### Testing locally in a browser
 
-[localTest.html](./localTest.html) runs the widget in a browser without touching StreamElements. It loads the real [widget.html](./widget.html) in an iframe and injects jQuery, a mocked `SE_API`, and the compiled [widget.js](./widget.js) into it, so it always exercises the current files on disk. Nothing in the harness is pasted into the StreamElements editor.
+For local testing and development there is a useful development server and testing harness
+that can be run in a console from the root of the project.
 
-Start the dev server as above, then open <http://localhost:8080/v1/localTest.html>. A local server is required because a `file://` page gets an opaque origin, which blocks both `fetch()` and scripting into the iframe.
+[localTest.html](./localTest.html) runs the widget in a browser without touching StreamElements.
+It loads the real [widget.html](./widget.html) in an iframe and injects jQuery, a mocked `SE_API`, and the compiled [widget.js](./widget.js) into it,
+so it always exercises the current files on disk. Nothing in the harness is pasted into the StreamElements editor.
+
+Use the below commands to start the development server:
+
+```shell
+npm run build
+npm run dev
+// will print
+// v1 test harness: http://localhost:8080/v1/localTest.html
+// which is the url to open in the browser to see the testing page
+```
+
+Start the dev server as above, then open <http://localhost:8080/v1/localTest.html>.
+
+A local server is required because a `file://` page gets an opaque origin, which blocks both `fetch()` and scripting into the iframe.
 
 The dev panel on the right can:
 
@@ -117,11 +127,19 @@ The dev panel on the right can:
 
 The mocked store is kept in `localStorage`, so state survives a reload; use "Clear store" to start over. Because the widget only redraws in response to the `kvstore:update` event that StreamElements broadcasts after `SE_API.store.set`, the mock re-emits that event too.
 
-Two things behave the same locally as they do on StreamElements and are not harness problems: the "Show all" button text never changes, because the `updateToggleButtonDisplay` calls in [widget.ts](./widget.ts) are commented out, and the character sprites never appear, because `showCharSvg` is currently unused and the `.user-redeem-window` container keeps its `hidden` class.
+To shut down the development server, press CTRL+C in the console where it was run or search for Node JS processes to kill.
+
+To run the automated test suite:
+
+```shell
+npm run test
+```
 
 ## How it works
 
-The widget has event listeners which are called and process when certain redemptions are redeemed in twitch chat. It uses the SE_API.store to persist and manage the widget state. The length of each meter in the widget display is calculated as a percentage of the total number of redeems of all types.
+The widget has event listeners which are called and process when certain redemptions are redeemed in twitch chat.
+When showing the current run, the meter lengths are calculated based on numberOfRedeems/meterMaximumNumberOfRedeems.
+When showing all time info, the meter lengths are calculated as a percentage of the total number of redeems of all types
 
 See stream elements documentation on custom widgets like:
 
