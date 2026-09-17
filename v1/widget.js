@@ -263,12 +263,10 @@ function incrementState(toIncrement, name, options) {
                 const userEntry = obj[redemptionHistoryKey][name];
                 userEntry.numberOfBlurses = getOrDefaultCount(userEntry.numberOfBlurses) + 1;
                 if (meterTarget === TYPE_BLESS) {
-                    userEntry.numberOfBlursesThatBlessed =
-                        getOrDefaultCount(userEntry.numberOfBlursesThatBlessed) + 1;
+                    userEntry.numberOfBlursesThatBlessed = getOrDefaultCount(userEntry.numberOfBlursesThatBlessed) + 1;
                 }
                 else {
-                    userEntry.numberOfBlursesThatCursed =
-                        getOrDefaultCount(userEntry.numberOfBlursesThatCursed) + 1;
+                    userEntry.numberOfBlursesThatCursed = getOrDefaultCount(userEntry.numberOfBlursesThatCursed) + 1;
                 }
             }
         }
@@ -349,8 +347,7 @@ function resetMetersButKeepCurrentState(widgetState) {
     const numberOfBlessesPreReset = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlessesPreReset]) + numberOfBlesses;
     const numberOfCursesPreReset = getOrDefaultCount(widgetState.current[StateKeys.numberOfCursesPreReset]) + numberOfCurses;
     const numberOfBlursesPreReset = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesPreReset]) + numberOfBlurses;
-    const numberOfBlursesThatBlessedPreReset = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatBlessedPreReset]) +
-        numberOfBlursesThatBlessed;
+    const numberOfBlursesThatBlessedPreReset = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatBlessedPreReset]) + numberOfBlursesThatBlessed;
     const numberOfBlursesThatCursedPreReset = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatCursedPreReset]) + numberOfBlursesThatCursed;
     // Structured as a complete WidgetState literal for TypeScript type safety.
     // Original built this incrementally via property assignments.
@@ -706,10 +703,7 @@ function updateDisplay(widgetState, showAnimate, announceRedemption) {
         lastAnnouncedRedemptionId = announcementId;
     }
     displayQueue.enqueue(() => __awaiter(this, void 0, void 0, function* () {
-        if (showAnimate &&
-            announce &&
-            showRedemptionAnnouncements &&
-            hasValidLastRedemption(widgetState.lastRedemption)) {
+        if (showAnimate && announce && showRedemptionAnnouncements && hasValidLastRedemption(widgetState.lastRedemption)) {
             yield animateRedemptionAnnouncement(widgetState.lastRedemption);
         }
         yield processDisplay(widgetState, showAnimate);
@@ -737,8 +731,7 @@ function applyFieldData(fieldData) {
     if (fieldData.showRedemptionAnnouncements != null && typeof fieldData.showRedemptionAnnouncements === "boolean") {
         showRedemptionAnnouncements = fieldData.showRedemptionAnnouncements;
     }
-    if (fieldData.numberOfSecondsBetweenReports != null &&
-        typeof fieldData.numberOfSecondsBetweenReports === "number") {
+    if (fieldData.numberOfSecondsBetweenReports != null && typeof fieldData.numberOfSecondsBetweenReports === "number") {
         numberOfSecondsBetweenReports = Math.max(0, Math.floor(fieldData.numberOfSecondsBetweenReports));
     }
     if (fieldData.reportsShouldDisplay != null && typeof fieldData.reportsShouldDisplay === "boolean") {
@@ -1040,10 +1033,8 @@ function processDisplay(widgetState, showAnimate) {
         }
         else {
             console.log(`Showing run so meter length is based on ${meterMaximum} max`);
-            blessWidth =
-                (effectiveBlesses >= meterMaximum ? 100 : (effectiveBlesses / meterMaximum) * 100).toFixed(2) + "%";
-            curseWidth =
-                (effectiveCurses >= meterMaximum ? 100 : (effectiveCurses / meterMaximum) * 100).toFixed(2) + "%";
+            blessWidth = (effectiveBlesses >= meterMaximum ? 100 : (effectiveBlesses / meterMaximum) * 100).toFixed(2) + "%";
+            curseWidth = (effectiveCurses >= meterMaximum ? 100 : (effectiveCurses / meterMaximum) * 100).toFixed(2) + "%";
         }
         updateToggleButtonDisplay(isShowingAll(widgetState));
         console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}`);
