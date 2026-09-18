@@ -1468,7 +1468,7 @@ function getCurseInfoValue() {
 function getBlurseInfoValue() {
     return $("span.blurse-info-value");
 }
-/** Returns the meter panel inside the main dialogue window (not the sprite window). */
+/** Returns the meter panel inside the main dialogue window. */
 function getMainMeterInnerWindow() {
     return $("div.outer-dialogue-window-main > div.inner-dialogue-window").not(".user-redeem-window");
 }
