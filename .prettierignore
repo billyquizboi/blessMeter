@@ -1,5 +1,4 @@
 node_modules
 coverage
 package-lock.json
-v1/widget.js
-v2/widget.js
+widget/widget.js

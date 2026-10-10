@@ -9,5 +9,5 @@
     "sourceMap": false,
     "declaration": false
   },
-  "include": ["v1/se-api.d.ts", "v1/widget.test.ts"]
+  "include": ["widget/se-api.d.ts", "widget/widget.test.ts"]
 }

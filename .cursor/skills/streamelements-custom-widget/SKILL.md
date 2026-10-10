@@ -3,7 +3,7 @@ name: streamelements-custom-widget
 description: >-
   Builds and maintains StreamElements Overlay custom widgets (HTML/CSS/JS/FIELDS),
   window events (onWidgetLoad, onEventReceived, onSessionUpdate), and SE_API
-  (store, counters, queue). Use for blessMeter v1 widget work, channel point
+  (store, counters, queue). Use for blessMeter widget work, channel point
   redemptions, overlay deployment, or StreamElements widget debugging.
 ---
 
@@ -17,23 +17,21 @@ Official docs:
 - [Widget structure & fields](https://docs.streamelements.com/overlays/widget-structure)
 - [API reference (custom widgets)](https://dev.streamelements.com/docs/api-docs/775038fd4f4a9-stream-elements-custom-widgets)
 
-Type definitions for this repo: [v1/se-api.d.ts](../../../v1/se-api.d.ts). Extended event/API reference: [reference.md](reference.md).
+Type definitions for this repo: [widget/se-api.d.ts](../../../widget/se-api.d.ts). Extended event/API reference: [reference.md](reference.md).
 
 ## blessMeter workflow (this repo)
 
-| Artifact | Source                    | StreamElements tab |
-| -------- | ------------------------- | ------------------ |
-| Markup   | `v1/widget.html`          | HTML               |
-| Styles   | `v1/widget.css`           | CSS                |
-| Logic    | `v1/widget.js` (compiled) | JS                 |
-| Settings | `v1/widgetFields.json`    | FIELDS             |
+| Artifact | Source                        | StreamElements tab |
+| -------- | ----------------------------- | ------------------ |
+| Markup   | `widget/widget.html`          | HTML               |
+| Styles   | `widget/widget.css`           | CSS                |
+| Logic    | `widget/widget.js` (compiled) | JS                 |
+| Settings | `widget/widgetFields.json`    | FIELDS             |
 
-1. Edit **`v1/widget.ts`** only — never hand-edit `widget.js`.
+1. Edit **`widget/widget.ts`** only — never hand-edit `widget.js`.
 2. Run `npm run fix` (format + lint fixes + build), or `npm run build` / `npm test` / `npm run dev`.
 3. Paste the four artifacts into the overlay Custom Code Editor and save.
-4. Local harness: `npm run dev` → open `http://localhost:8080/v1/localTest.html` (requires HTTP, not `file://`).
-
-v2 (`v2/widget.html`, `v2/widget.css`, `v2/widget.js`) is a separate vertical-meter widget without the TypeScript pipeline.
+4. Local harness: `npm run dev` → open `http://localhost:8080/widget/localTest.html` (requires HTTP, not `file://`).
 
 ## Custom widget anatomy
 
@@ -167,7 +165,7 @@ Do not use `event.name` for live Twitch redemptions when `event.data` has user f
 | **`redemptionHistory` map key** (`trackingKey`)                            | `event.data.username` → `event.data.nick` → `session.data["channel-points-latest"].username` → `.name` → `event.name` |
 | **Display** (`displayName`, announcements, `lastRedemption.redeemingUser`) | `event.data.displayName` → tracking key → `event.data.nick`; session path uses `displayName` → tracking key → `.name` |
 
-`getRedeemingUserName()` is the display label only (`displayName` from the ref above). Canonical Twitch test fixture: `makeExampleTwitchChannelPointsRedemptionDetail` in `v1/widget.test.ts` (`listener: "event"`, `type: "channelPointsRedemption"`, `data.username` + `data.displayName`).
+`getRedeemingUserName()` is the display label only (`displayName` from the ref above). Canonical Twitch test fixture: `makeExampleTwitchChannelPointsRedemptionDetail` in `widget/widget.test.ts` (`listener: "event"`, `type: "channelPointsRedemption"`, `data.username` + `data.displayName`).
 
 ### Chat messages (emote bless)
 
@@ -185,16 +183,16 @@ When `listener === "message"`, user fields live on **`detail.event.data`** only:
 
 ### Testing
 
-- **Jest:** mock `SE_API` on `window` before injecting `widget.js` (`v1/widget.test.ts`).
+- **Jest:** mock `SE_API` on `window` before injecting `widget.js` (`widget/widget.test.ts`).
 - **Browser:** `localTest.html` mocks store + re-emits `kvstore:update` after `set` (matches SE behavior).
 - **Synthetic events:** `new CustomEvent("onEventReceived", { detail: { listener, event } })` then `window.dispatchEvent(...)`.
 
 ## Implementation checklist
 
-When adding behavior to blessMeter v1:
+When adding behavior to blessMeter:
 
 - [ ] Types in `se-api.d.ts` if state or event shapes change
-- [ ] Logic in `widget.ts`; run `npm run fix` or `npm run build` and commit `v1/widget.js`
+- [ ] Logic in `widget.ts`; run `npm run fix` or `npm run build` and commit `widget/widget.js`
 - [ ] New editor settings in `widgetFields.json` + `FieldData` + `applyFieldData`
 - [ ] Handle `onWidgetLoad` (fields + store init) and `onEventReceived` (redemptions + `kvstore:update`)
 - [ ] Store updates use full `WidgetState` objects

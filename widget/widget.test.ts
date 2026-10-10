@@ -1,8 +1,8 @@
 /**
  * Tests for the curse meter widget.
  *
- * Strategy: JSDOM loads v1/widget.html, real jQuery is injected, SE_API is
- * mocked, then the compiled v1/widget.js is eval'd into the window.  Because
+ * Strategy: JSDOM loads widget/widget.html, real jQuery is injected, SE_API is
+ * mocked, then the compiled widget/widget.js is eval'd into the window.  Because
  * widget functions are top-level `function` declarations (not const/let), they
  * become properties of the window object and are accessible as
  * dom.window.functionName().
@@ -45,6 +45,9 @@ declare global {
     getBlessInfoValue: JQueryGetterFn;
     getCurseInfoValue: JQueryGetterFn;
     getBlurseInfoValue: JQueryGetterFn;
+    getBlessMeterTitle: JQueryGetterFn;
+    getCurseMeterTitle: JQueryGetterFn;
+    isCt: () => boolean;
     // State management
     initializeLastWidgetState: NoArgVoidFunction;
     toggleShowAllState: NoArgVoidFunction;
@@ -1375,6 +1378,21 @@ describe("animateChange", () => {
 // ===========================================================================
 // toggleShowAllState — async SE_API interaction
 // ===========================================================================
+
+function blessMeterTitleText(w: Window): string | undefined {
+  return w.document.querySelector(".bless-container .meter-title")?.textContent ?? undefined;
+}
+
+function curseMeterTitleText(w: Window): string | undefined {
+  return w.document.querySelector(".curse-container .meter-title")?.textContent ?? undefined;
+}
+
+/** Runs updateDisplay and drains the widget display queue (needed for meter titles). */
+async function renderWidgetState(w: Window, state: WidgetState): Promise<void> {
+  w.updateDisplay(state, false);
+  await flushPromises();
+}
+
 describe("toggleShowAllState", () => {
   it("toggles showAll from false to true", async () => {
     const state = makeState({ showAll: false });
@@ -1397,6 +1415,110 @@ describe("toggleShowAllState", () => {
 
     const saved = mockSEAPI.store._data["blessCurseMeterState"];
     expect(saved?.showAll).toBe(false);
+  });
+
+  it("toggles FFVI meter titles between current run and all-time", async () => {
+    const state = makeState({ showAll: false, backgroundTheme: "ffvi" });
+    const { w, mockSEAPI } = setupTestDOM(state);
+
+    await renderWidgetState(w, state);
+    expect(blessMeterTitleText(w)).toBe("BLESS");
+    expect(curseMeterTitleText(w)).toBe("CURSE");
+
+    w.toggleShowAllState();
+    await flushPromises();
+    let saved = mockSEAPI.store._data["blessCurseMeterState"];
+    expect(saved?.showAll).toBe(true);
+    await renderWidgetState(w, saved!);
+    expect(blessMeterTitleText(w)).toBe("ALL");
+    expect(curseMeterTitleText(w)).toBe("TIME");
+
+    w.toggleShowAllState();
+    await flushPromises();
+    saved = mockSEAPI.store._data["blessCurseMeterState"];
+    expect(saved?.showAll).toBe(false);
+    await renderWidgetState(w, saved!);
+    expect(blessMeterTitleText(w)).toBe("BLESS");
+    expect(curseMeterTitleText(w)).toBe("CURSE");
+  });
+
+  it("toggles CT meter titles between current run and all-time", async () => {
+    const state = makeState({ showAll: false, backgroundTheme: "ct" });
+    const { w, mockSEAPI } = setupTestDOM(state);
+
+    await renderWidgetState(w, state);
+    expect(w.document.body.classList.contains("theme-ct")).toBe(true);
+    expect(blessMeterTitleText(w)).toBe("BLESS");
+    expect(curseMeterTitleText(w)).toBe("CURSE");
+
+    w.toggleShowAllState();
+    await flushPromises();
+    let saved = mockSEAPI.store._data["blessCurseMeterState"];
+    expect(saved?.showAll).toBe(true);
+    await renderWidgetState(w, saved!);
+    expect(blessMeterTitleText(w)).toBe("ALL BLESS");
+    expect(curseMeterTitleText(w)).toBe("ALL CURSE");
+
+    w.toggleShowAllState();
+    await flushPromises();
+    saved = mockSEAPI.store._data["blessCurseMeterState"];
+    expect(saved?.showAll).toBe(false);
+    await renderWidgetState(w, saved!);
+    expect(blessMeterTitleText(w)).toBe("BLESS");
+    expect(curseMeterTitleText(w)).toBe("CURSE");
+  });
+});
+
+// ===========================================================================
+// isCt / getBlessMeterTitle / getCurseMeterTitle
+// ===========================================================================
+describe("meter title DOM helpers", () => {
+  describe("isCt", () => {
+    it("returns false when the CT body class is not applied", () => {
+      const { w } = setupTestDOM();
+      expect(w.isCt()).toBe(false);
+    });
+
+    it("returns true after applyBackgroundTheme('ct')", () => {
+      const { w } = setupTestDOM();
+      w.applyBackgroundTheme("ct");
+      expect(w.isCt()).toBe(true);
+      expect(w.document.body.classList.contains("theme-ct")).toBe(true);
+    });
+
+    it("returns false after switching back to ffvi", () => {
+      const { w } = setupTestDOM();
+      w.applyBackgroundTheme("ct");
+      w.applyBackgroundTheme("ffvi");
+      expect(w.isCt()).toBe(false);
+    });
+  });
+
+  describe("getBlessMeterTitle and getCurseMeterTitle", () => {
+    it("return single elements for the bless and curse meter titles", () => {
+      const { w } = setupTestDOM();
+      const blessTitle = w.getBlessMeterTitle();
+      const curseTitle = w.getCurseMeterTitle();
+
+      expect(blessTitle.length).toBe(1);
+      expect(curseTitle.length).toBe(1);
+      expect(blessTitle.get(0)).toBe(w.document.querySelector(".bless-container .meter-title"));
+      expect(curseTitle.get(0)).toBe(w.document.querySelector(".curse-container .meter-title"));
+    });
+
+    it("read initial title text from widget.html", () => {
+      const { w } = setupTestDOM();
+      expect(w.getBlessMeterTitle().text()).toBe("BLESS");
+      expect(w.getCurseMeterTitle().text()).toBe("CURSE");
+    });
+
+    it("update visible title text via jQuery", () => {
+      const { w } = setupTestDOM();
+      w.getBlessMeterTitle().text("CUSTOM BLESS");
+      w.getCurseMeterTitle().text("CUSTOM CURSE");
+      expect(blessMeterTitleText(w)).toBe("CUSTOM BLESS");
+      expect(curseMeterTitleText(w)).toBe("CUSTOM CURSE");
+    });
   });
 });
 

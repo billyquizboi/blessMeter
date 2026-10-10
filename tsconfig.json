@@ -4,10 +4,10 @@
     "module": "none",
     "lib": ["ES6", "DOM"],
     "strict": true,
-    "outFile": "v1/widget.js",
+    "outFile": "widget/widget.js",
     "sourceMap": false,
     "declaration": false,
     "types": ["jquery"]
   },
-  "include": ["v1/widget.ts", "v1/se-api.d.ts"]
+  "include": ["widget/widget.ts", "widget/se-api.d.ts"]
 }

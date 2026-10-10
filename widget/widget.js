@@ -1133,6 +1133,7 @@ function processDisplay(widgetState, showAnimate) {
         curseCountText = preResetCurses;
         blurseCountText = `${preResetBlursesThatBlessed} / ${preResetBlursesThatCursed}`;
         updateToggleButtonDisplay(isShowingAll(widgetState));
+        updateMeterTitles(isShowingAll(widgetState));
     }
     else {
         const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * 2;
@@ -1153,6 +1154,7 @@ function processDisplay(widgetState, showAnimate) {
             curseWidth = (effectiveCurses >= meterMaximum ? 100 : (effectiveCurses / meterMaximum) * 100).toFixed(2) + "%";
         }
         updateToggleButtonDisplay(isShowingAll(widgetState));
+        updateMeterTitles(isShowingAll(widgetState));
         console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}`);
         // Build factories now (captures current widths; glow class changes happen immediately).
         blessFactory = animateMeterFill(blessMeterFill.get(0), blessWidth, animationTime, TYPE_BLESS);
@@ -1613,6 +1615,18 @@ function getMeterPanelContent() {
 function getRedemptionAnnouncement() {
     return getMainMeterInnerWindow().find(".redemption-announcement");
 }
+function getBlessMeterTitle() {
+    return getMainMeterInnerWindow().find(".bless-container .meter-title");
+}
+function getCurseMeterTitle() {
+    return getMainMeterInnerWindow().find(".curse-container .meter-title");
+}
+function isCt() {
+    return $("body").hasClass("theme-ct");
+}
+function isFfv6() {
+    return !isCt();
+}
 /**
  * Updates the all-time toggle button label.
  * Sets the text to "Show run" when `showAll` is true (all-time view is active)
@@ -1630,6 +1644,26 @@ function updateToggleButtonDisplay(showAll) {
         console.log("Show run");
         toggleButton.text("Show all");
         console.log(`Updated show all attribute to: ${showAll}`);
+    }
+}
+/**
+ * Change the meter titles to be clear when showing all vs. showing current
+ * @param showAll if showing all time or current run
+ */
+function updateMeterTitles(showAll) {
+    if (showAll) {
+        if (isCt()) {
+            getBlessMeterTitle().text("ALL BLESS");
+            getCurseMeterTitle().text("ALL CURSE");
+        }
+        else {
+            getBlessMeterTitle().text("ALL");
+            getCurseMeterTitle().text("TIME");
+        }
+    }
+    else {
+        getBlessMeterTitle().text("BLESS");
+        getCurseMeterTitle().text("CURSE");
     }
 }
 /**
@@ -1832,6 +1866,7 @@ function applyBackgroundTheme(theme) {
 function updateBackgroundThemeButtonDisplay(theme) {
     const label = normalizeBackgroundTheme(theme) === THEME_CT ? "FF6" : "CT";
     $("#background-theme-toggle").text(label);
+    updateMeterTitles(isShowingAll(lastWidgetState)); // edge-case to be honest - prevents a bad text
 }
 /**
  * Flips {@link ATTRIBUTE_BACKGROUND_THEME} in SE_API.store. The resulting

@@ -14,7 +14,7 @@
     "fix": "npm run format && npm run lint:fix && npm run build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check:widget-js": "npm run build && git diff --exit-code -- v1/widget.js",
+    "check:widget-js": "npm run build && git diff --exit-code -- widget/widget.js",
     "prepare": "husky"
   },
   "devDependencies": {
