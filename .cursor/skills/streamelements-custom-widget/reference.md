@@ -82,7 +82,12 @@ Redemption title locations (priority):
 2. `session.data["channel-points-latest"].redemption`
 3. `event.itemId`
 
-Redeeming user: `event.name` (see `getRedeemingUserName` in `widget.ts`).
+Redeeming user (see `getRedemptionUserIdentity` in `widget.ts`):
+
+- **Tracking key** ( `redemptionHistory` map key ): `event.data.username` (then `nick`), or session `channel-points-latest.username` / `.name`, then `event.name`.
+- **Display label** (reports, announcements): `event.data.displayName` when present, else the tracking key.
+
+`getRedeemingUserName()` returns the display label only.
 
 ## `onSessionUpdate`
 

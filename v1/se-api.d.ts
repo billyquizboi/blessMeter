@@ -44,13 +44,24 @@ interface RedemptionHistoryEntry {
   numberOfBlurses: number;
   numberOfBlursesThatBlessed: number;
   numberOfBlursesThatCursed: number;
+  /**
+   * Latest display name for this redeemer (Twitch `displayName` when available).
+   * The map key is the stable tracking id (usually `username`).
+   */
+  displayName?: string;
 }
 
 /**
- * Maps a redeeming user's name to their {@link RedemptionHistoryEntry}.
+ * Maps a redeeming user's tracking key (usually Twitch `username`) to counts.
  */
 interface RedemptionHistory {
-  [userName: string]: RedemptionHistoryEntry;
+  [trackingKey: string]: RedemptionHistoryEntry;
+}
+
+/** Stable id for per-user counts plus the label shown in UI and reports. */
+interface RedemptionUserRef {
+  trackingKey: string;
+  displayName: string;
 }
 
 interface LastRedemption {
@@ -110,6 +121,7 @@ interface ChatEmote {
 interface ChatMessageData {
   text?: string;
   displayName?: string;
+  username?: string;
   nick?: string;
   userId?: string;
   emotes?: ChatEmote[];
@@ -117,21 +129,37 @@ interface ChatMessageData {
 
 interface SEEventData extends ChatMessageData {
   redemption?: string;
+  amount?: number;
+  providerId?: string;
+  quantity?: number;
+  avatar?: string;
   key?: string;
   value?: WidgetState;
 }
 
 interface SEEvent {
   type?: string;
+  provider?: string;
+  channel?: string;
+  flagged?: boolean;
+  createdAt?: string;
   itemId?: string;
   data?: SEEventData;
   name?: string;
+  _id?: string;
+  expiresAt?: string;
+  updatedAt?: string;
+  activityId?: string;
+  sessionEventsCount?: number;
 }
 
 interface SESession {
   data?: {
     "channel-points-latest"?: {
       redemption?: string;
+      name?: string;
+      displayName?: string;
+      username?: string;
     };
   };
 }
@@ -140,6 +168,8 @@ interface FieldData {
   meterMaximum?: number;
   showChars?: boolean;
   showRedemptionAnnouncements?: boolean;
+  /** Seconds to pause after typewriter text finishes before hiding the overlay. */
+  redemptionTypewriterHoldSeconds?: number;
   numberOfSecondsBetweenReports?: number;
   reportsShouldDisplay?: boolean;
   emoteBlessEnabled?: boolean;
@@ -184,7 +214,11 @@ type JQueryGetterFn = () => JQuery<HTMLElement>;
 
 // Void state / side-effect functions
 type NoArgVoidFunction = () => void;
-type IncrementStateFn = (toIncrement: string, name?: string | null, options?: IncrementStateOptions) => void;
+type IncrementStateFn = (
+  toIncrement: string,
+  user?: string | RedemptionUserRef | null,
+  options?: IncrementStateOptions
+) => void;
 type OptionallyInitializeNumericFieldFn = (obj: WidgetState, fieldName: string) => void;
 type EventHandlerFn = (event: Event) => void;
 type HandleRedemptionFn = (detail: SEEventDetail) => void;
