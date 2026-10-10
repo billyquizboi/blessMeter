@@ -204,6 +204,8 @@ function toggleShowAllState() {
  * rolled into the preReset fields via {@link resetMetersButKeepCurrentState}
  * before saving.
  * @param toIncrement - A {@link StateKeys} value identifying the counter to increment.
+ * @param user
+ * @param options
  */
 function incrementState(toIncrement, user, options) {
     var _a, _b;
