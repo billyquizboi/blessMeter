@@ -44,7 +44,7 @@ Session keys vary by platform; see [Session Data Reference](https://docs.streame
 | `kicks-latest`             | Kick KICKs gift                            |
 | `tip-latest`               | tip                                        |
 | `raid-latest`              | raid                                       |
-| `message`                  | chat message                               |
+| `message`                  | chat message (`event.data` — see below)    |
 | `delete-message`           | single message removed (`msgId`)           |
 | `delete-messages`          | all messages from `userId` removed         |
 | `event:skip`               | skip alert (activity feed)                 |
@@ -70,24 +70,106 @@ Tips may include `userCurrency` (with `.symbol`, etc.).
 
 ### Channel points (blessMeter)
 
-Not always listed in the public listener table. This repo handles:
+Not always listed in the public listener table. `eventReceivedHandler` routes to `handleRedemption` when:
 
-- `listener` containing `redemption` (e.g. `redemption-latest`)
-- `event.type === "channelPointsRedemption"`
-- `event.itemId` set (StreamElements editor emulator)
+- `detail.listener.split("-")[0] === "redemption"` (e.g. `redemption-latest`), or
+- `detail.event.type === "channelPointsRedemption"` — **required for live Twitch**, where `listener` is often **`"event"`** (not `redemption-latest`), or
+- `detail.event.itemId` is set → handler forces `listener` to `redemption-latest` (SE editor emulator).
 
-Redemption title locations (priority):
+#### Reward title (`getRedemptionName`)
 
 1. `event.data.redemption`
 2. `session.data["channel-points-latest"].redemption`
-3. `event.itemId`
+3. `event.itemId` (string reward name in the emulator)
 
-Redeeming user (see `getRedemptionUserIdentity` in `widget.ts`):
+#### Redeeming user (`getRedemptionUserIdentity`)
 
-- **Tracking key** ( `redemptionHistory` map key ): `event.data.username` (then `nick`), or session `channel-points-latest.username` / `.name`, then `event.name`.
-- **Display label** (reports, announcements): `event.data.displayName` when present, else the tracking key.
+Returns `{ trackingKey, displayName }` or `null`. Used for `redemptionHistory` keys and `lastRedemption.redeemingUser` (display).
 
-`getRedeemingUserName()` returns the display label only.
+| Step                                       | `trackingKey`           | `displayName`                                                      |
+| ------------------------------------------ | ----------------------- | ------------------------------------------------------------------ |
+| 1. `event.data`                            | `username`, then `nick` | `displayName`, then tracking key, then `nick`                      |
+| 2. `session.data["channel-points-latest"]` | `username`, then `name` | `displayName`, then tracking key; else `name` / `displayName` only |
+| 3. `event.name`                            | same string for both    | same string for both                                               |
+
+`getRedeemingUserName()` → `displayName` only.
+
+#### Live Twitch envelope (canonical test fixture)
+
+From `makeExampleTwitchChannelPointsRedemptionDetail` in `v1/widget.test.ts`:
+
+```javascript
+{
+  listener: "event",
+  event: {
+    type: "channelPointsRedemption",
+    provider: "twitch",
+    data: {
+      redemption: "Bless the Run",
+      username: "exampleUserName",
+      displayName: "ExampleUserNameDisplay",
+      amount: 500,
+      providerId: "123456789",
+      // ...
+    },
+  },
+}
+```
+
+#### SE editor / mock redeem (`mockRedeemEvent` in `widget.ts`)
+
+Often omits `data.username`; identity falls back to **`event.name`**:
+
+```javascript
+{
+  event: {
+    type: "channelPointsRedemption",
+    data: { redemption: "Bless the Run" },
+    name: "testUserName",
+  },
+}
+```
+
+### Chat messages (message listener)
+
+Chat payload is always **`obj.detail.event.data`** (`ChatMessageData`). There is no redeemer on `event.name` for chat.
+
+| Field         | Role                                                                            |
+| ------------- | ------------------------------------------------------------------------------- |
+| `text`        | Message body; also tokenized for emote-name matching when `emotes` is empty     |
+| `emotes`      | `{ name?: string }[]` — preferred emote source for blessMeter                   |
+| `displayName` | Shown name; used for emote-bless announcements and single-user credit           |
+| `nick`        | Fallback login-style name                                                       |
+| `userId`      | Stable id for emote window deduplication (`userId ?? nick ?? "unknown"`)        |
+| `username`    | Present on some platforms in typings; **not** used by `handleChatMessage` today |
+| `msgId`       | Store with `userId` if you handle `delete-message` / `delete-messages`          |
+
+blessMeter emote bless (`handleChatMessage`):
+
+```javascript
+const message = detail.event?.data;
+const userId = message.userId ?? message.nick ?? "unknown";
+const displayName = message.displayName ?? message.nick ?? userId;
+```
+
+Synthetic chat event:
+
+```javascript
+new CustomEvent("onEventReceived", {
+  detail: {
+    listener: "message",
+    event: {
+      data: {
+        text: "Kappa",
+        displayName: "Viewer",
+        nick: "viewer",
+        userId: "12345",
+        emotes: [{ name: "Kappa" }],
+      },
+    },
+  },
+});
+```
 
 ## `onSessionUpdate`
 
@@ -208,17 +290,39 @@ interface SEEventDetail {
   fieldData?: FieldData;
 }
 
+interface ChatMessageData {
+  text?: string;
+  displayName?: string;
+  username?: string;
+  nick?: string;
+  userId?: string;
+  emotes?: { name?: string }[];
+}
+
+interface SEEventData extends ChatMessageData {
+  redemption?: string; // channel points reward title
+  amount?: number;
+  providerId?: string;
+  key?: string; // kvstore:update
+  value?: WidgetState;
+  // ...
+}
+
 interface SEEvent {
-  type?: string;
-  itemId?: string;
-  data?: SEEventData; // redemption?, key?, value?: WidgetState
-  name?: string;
+  type?: string; // e.g. "channelPointsRedemption"
+  itemId?: string; // emulator reward title; also forces redemption routing
+  data?: SEEventData;
+  name?: string; // redeemer fallback when data has no user fields (-latest / emulator)
 }
 ```
 
 `FieldData` mirrors `widgetFields.json`: `meterMaximum`, `showChars`, `showRedemptionAnnouncements`, `numberOfSecondsBetweenReports`, `reportsShouldDisplay`.
 
-### Mock / test event
+### Mock / test events
+
+**Live-style Twitch redemption** — use `listener: "event"` and `data.username` / `data.displayName` (see `makeExampleTwitchChannelPointsRedemptionDetail`).
+
+**Editor-style redemption** — `name` on `event` when `data` has no user fields:
 
 ```typescript
 new CustomEvent("onEventReceived", {
