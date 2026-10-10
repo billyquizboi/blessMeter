@@ -11,6 +11,7 @@
     "test": "jest",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "fix": "npm run format && npm run lint:fix && npm run build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:widget-js": "npm run build && git diff --exit-code -- v1/widget.js",
