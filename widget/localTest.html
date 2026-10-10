@@ -3,17 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BlessMeter v1 - local test harness</title>
+    <title>BlessMeter - local test harness</title>
 
     <!--
-    Local development harness for the v1 widget. It is not part of the widget:
+    Local development harness for the blessMeter widget. It is not part of the widget:
     nothing in this file is pasted into the StreamElements editor.
 
     It hosts the real widget.html in an iframe and injects jQuery, a mocked
     SE_API, and the compiled widget.js into it, so the page always exercises the
     latest widget.html / widget.css / widget.js from disk.
 
-    Run `npm run dev` and open http://localhost:8080/v1/localTest.html.
+    Run `npm run dev` and open http://localhost:8080/widget/localTest.html.
     An http origin is required: a file:// page has an opaque origin, which blocks
     both fetch() and same-origin scripting into the iframe.
     -->
@@ -248,7 +248,7 @@
   <body>
     <div id="stage-column">
       <div id="stage-header">
-        <h1>BlessMeter v1 harness</h1>
+        <h1>BlessMeter harness</h1>
         <span id="stage-status">booting...</span>
       </div>
       <div id="stage"></div>
@@ -311,6 +311,10 @@
           <input id="field-show-chars" type="checkbox" checked />
           <label for="field-show-redemption-announcements">showRedemptionAnnouncements</label>
           <input id="field-show-redemption-announcements" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <label for="field-redemption-typewriter-hold">redemptionTypewriterHoldSeconds</label>
+          <input id="field-redemption-typewriter-hold" type="number" min="0" step="0.1" value="0.6" />
         </div>
         <div class="row">
           <label for="field-seconds-between-reports">numberOfSecondsBetweenReports</label>
@@ -452,7 +456,7 @@
       // =====================================================================
       // Types mirrored from se-api.d.ts
       //
-      // The widget is compiled from TypeScript against v1/se-api.d.ts. These
+      // The widget is compiled from TypeScript against widget/se-api.d.ts. These
       // typedefs mirror those declarations so the mocks and builders below stay
       // in step with what the widget actually reads.
       // =====================================================================
@@ -545,6 +549,7 @@
        * @property {number} [meterMaximum]
        * @property {boolean} [showChars]
        * @property {boolean} [showRedemptionAnnouncements]
+       * @property {number} [redemptionTypewriterHoldSeconds]
        * @property {number} [numberOfSecondsBetweenReports]
        * @property {boolean} [reportsShouldDisplay]
        * @property {boolean} [emoteBlessEnabled]
@@ -582,7 +587,7 @@
       /** Must match STORE_KEY_NAME in widget.ts. */
       const STORE_KEY = "blessCurseMeterState";
       /** Where the mocked store persists between reloads. */
-      const LOCAL_STORAGE_KEY = "blessMeter.v1.localTest.store";
+      const LOCAL_STORAGE_KEY = "blessMeter.widget.localTest.store";
 
       const WIDGET_HTML_URL = "widget.html";
       const WIDGET_CSS_URL = "widget.css";
@@ -1039,6 +1044,7 @@
           meterMaximum: Number(document.getElementById("field-meter-maximum").value),
           showChars: document.getElementById("field-show-chars").checked,
           showRedemptionAnnouncements: document.getElementById("field-show-redemption-announcements").checked,
+          redemptionTypewriterHoldSeconds: Number(document.getElementById("field-redemption-typewriter-hold").value),
           numberOfSecondsBetweenReports: Number(document.getElementById("field-seconds-between-reports").value),
           reportsShouldDisplay: document.getElementById("field-reports-should-display").checked,
           emoteBlessEnabled: document.getElementById("field-emote-bless-enabled").checked,
@@ -1225,6 +1231,14 @@
           if (fields.showRedemptionAnnouncements && typeof fields.showRedemptionAnnouncements.value === "boolean") {
             document.getElementById("field-show-redemption-announcements").checked =
               fields.showRedemptionAnnouncements.value;
+          }
+          if (
+            fields.redemptionTypewriterHoldSeconds &&
+            typeof fields.redemptionTypewriterHoldSeconds.value === "number"
+          ) {
+            document.getElementById("field-redemption-typewriter-hold").value = String(
+              fields.redemptionTypewriterHoldSeconds.value
+            );
           }
           if (fields.numberOfSecondsBetweenReports && typeof fields.numberOfSecondsBetweenReports.value === "number") {
             document.getElementById("field-seconds-between-reports").value = String(

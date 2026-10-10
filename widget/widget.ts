@@ -1236,6 +1236,7 @@ function processDisplay(widgetState: WidgetState, showAnimate: boolean): Promise
     curseCountText = preResetCurses;
     blurseCountText = `${preResetBlursesThatBlessed} / ${preResetBlursesThatCursed}`;
     updateToggleButtonDisplay(isShowingAll(widgetState));
+    updateMeterTitles(isShowingAll(widgetState));
   } else {
     const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * 2;
     const effectiveCurses = numberOfCurses + numberOfBlursesThatCursed * 2;
@@ -1256,6 +1257,7 @@ function processDisplay(widgetState: WidgetState, showAnimate: boolean): Promise
       curseWidth = (effectiveCurses >= meterMaximum ? 100 : (effectiveCurses / meterMaximum) * 100).toFixed(2) + "%";
     }
     updateToggleButtonDisplay(isShowingAll(widgetState));
+    updateMeterTitles(isShowingAll(widgetState));
     console.log(`Updating widths to bless: ${blessWidth}, curse: ${curseWidth}`);
 
     // Build factories now (captures current widths; glow class changes happen immediately).
@@ -1785,6 +1787,22 @@ function getRedemptionAnnouncement(): JQuery<HTMLElement> {
   return getMainMeterInnerWindow().find(".redemption-announcement");
 }
 
+function getBlessMeterTitle(): JQuery<HTMLElement> {
+  return getMainMeterInnerWindow().find(".bless-container .meter-title");
+}
+
+function getCurseMeterTitle(): JQuery<HTMLElement> {
+  return getMainMeterInnerWindow().find(".curse-container .meter-title");
+}
+
+function isCt(): boolean {
+  return $("body").hasClass("theme-ct");
+}
+
+function isFfv6(): boolean {
+  return !isCt();
+}
+
 /**
  * Updates the all-time toggle button label.
  * Sets the text to "Show run" when `showAll` is true (all-time view is active)
@@ -1801,6 +1819,25 @@ function updateToggleButtonDisplay(showAll: boolean): void {
     console.log("Show run");
     toggleButton.text("Show all");
     console.log(`Updated show all attribute to: ${showAll}`);
+  }
+}
+
+/**
+ * Change the meter titles to be clear when showing all vs. showing current
+ * @param showAll if showing all time or current run
+ */
+function updateMeterTitles(showAll: boolean): void {
+  if (showAll) {
+    if (isCt()) {
+      getBlessMeterTitle().text("ALL BLESS");
+      getCurseMeterTitle().text("ALL CURSE");
+    } else {
+      getBlessMeterTitle().text("ALL");
+      getCurseMeterTitle().text("TIME");
+    }
+  } else {
+    getBlessMeterTitle().text("BLESS");
+    getCurseMeterTitle().text("CURSE");
   }
 }
 
@@ -2031,6 +2068,7 @@ function applyBackgroundTheme(theme: string): void {
 function updateBackgroundThemeButtonDisplay(theme: string): void {
   const label = normalizeBackgroundTheme(theme) === THEME_CT ? "FF6" : "CT";
   $("#background-theme-toggle").text(label);
+  updateMeterTitles(isShowingAll(lastWidgetState)); // edge-case to be honest - prevents a bad text
 }
 
 /**

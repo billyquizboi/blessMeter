@@ -1,10 +1,8 @@
 # blessMeter
 
-Two versions of a StreamElements widget for tracking number of blesses, curses, and blurses redeemed in twitch chat.
+StreamElements overlay widget for tracking blesses, curses, and blurses redeemed in Twitch chat.
 
-[Version 1 Widget README.md](./v1/README.md) - A FFVI & Chrono Trigger inspired menu-like meter display for tracking blesses, curses, and blurses.
-
-[Version 2 Widget README.md](./v2/README.md) - A vertical meter display for tracking blesses, curses, and blurses.
+[Widget README](./widget/README.md) — FFVI & Chrono Trigger inspired menu-style meter display.
 
 Final Fantasy and all other trademarked material is the intellectual property of Square Enix.
 

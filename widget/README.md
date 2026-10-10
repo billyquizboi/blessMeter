@@ -1,4 +1,4 @@
-# blessMeter V1
+# blessMeter widget
 
 A FFVI inspired StreamElements custom widget for tracking number of blesses, curses, and blurses redeemed for a speedrun.
 
@@ -44,7 +44,7 @@ _These OBS instructions below were copied from google_
 
 ## Development
 
-All commands below are run from the **repository root** (the folder that contains `package.json`, one level above `v1/`).
+All commands below are run from the **repository root** (the folder that contains `package.json`, one level above `widget/`).
 
 ### Prerequisites
 
@@ -71,7 +71,7 @@ For a clean install that matches the lockfile exactly (same as CI): `npm ci`.
 | Serve only (no compile) | `npm run serve`                                        |
 | Stop                    | **Ctrl+C** in the terminal where the server is running |
 
-`npm run dev` compiles TypeScript, then starts a static server at **http://localhost:8080**. Open the local harness at **http://localhost:8080/v1/localTest.html**.
+`npm run dev` compiles TypeScript, then starts a static server at **http://localhost:8080**. Open the local harness at **http://localhost:8080/widget/localTest.html**.
 
 Use another port if 8080 is busy: `npm run serve -- --port 8090` (run `npm run build` first if you changed `.ts` files and skipped `npm run dev`).
 
@@ -105,11 +105,11 @@ Use the below commands to start the development server:
 npm run build
 npm run dev
 // will print
-// v1 test harness: http://localhost:8080/v1/localTest.html
+// Local test harness: http://localhost:8080/widget/localTest.html
 // which is the url to open in the browser to see the testing page
 ```
 
-Start the dev server as above, then open <http://localhost:8080/v1/localTest.html>.
+Start the dev server as above, then open <http://localhost:8080/widget/localTest.html>.
 
 A local server is required because a `file://` page gets an opaque origin, which blocks both `fetch()` and scripting into the iframe.
 

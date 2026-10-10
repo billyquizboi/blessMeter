@@ -1,7 +1,7 @@
 /**
  * Static file server for local widget testing.
  *
- * Serves the repository root so v1/localTest.html can fetch widget.html,
+ * Serves the repository root so widget/localTest.html can fetch widget.html,
  * widgetFields.json, and node_modules/jquery over an http origin. A file://
  * page gets an opaque origin, which blocks both fetch() and same-origin
  * scripting into the widget iframe.
@@ -14,7 +14,7 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
-const HARNESS_PATH = "/v1/localTest.html";
+const HARNESS_PATH = "/widget/localTest.html";
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -57,8 +57,8 @@ const server = http.createServer((req, res) => {
 
   // Redirect rather than serve the harness at "/": the page resolves
   // widget.html and widget.js relative to its own URL, so it has to be loaded
-  // from /v1/ or those requests land on the repository root and 404.
-  if (pathname === "/" || pathname === "/v1" || pathname === "/v1/") {
+  // from /widget/ or those requests land on the repository root and 404.
+  if (pathname === "/" || pathname === "/widget" || pathname === "/widget/") {
     send(res, 302, "", { Location: HARNESS_PATH });
     return;
   }
@@ -89,7 +89,7 @@ const server = http.createServer((req, res) => {
 const port = resolvePort();
 server.listen(port, () => {
   console.log(`Serving ${ROOT} at http://localhost:${port}`);
-  console.log(`v1 test harness: http://localhost:${port}${HARNESS_PATH}`);
+  console.log(`Local test harness: http://localhost:${port}${HARNESS_PATH}`);
 });
 
 server.on("error", (error) => {

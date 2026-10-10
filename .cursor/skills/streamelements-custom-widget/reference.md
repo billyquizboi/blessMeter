@@ -1,6 +1,6 @@
 # StreamElements custom widget reference
 
-Condensed from StreamElements docs and [v1/se-api.d.ts](../../../v1/se-api.d.ts).
+Condensed from StreamElements docs and [widget/se-api.d.ts](../../../widget/se-api.d.ts).
 
 ## FIELDS JSON — supported types
 
@@ -96,7 +96,7 @@ Returns `{ trackingKey, displayName }` or `null`. Used for `redemptionHistory` k
 
 #### Live Twitch envelope (canonical test fixture)
 
-From `makeExampleTwitchChannelPointsRedemptionDetail` in `v1/widget.test.ts`:
+From `makeExampleTwitchChannelPointsRedemptionDetail` in `widget/widget.test.ts`:
 
 ```javascript
 {
@@ -245,7 +245,7 @@ window.addEventListener("onEventReceived", (obj) => {
 });
 ```
 
-## Types in `v1/se-api.d.ts` (blessMeter)
+## Types in `widget/se-api.d.ts` (blessMeter)
 
 ### `SE_API` (declared subset)
 

@@ -5,7 +5,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["**/node_modules/**", "coverage/**", "v1/widget.js", "v2/widget.js"],
+    ignores: ["**/node_modules/**", "coverage/**", "widget/widget.js"],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
@@ -22,7 +22,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["v1/**/*.ts"],
+    files: ["widget/**/*.ts"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "script",
@@ -38,7 +38,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["v1/**/*.test.ts"],
+    files: ["widget/**/*.test.ts"],
     languageOptions: {
       globals: globals.jest,
     },
@@ -47,7 +47,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["v1/widget.ts"],
+    files: ["widget/widget.ts"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "script",

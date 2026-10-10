@@ -231,6 +231,15 @@ h5 {
   scrollbar-width: none;
 }
 
+body.theme-ct .redemption-announcement-text:not(.redemption-announcement-headline) {
+  flex: 1 1 auto;
+  align-self: stretch;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: left;
+}
+
 .redemption-announcement-text.redemption-announcement-headline {
   flex: 0 0 auto;
   width: auto;
@@ -458,7 +467,7 @@ div.hidden {
   Chrono Trigger style background, toggled by adding .theme-ct to <body>.
   The tile is inlined as a data URI because StreamElements hosts widget.css
   without any sibling assets, so a relative url() would 404 in the overlay.
-  Source image: v1/proof_of_concept/mock_ct_background.png
+  Source image: widget/proof_of_concept/mock_ct_background.png
 */
 body.theme-ct,
 body.theme-ct * {
