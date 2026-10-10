@@ -69,7 +69,8 @@ const ATTRIBUTE_BACKGROUND_THEME = "backgroundTheme" as const;
 const animationDuration = 1000;
 const shortAnimationDuration = 1;
 const redemptionLetterDelayMs = 45;
-const redemptionHoldAfterTypeMs = 600;
+/** Pause after typewriter finishes; overridden by {@link applyFieldData}. */
+let redemptionHoldAfterTypeMs = 600;
 const reportAllTimeHoldMs = 2000;
 const topRedeemerLimit = 3;
 
@@ -228,8 +229,14 @@ function toggleShowAllState(): void {
  * before saving.
  * @param toIncrement - A {@link StateKeys} value identifying the counter to increment.
  */
-function incrementState(toIncrement: string, name: string | null, options?: IncrementStateOptions): void {
+function incrementState(
+  toIncrement: string,
+  user: string | RedemptionUserRef | null,
+  options?: IncrementStateOptions
+): void {
   console.log(`Incrementing ${toIncrement}`);
+  const userRef = resolveRedemptionUserRef(user);
+  const trackingKey = userRef?.trackingKey ?? null;
   const recordRedemption = options?.recordRedemption ?? true;
   void storeMutationQueue.enqueue(() =>
     SE_API.store.get(STORE_KEY_NAME).then((obj) => {
@@ -251,12 +258,15 @@ function incrementState(toIncrement: string, name: string | null, options?: Incr
         console.log("Initializing redemptionHistory  object");
         obj[redemptionHistoryKey] = {};
       }
-      if (name != null && name !== "") {
-        if (obj[redemptionHistoryKey][name] == null) {
-          console.log("Initializing redemptionHistory for user " + name);
-          obj[redemptionHistoryKey][name] = createEmptyRedemptionHistoryEntry();
+      if (trackingKey != null) {
+        if (obj[redemptionHistoryKey][trackingKey] == null) {
+          console.log("Initializing redemptionHistory for user " + trackingKey);
+          obj[redemptionHistoryKey][trackingKey] = createEmptyRedemptionHistoryEntry(userRef!.displayName);
         } else {
-          obj[redemptionHistoryKey][name] = normalizeRedemptionHistoryEntry(obj[redemptionHistoryKey][name]);
+          obj[redemptionHistoryKey][trackingKey] = normalizeRedemptionHistoryEntry(
+            obj[redemptionHistoryKey][trackingKey]
+          );
+          applyRedemptionHistoryDisplayName(obj[redemptionHistoryKey][trackingKey], userRef!.displayName);
         }
       }
 
@@ -284,9 +294,9 @@ function incrementState(toIncrement: string, name: string | null, options?: Incr
           meterAmount = 2;
         }
 
-        if (name != null && name !== "" && obj[redemptionHistoryKey][name] != null) {
-          console.log("Incrementing blurses for user " + name);
-          const userEntry = obj[redemptionHistoryKey][name];
+        if (trackingKey != null && obj[redemptionHistoryKey][trackingKey] != null) {
+          console.log("Incrementing blurses for user " + trackingKey);
+          const userEntry = obj[redemptionHistoryKey][trackingKey];
           userEntry.numberOfBlurses = getOrDefaultCount(userEntry.numberOfBlurses) + 1;
           if (meterTarget === TYPE_BLESS) {
             userEntry.numberOfBlursesThatBlessed = getOrDefaultCount(userEntry.numberOfBlursesThatBlessed) + 1;
@@ -299,18 +309,18 @@ function incrementState(toIncrement: string, name: string | null, options?: Incr
       obj.allTime[toIncrement] += 1;
       obj.lastUpdated = new Date();
 
-      if (name != null && name !== "" && obj[redemptionHistoryKey][name] != null) {
+      if (trackingKey != null && obj[redemptionHistoryKey][trackingKey] != null) {
         if (toIncrement == StateKeys.numberOfBlesses) {
-          console.log("Incrementing blesses for user " + name);
-          obj[redemptionHistoryKey][name][StateKeys.numberOfBlesses] =
-            obj[redemptionHistoryKey][name]["numberOfBlesses"] + 1;
+          console.log("Incrementing blesses for user " + trackingKey);
+          obj[redemptionHistoryKey][trackingKey][StateKeys.numberOfBlesses] =
+            obj[redemptionHistoryKey][trackingKey]["numberOfBlesses"] + 1;
           charType = TYPE_BLESS;
           meterTarget = TYPE_BLESS;
           meterAmount = 1;
         } else if (toIncrement == StateKeys.numberOfCurses) {
-          console.log("Incrementing curses for user " + name);
-          obj[redemptionHistoryKey][name][StateKeys.numberOfCurses] =
-            obj[redemptionHistoryKey][name]["numberOfCurses"] + 1;
+          console.log("Incrementing curses for user " + trackingKey);
+          obj[redemptionHistoryKey][trackingKey][StateKeys.numberOfCurses] =
+            obj[redemptionHistoryKey][trackingKey]["numberOfCurses"] + 1;
           charType = TYPE_CURSE;
           meterTarget = TYPE_CURSE;
           meterAmount = 1;
@@ -323,14 +333,13 @@ function incrementState(toIncrement: string, name: string | null, options?: Incr
 
       if (
         recordRedemption &&
-        name != null &&
-        name !== "" &&
+        userRef != null &&
         meterTarget != undefined &&
         meterAmount != undefined &&
         charType != undefined
       ) {
         obj["lastRedemption"] = {
-          redeemingUser: name,
+          redeemingUser: userRef.displayName,
           charType: charType,
           meterTarget: meterTarget,
           meterAmount: meterAmount,
@@ -459,6 +468,16 @@ function optionallyInitializeNumericField(obj: WidgetState, fieldName: string): 
 }
 
 /**
+ * Logs an incoming StreamElements window event. `JSON.stringify(event)` only
+ * serializes DOM metadata (e.g. `isTrusted`); the payload is in `detail`.
+ */
+function logSeIncomingEvent(label: string, event: Event, detail?: SEEventDetail): void {
+  const d = detail ?? (event as SECustomEvent).detail;
+  const summary = d?.event != null ? { eventType: d.event.type, eventName: d.event.name } : d;
+  console.log(`${label} type=${event.type} listener=${d?.listener ?? "?"}`, summary);
+}
+
+/**
  * Handles the StreamElements `onEventReceived` window event.
  * Routes the event to {@link handleRedemption} for channel point redemptions,
  * or calls {@link updateDisplay} when a `kvstore:update` signals that the
@@ -467,7 +486,7 @@ function optionallyInitializeNumericField(obj: WidgetState, fieldName: string): 
  */
 function eventReceivedHandler(event: Event): void {
   const obj = event as SECustomEvent;
-  console.log(`Received an event ${JSON.stringify(obj)}`);
+  logSeIncomingEvent("Received onEventReceived", event);
   if (obj.detail == undefined) {
     console.log("obj.detail does not exist so exiting");
     return;
@@ -505,7 +524,7 @@ function eventReceivedHandler(event: Event): void {
   } else if (detail.listener === "message") {
     handleChatMessage(detail);
   } else if (detail.listener === "kvstore:update") {
-    console.log(`Key store was updated so update the widget display ${JSON.stringify(obj)}`);
+    logSeIncomingEvent("Key store was updated so update the widget display", event, detail);
     if (
       seEvent != undefined &&
       seEvent.data != undefined &&
@@ -518,7 +537,7 @@ function eventReceivedHandler(event: Event): void {
       console.log(
         `This kvstore update may be invalid or not for us but we are going to check current state anyway as a fallback. This was necessary during testing on SE site.`
       );
-      console.log(`A different key store item was saved ${JSON.stringify(obj)}`);
+      logSeIncomingEvent("A different key store item was saved", event, detail);
       SE_API.store.get(STORE_KEY_NAME).then((state) => {
         console.log(`Retrieved widget state: ${JSON.stringify(state)}`);
         lastWidgetState = state;
@@ -526,7 +545,8 @@ function eventReceivedHandler(event: Event): void {
       });
     }
   } else {
-    console.log(`Not doing anything with object ${JSON.stringify(obj)} and detail ${JSON.stringify(detail)}`);
+    logSeIncomingEvent("Not doing anything with", event, detail);
+    console.log(`detail payload ${JSON.stringify(detail)}`);
   }
 }
 
@@ -582,18 +602,18 @@ window.addEventListener("onWidgetLoad", widgetLoadHandler);
 function handleRedemption(detail: SEEventDetail): void {
   console.log("In redemption handling");
   const redemptionName: string | null = getRedemptionName(detail);
-  const redeemingUserName: string | null = getRedeemingUserName(detail);
+  const redeemingUser: RedemptionUserRef | null = getRedemptionUserIdentity(detail);
   if (redemptionName != undefined && redemptionName != null) {
     console.log(`Redemption name is ${redemptionName}`);
     if (redemptionName == blessTheRun) {
       console.log(`Bless it: Verily let this run be bless-ed`);
-      incrementState(StateKeys.numberOfBlesses, redeemingUserName);
+      incrementState(StateKeys.numberOfBlesses, redeemingUser);
     } else if (redemptionName == curseTheRun) {
       console.log(`Curse it: I say unto you Locke shall not steal this run.`);
-      incrementState(StateKeys.numberOfCurses, redeemingUserName);
+      incrementState(StateKeys.numberOfCurses, redeemingUser);
     } else if (redemptionName == blurseTheRun) {
       console.log(`Blurse it - who knows? Maybe gau, maybe no gau. Maybe black belt, maybe trench death.`);
-      incrementState(StateKeys.numberOfBlurses, redeemingUserName);
+      incrementState(StateKeys.numberOfBlurses, redeemingUser);
     } else {
       console.log(`Not handling redemption ${redemptionName}`);
     }
@@ -709,22 +729,108 @@ function getRedemptionName(detail: SEEventDetail | undefined): string | null {
 }
 
 /**
- * Return the name of the redeeming user or null if missing required data
- * or if SE api documentation at https://docs.streamelements.com/overlays/events#event-details
- * is incorrect.
- * @param detail the event detail which contains the name of the redeeming user nested in event
- * @returns the name of the redeeming user or null
+ * Resolves who redeemed for history tracking and UI labels.
+ * Twitch channel points use `event.data.username` as the stable key and
+ * `event.data.displayName` for display when present.
+ * @param detail - StreamElements event detail for a redemption.
  */
-function getRedeemingUserName(detail: SEEventDetail | undefined): string | null {
+function getRedemptionUserIdentity(detail: SEEventDetail | undefined): RedemptionUserRef | null {
   if (detail == null || detail.event == null) {
     return null;
   }
-  const name: string | undefined = detail.event.name;
-  if (name == undefined || name.length == 0) {
+  const event = detail.event;
+
+  if (event.data != undefined) {
+    const identity = redemptionUserFromDataFields(event.data);
+    if (identity != null) {
+      console.log(`${identity.trackingKey} redeemed (event.data user fields)`);
+      return identity;
+    }
+  }
+
+  const channelPointsLatest = detail.session?.data?.["channel-points-latest"];
+  if (channelPointsLatest != undefined) {
+    const identity = redemptionUserFromSessionLatest(channelPointsLatest);
+    if (identity != null) {
+      console.log(`${identity.trackingKey} redeemed (session channel-points-latest)`);
+      return identity;
+    }
+  }
+
+  const fromEventName = pickNonEmptyString(event.name);
+  if (fromEventName != null) {
+    console.log(`${fromEventName} redeemed (event.name)`);
+    return { trackingKey: fromEventName, displayName: fromEventName };
+  }
+
+  return null;
+}
+
+/**
+ * @param detail - StreamElements event detail for a redemption.
+ * @returns Display label for announcements and reports.
+ */
+function getRedeemingUserName(detail: SEEventDetail | undefined): string | null {
+  return getRedemptionUserIdentity(detail)?.displayName ?? null;
+}
+
+function redemptionUserFromDataFields(data: SEEventData): RedemptionUserRef | null {
+  const trackingKey = pickNonEmptyString(data.username, data.nick);
+  const displayName = pickNonEmptyString(data.displayName, trackingKey, data.nick);
+  if (trackingKey != null) {
+    return { trackingKey, displayName: displayName ?? trackingKey };
+  }
+  if (displayName != null) {
+    return { trackingKey: displayName, displayName };
+  }
+  return null;
+}
+
+function redemptionUserFromSessionLatest(
+  latest: NonNullable<NonNullable<SESession["data"]>["channel-points-latest"]>
+): RedemptionUserRef | null {
+  const trackingKey = pickNonEmptyString(latest.username, latest.name);
+  const displayName = pickNonEmptyString(latest.displayName, trackingKey);
+  if (trackingKey != null) {
+    return { trackingKey, displayName: displayName ?? trackingKey };
+  }
+  const nameOnly = pickNonEmptyString(latest.name, latest.displayName);
+  if (nameOnly != null) {
+    return { trackingKey: nameOnly, displayName: nameOnly };
+  }
+  return null;
+}
+
+/**
+ * Normalizes string or {@link RedemptionUserRef} arguments for {@link incrementState}.
+ */
+function resolveRedemptionUserRef(user: string | RedemptionUserRef | null): RedemptionUserRef | null {
+  if (user == null) {
     return null;
   }
-  console.log("" + name + " redeemed " + JSON.stringify(detail));
-  return name;
+  if (typeof user === "string") {
+    const trimmed = user.trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+    return { trackingKey: trimmed, displayName: trimmed };
+  }
+  const trackingKey = user.trackingKey.trim();
+  if (trackingKey.length === 0) {
+    return null;
+  }
+  const displayName = pickNonEmptyString(user.displayName, trackingKey) ?? trackingKey;
+  return { trackingKey, displayName };
+}
+
+/** Returns the first non-empty trimmed string, or null. */
+function pickNonEmptyString(...candidates: (string | null | undefined)[]): string | null {
+  for (const candidate of candidates) {
+    if (candidate != undefined && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+  return null;
 }
 
 /**
@@ -786,6 +892,12 @@ function applyFieldData(fieldData: FieldData | undefined): void {
   }
   if (fieldData.showRedemptionAnnouncements != null && typeof fieldData.showRedemptionAnnouncements === "boolean") {
     showRedemptionAnnouncements = fieldData.showRedemptionAnnouncements;
+  }
+  if (
+    fieldData.redemptionTypewriterHoldSeconds != null &&
+    typeof fieldData.redemptionTypewriterHoldSeconds === "number"
+  ) {
+    redemptionHoldAfterTypeMs = Math.max(0, fieldData.redemptionTypewriterHoldSeconds) * 1000;
   }
   if (fieldData.numberOfSecondsBetweenReports != null && typeof fieldData.numberOfSecondsBetweenReports === "number") {
     numberOfSecondsBetweenReports = Math.max(0, Math.floor(fieldData.numberOfSecondsBetweenReports));
@@ -854,8 +966,10 @@ function normalizeEmoteNameForMatch(emoteName: string): string {
  */
 function findMatchingTrackedEmotesInChat(message: ChatMessageData, trackedLower: Set<string>): string[] {
   if (trackedLower.size === 0) {
+    console.log("No tracked emotes configured");
     return [];
   }
+  console.log(`Looking for tracked emotes ${JSON.stringify(trackedLower)}`);
   const matches: string[] = [];
   if (message.emotes != null && message.emotes.length > 0) {
     for (const emote of message.emotes) {
@@ -866,6 +980,7 @@ function findMatchingTrackedEmotesInChat(message: ChatMessageData, trackedLower:
         matches.push(emote.name);
       }
     }
+    console.log(`Found message.emotes ${matches.length} tracked emotes`);
     return matches;
   }
   if (message.text != null && message.text.trim() !== "") {
@@ -876,6 +991,7 @@ function findMatchingTrackedEmotesInChat(message: ChatMessageData, trackedLower:
       }
     }
   }
+  console.log(`Found message.text ${matches.length} tracked emotes`);
   return matches;
 }
 
@@ -910,17 +1026,24 @@ function getDistinctUsersInEmoteWindow(): string[] {
  * @param detail - `onEventReceived` payload with `listener === "message"`.
  */
 function handleChatMessage(detail: SEEventDetail): void {
+  console.log("Handling chat message");
   if (!emoteBlessEnabled) {
+    console.log("Emote bless is disabled");
     return;
   }
+  console.log("Emote bless is enabled");
   const message = detail.event?.data;
   if (message == null) {
+    console.log("No chat message data found");
     return;
   }
+  console.log("Found message data: " + JSON.stringify(message));
   const matchedEmotes = findMatchingTrackedEmotesInChat(message, trackedEmoteNamesLower);
   if (matchedEmotes.length === 0) {
+    console.log("No emotes matched");
     return;
   }
+  console.log(`Matched ${matchedEmotes.length} emotes: ${matchedEmotes.join(", ")}`);
 
   const nowMs = Date.now();
   const userId = message.userId ?? message.nick ?? "unknown";
@@ -938,6 +1061,7 @@ function handleChatMessage(detail: SEEventDetail): void {
   }
 
   if (emoteWindowEntries.length < emoteBlessRequiredMatches) {
+    console.log(`Not enough emotes in window yet (${emoteWindowEntries.length}/${emoteBlessRequiredMatches})`);
     return;
   }
 
@@ -948,6 +1072,7 @@ function handleChatMessage(detail: SEEventDetail): void {
   }
 
   const distinctUsers = getDistinctUsersInEmoteWindow();
+  console.log(`Found ${distinctUsers.length} distinct users in window: ${distinctUsers.join(", ")}`);
   const matchCount = emoteWindowEntries.length;
   emoteWindowEntries = [];
   lastEmoteBlessTriggeredAt = nowMs;
@@ -972,6 +1097,7 @@ function isEmoteBlessOnCooldown(nowMs: number): boolean {
  * @param matchCount - Total matching emotes that filled the window.
  */
 function triggerEmoteBlessReward(distinctDisplayNames: string[], matchCount: number): void {
+  console.log(`Triggering emote bless reward for ${distinctDisplayNames.length} distinct users`);
   displayQueue.enqueue(async () => {
     await animateOverlayTypewriter(buildEmoteBlessAnnouncementSegments(distinctDisplayNames, matchCount));
     const creditedUser = distinctDisplayNames.length === 1 ? distinctDisplayNames[0] : null;
@@ -1046,15 +1172,19 @@ function enqueuePeriodicReportCycle(force = false): void {
   }
 
   displayQueue.enqueue(async () => {
-    const history = widgetState.redemptionHistory;
+    const stateForReport = lastWidgetState ?? widgetState;
+    if (stateForReport == null || stateForReport.current == undefined) {
+      return;
+    }
+    const history = stateForReport.redemptionHistory;
     await animateTopRedeemersReport("TOP BLESS REDEEMERS", getTopRedeemers(history, "bless"));
     await animateTopRedeemersReport("TOP CURSE REDEEMERS", getTopRedeemers(history, "curse"));
     await animateTopRedeemersReport("TOP BLURSE REDEEMERS", getTopRedeemers(history, "blurse"));
     await animateReportHeadline("ALL TIME");
-    await processDisplay({ ...widgetState, showAll: true }, true);
+    await processDisplay({ ...stateForReport, showAll: true }, true);
     await waitMs(reportAllTimeHoldMs);
     await animateReportHeadline("CURRENT RUN");
-    await processDisplay({ ...widgetState, showAll: false }, true);
+    await processDisplay({ ...stateForReport, showAll: false }, true);
   });
 }
 
@@ -1276,14 +1406,29 @@ async function animateOverlayTypewriter(
 }
 
 /** @returns A zeroed per-user redemption history entry. */
-function createEmptyRedemptionHistoryEntry(): RedemptionHistoryEntry {
-  return {
+function createEmptyRedemptionHistoryEntry(displayName?: string): RedemptionHistoryEntry {
+  const entry: RedemptionHistoryEntry = {
     numberOfBlesses: 0,
     numberOfCurses: 0,
     numberOfBlurses: 0,
     numberOfBlursesThatBlessed: 0,
     numberOfBlursesThatCursed: 0,
   };
+  applyRedemptionHistoryDisplayName(entry, displayName);
+  return entry;
+}
+
+/** Persists the latest Twitch display name on a history entry when provided. */
+function applyRedemptionHistoryDisplayName(entry: RedemptionHistoryEntry, displayName?: string): void {
+  const next = pickNonEmptyString(displayName);
+  if (next != null) {
+    entry.displayName = next;
+  }
+}
+
+/** Label for leaderboards and reports. */
+function getRedemptionHistoryDisplayName(entry: RedemptionHistoryEntry, trackingKey: string): string {
+  return pickNonEmptyString(entry.displayName, trackingKey) ?? trackingKey;
 }
 
 /**
@@ -1292,13 +1437,15 @@ function createEmptyRedemptionHistoryEntry(): RedemptionHistoryEntry {
  * @param entry - A stored redemption history entry.
  */
 function normalizeRedemptionHistoryEntry(entry: RedemptionHistoryEntry): RedemptionHistoryEntry {
-  return {
+  const normalized: RedemptionHistoryEntry = {
     numberOfBlesses: getOrDefaultCount(entry.numberOfBlesses),
     numberOfCurses: getOrDefaultCount(entry.numberOfCurses),
     numberOfBlurses: getOrDefaultCount(entry.numberOfBlurses),
     numberOfBlursesThatBlessed: getOrDefaultCount(entry.numberOfBlursesThatBlessed),
     numberOfBlursesThatCursed: getOrDefaultCount(entry.numberOfBlursesThatCursed),
   };
+  applyRedemptionHistoryDisplayName(normalized, entry.displayName);
+  return normalized;
 }
 
 /**
@@ -1330,13 +1477,14 @@ function getTopRedeemers(
     return [];
   }
   const ranked: { userName: string; count: number }[] = [];
-  for (const userName in redemptionHistory) {
-    if (!Object.prototype.hasOwnProperty.call(redemptionHistory, userName)) {
+  for (const trackingKey in redemptionHistory) {
+    if (!Object.prototype.hasOwnProperty.call(redemptionHistory, trackingKey)) {
       continue;
     }
-    const count = getRedemptionHistoryCount(normalizeRedemptionHistoryEntry(redemptionHistory[userName]), category);
+    const entry = normalizeRedemptionHistoryEntry(redemptionHistory[trackingKey]);
+    const count = getRedemptionHistoryCount(entry, category);
     if (count > 0) {
-      ranked.push({ userName, count });
+      ranked.push({ userName: getRedemptionHistoryDisplayName(entry, trackingKey), count });
     }
   }
   ranked.sort((left, right) => right.count - left.count || left.userName.localeCompare(right.userName));

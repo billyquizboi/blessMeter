@@ -80,6 +80,10 @@ declare global {
     isShowingAll: IsShowingAllFn;
     // Pure value functions
     getRedemptionName: GetRedemptionNameFn;
+    getRedeemingUserName: (detail: SEEventDetail | undefined) => string | null;
+    getRedemptionUserIdentity: (detail: SEEventDetail | undefined) => RedemptionUserRef | null;
+    pickNonEmptyString: (...candidates: (string | undefined)[]) => string | null;
+    getRedemptionHistoryDisplayName: (entry: RedemptionHistoryEntry, trackingKey: string) => string;
     getOrDefaultCount: GetOrDefaultCountFn;
     getCountFromState: GetCountFromStateFn;
     gletGlowForeverClass: GletGlowForeverClassFn;
@@ -244,6 +248,39 @@ function makeRedemptionHistoryEntry(overrides?: Partial<RedemptionHistoryEntry>)
     numberOfBlursesThatBlessed: 0,
     numberOfBlursesThatCursed: 0,
     ...overrides,
+  };
+}
+
+/** Live Twitch channel-points payload shape (`listener: "event"`). */
+function makeExampleTwitchChannelPointsRedemptionDetail(
+  overrides?: Partial<SEEventDetail> & { redemption?: string }
+): SEEventDetail {
+  const redemption = overrides?.redemption ?? "Bless the Run";
+  const { redemption: _ignored, ...detailOverrides } = overrides ?? {};
+  return {
+    listener: "event",
+    event: {
+      type: "channelPointsRedemption",
+      provider: "twitch",
+      channel: "testChannelId",
+      flagged: false,
+      createdAt: "2026-10-01T00:12:01.123Z",
+      data: {
+        amount: 500,
+        username: "exampleUserName",
+        displayName: "ExampleUserNameDisplay",
+        providerId: "123456789",
+        redemption,
+        quantity: 0,
+        avatar: "exampleUrlHereToAPng",
+      },
+      _id: "24CharId",
+      expiresAt: "dateTime",
+      updatedAt: "dateTime",
+      activityId: "24CharId",
+      sessionEventsCount: 1,
+    },
+    ...detailOverrides,
   };
 }
 
@@ -499,6 +536,97 @@ describe("getRedemptionName", () => {
       },
     };
     expect(w.getRedemptionName(detail)).toBe("Bless the Run");
+  });
+});
+
+// ===========================================================================
+// getRedemptionUserIdentity / getRedeemingUserName
+// ===========================================================================
+describe("getRedemptionUserIdentity", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("resolves username and displayName from a live Twitch channel-points detail", () => {
+    const detail = makeExampleTwitchChannelPointsRedemptionDetail();
+    expect(w.getRedemptionUserIdentity(detail)).toEqual({
+      trackingKey: "exampleUserName",
+      displayName: "ExampleUserNameDisplay",
+    });
+  });
+
+  it("uses username as the tracking key when displayName differs from login", () => {
+    const detail: SEEventDetail = {
+      event: {
+        type: "channelPointsRedemption",
+        data: { username: "twitchlogin", displayName: "TwitchDisplay" },
+      },
+    };
+    expect(w.getRedemptionUserIdentity(detail)).toEqual({
+      trackingKey: "twitchlogin",
+      displayName: "TwitchDisplay",
+    });
+  });
+
+  it("falls back to event.name for SE emulator and -latest events", () => {
+    const detail: SEEventDetail = {
+      event: { name: "testUserName", data: { redemption: "Bless the Run" } },
+    };
+    expect(w.getRedemptionUserIdentity(detail)).toEqual({
+      trackingKey: "testUserName",
+      displayName: "testUserName",
+    });
+  });
+});
+
+describe("getRedeemingUserName", () => {
+  let w: Window;
+
+  beforeEach(() => {
+    ({ w } = setupTestDOM());
+  });
+
+  it("returns null for undefined detail", () => {
+    expect(w.getRedeemingUserName(undefined)).toBeNull();
+  });
+
+  it("returns displayName from event.data when both username and displayName are set", () => {
+    const detail = makeExampleTwitchChannelPointsRedemptionDetail();
+    expect(w.getRedeemingUserName(detail)).toBe("ExampleUserNameDisplay");
+  });
+
+  it("reads username from event.data when displayName is absent", () => {
+    const detail: SEEventDetail = {
+      event: { data: { username: "viewer42" } },
+    };
+    expect(w.getRedeemingUserName(detail)).toBe("viewer42");
+  });
+
+  it("reads name from session channel-points-latest", () => {
+    const detail: SEEventDetail = {
+      session: { data: { "channel-points-latest": { name: "sessionUser" } } },
+      event: { data: { redemption: "Bless the Run" } },
+    };
+    expect(w.getRedeemingUserName(detail)).toBe("sessionUser");
+  });
+
+  it("falls back to event.name for SE emulator and -latest events", () => {
+    const detail: SEEventDetail = {
+      event: { name: "testUserName", data: { redemption: "Bless the Run" } },
+    };
+    expect(w.getRedeemingUserName(detail)).toBe("testUserName");
+  });
+
+  it("prefers event.data displayName over event.name", () => {
+    const detail: SEEventDetail = {
+      event: {
+        name: "legacyName",
+        data: { displayName: "TwitchDisplay", username: "twitchlogin" },
+      },
+    };
+    expect(w.getRedeemingUserName(detail)).toBe("TwitchDisplay");
   });
 });
 
@@ -1156,13 +1284,18 @@ describe("incrementState", () => {
     randomSpy.mockRestore();
 
     const saved = mockSEAPI.store._data["blessCurseMeterState"];
-    expect(saved?.redemptionHistory?.alice).toEqual(makeRedemptionHistoryEntry({ numberOfBlesses: 1 }));
-    expect(saved?.redemptionHistory?.bob).toEqual(makeRedemptionHistoryEntry({ numberOfCurses: 1 }));
+    expect(saved?.redemptionHistory?.alice).toEqual(
+      makeRedemptionHistoryEntry({ numberOfBlesses: 1, displayName: "alice" })
+    );
+    expect(saved?.redemptionHistory?.bob).toEqual(
+      makeRedemptionHistoryEntry({ numberOfCurses: 1, displayName: "bob" })
+    );
     expect(saved?.redemptionHistory?.carol).toEqual(
       makeRedemptionHistoryEntry({
         numberOfBlurses: 2,
         numberOfBlursesThatBlessed: 1,
         numberOfBlursesThatCursed: 1,
+        displayName: "carol",
       })
     );
   });
@@ -1330,6 +1463,21 @@ describe("resetAllTimeState", () => {
 // Event flow — onEventReceived dispatching
 // ===========================================================================
 describe("onEventReceived event dispatching", () => {
+  it("handles Twitch channel-points detail with listener event", async () => {
+    const state = makeState();
+    const { w, mockSEAPI } = setupTestDOM(state);
+
+    w.eventReceivedHandler(
+      new CustomEvent("onEventReceived", { detail: makeExampleTwitchChannelPointsRedemptionDetail() })
+    );
+    await flushPromises();
+
+    const saved = mockSEAPI.store._data["blessCurseMeterState"];
+    expect(saved?.current.numberOfBlesses).toBe(1);
+    expect(saved?.redemptionHistory?.exampleUserName?.numberOfBlesses).toBe(1);
+    expect(saved?.redemptionHistory?.exampleUserName?.displayName).toBe("ExampleUserNameDisplay");
+  });
+
   it("testBless dispatches an onEventReceived CustomEvent", () => {
     const { w } = setupTestDOM(makeState());
     const eventSpy = jest.fn();
@@ -1383,6 +1531,20 @@ describe("handleRedemption", () => {
 
     const saved = mockSEAPI.store._data["blessCurseMeterState"];
     expect(saved?.current.numberOfBlesses).toBe(1);
+  });
+
+  it("records redemptionHistory keyed by username with displayName stored for reports", async () => {
+    const state = makeState();
+    const { w, mockSEAPI } = setupTestDOM(state);
+
+    w.handleRedemption(makeExampleTwitchChannelPointsRedemptionDetail());
+    await flushPromises();
+
+    const saved = mockSEAPI.store._data["blessCurseMeterState"];
+    expect(saved?.redemptionHistory?.exampleUserName).toEqual(
+      makeRedemptionHistoryEntry({ numberOfBlesses: 1, displayName: "ExampleUserNameDisplay" })
+    );
+    expect(saved?.lastRedemption?.redeemingUser).toBe("ExampleUserNameDisplay");
   });
 
   it("calls incrementState for 'Curse the Run'", async () => {
@@ -1462,6 +1624,16 @@ describe("getTopRedeemers", () => {
 
   beforeEach(() => {
     ({ w } = setupTestDOM());
+  });
+
+  it("shows stored displayName in leaderboard rows while tracking by username key", () => {
+    const history: RedemptionHistory = {
+      exampleUserName: makeRedemptionHistoryEntry({
+        numberOfBlesses: 4,
+        displayName: "ExampleUserNameDisplay",
+      }),
+    };
+    expect(w.getTopRedeemers(history, "bless")).toEqual([{ userName: "ExampleUserNameDisplay", count: 4 }]);
   });
 
   it("returns the top bless redeemers sorted by count", () => {
@@ -1966,6 +2138,20 @@ describe("applyFieldData", () => {
 
   afterEach(() => {
     w.stopPeriodicReports();
+  });
+
+  it("applies redemptionTypewriterHoldSeconds to the post-typewriter pause", async () => {
+    const { w } = setupTestDOM(makeState());
+    w.applyFieldData({ redemptionTypewriterHoldSeconds: 2.5 });
+    const waitSpy = jest
+      .spyOn(w as Window & { waitMs: (ms: number) => Promise<void> }, "waitMs")
+      .mockResolvedValue(undefined);
+    jest.spyOn(w, "typewriterSegments").mockResolvedValue(undefined);
+
+    await w.animateOverlayTypewriter([{ text: "hold test" }]);
+
+    expect(waitSpy).toHaveBeenCalledWith(2500);
+    waitSpy.mockRestore();
   });
 
   it("applies showRedemptionAnnouncements and report timing settings", async () => {
