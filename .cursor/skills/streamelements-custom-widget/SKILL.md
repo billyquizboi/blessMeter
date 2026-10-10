@@ -29,7 +29,7 @@ Type definitions for this repo: [v1/se-api.d.ts](../../../v1/se-api.d.ts). Exten
 | Settings | `v1/widgetFields.json`    | FIELDS             |
 
 1. Edit **`v1/widget.ts`** only — never hand-edit `widget.js`.
-2. Run `npm run build` (or `npm test` / `npm run dev`).
+2. Run `npm run fix` (format + lint fixes + build), or `npm run build` / `npm test` / `npm run dev`.
 3. Paste the four artifacts into the overlay Custom Code Editor and save.
 4. Local harness: `npm run dev` → open `http://localhost:8080/v1/localTest.html` (requires HTTP, not `file://`).
 
@@ -78,7 +78,7 @@ Prefer bracket notation (`obj.detail.event["name"]`) — many keys contain `-`.
 
 **Common listeners:** `follower-latest`, `subscriber-latest`, `tip-latest`, `cheer-latest`, `message`, `delete-message`, `delete-messages`, `kvstore:update`, `widget-button`, `bot:counter`, `event:skip`, `alertService:toggleSound`.
 
-Chat messages: `obj.detail.event.data` (store `msgId` + `userId` for deletions).
+Chat (`listener === "message"`): payload is **`obj.detail.event.data`** (`ChatMessageData` in `se-api.d.ts`). blessMeter emote-bless reads **`displayName`**, **`nick`**, and **`userId`** there — not `event.name`. See [reference.md](reference.md#chat-messages-message-listener).
 
 ### `onSessionUpdate`
 
@@ -129,21 +129,55 @@ While your widget handles a queued alert, SE holds the global alert queue up to 
 - Store key: `blessCurseMeterState` (`STORE_KEY_NAME` in `widget.ts`).
 - Persisted type: `WidgetState` (`current`, `allTime`, optional `showAll`, `redemptionHistory`, `lastRedemption`, `lastUpdated`) — see `se-api.d.ts`.
 
+### `onEventReceived` envelope (blessMeter)
+
+All handlers use the same top-level shape (`SEEventDetail`):
+
+```javascript
+const { listener, event, session } = obj.detail;
+// event: { type?, itemId?, name?, data?, ... }
+// session?.data?.["channel-points-latest"] — fallback for redemption title + user on some SE paths
+```
+
+`eventReceivedHandler` compares `detail.listener` **exactly** for `message` and `kvstore:update`. For redemptions it first takes `listener.split("-")[0]` (so `redemption-latest` → `redemption`), then treats **`event.type === "channelPointsRedemption"`** as a redemption even when `listener` is **`"event"`** (live Twitch channel points in tests and production).
+
 ### Event routing (`eventReceivedHandler`)
 
-1. Channel points: treat as redemption when `listener` is `redemption-latest` / `redemption`, or `event.type === "channelPointsRedemption"`, or `event.itemId` is set (editor emulator).
-2. `kvstore:update`: refresh display when `event.data.key` matches the store key; fallback `SE_API.store.get` if payload shape differs in testing.
-3. Ignore unrelated listeners.
+1. **Channel points:** `event.itemId` set → force `listener` to `redemption-latest`; else redemption when the normalized listener is `redemption`, or `event.type === "channelPointsRedemption"` (includes `listener: "event"`).
+2. **`message`:** `handleChatMessage` — emote-triggered bless only; see chat section in [reference.md](reference.md#chat-messages-message-listener).
+3. **`kvstore:update`:** refresh display when `event.data.key` matches the store key; fallback `SE_API.store.get` if payload shape differs in testing.
+4. Other listeners are ignored.
 
-### Redemption name resolution (`getRedemptionName`)
+### Redemption reward title (`getRedemptionName`)
 
 Check in order:
 
 1. `detail.event.data.redemption` — live Twitch
 2. `detail.session.data["channel-points-latest"].redemption` — documented SE path
-3. `detail.event.itemId` — SE overlay emulator
+3. `detail.event.itemId` — SE overlay emulator (reward title string)
 
 Reward titles must match exactly: `Bless the Run`, `Curse the Run`, `Blurse the Run`.
+
+### Redeeming user (`getRedemptionUserIdentity`)
+
+Do not use `event.name` for live Twitch redemptions when `event.data` has user fields. Resolution order (see `widget.ts`):
+
+| Purpose                                                                    | Source (first match wins)                                                                                             |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **`redemptionHistory` map key** (`trackingKey`)                            | `event.data.username` → `event.data.nick` → `session.data["channel-points-latest"].username` → `.name` → `event.name` |
+| **Display** (`displayName`, announcements, `lastRedemption.redeemingUser`) | `event.data.displayName` → tracking key → `event.data.nick`; session path uses `displayName` → tracking key → `.name` |
+
+`getRedeemingUserName()` is the display label only (`displayName` from the ref above). Canonical Twitch test fixture: `makeExampleTwitchChannelPointsRedemptionDetail` in `v1/widget.test.ts` (`listener: "event"`, `type: "channelPointsRedemption"`, `data.username` + `data.displayName`).
+
+### Chat messages (emote bless)
+
+When `listener === "message"`, user fields live on **`detail.event.data`** only:
+
+- **Window / dedupe key:** `userId ?? nick ?? "unknown"`
+- **Display / credited name:** `displayName ?? nick ?? userId`
+- **Emote matching:** `emotes[].name` and tokenized `text`
+
+`message.username` is typed but **not** read by blessMeter chat handling today.
 
 ### Multi-widget sync
 
@@ -160,7 +194,7 @@ Reward titles must match exactly: `Bless the Run`, `Curse the Run`, `Blurse the 
 When adding behavior to blessMeter v1:
 
 - [ ] Types in `se-api.d.ts` if state or event shapes change
-- [ ] Logic in `widget.ts`; run `npm run build`
+- [ ] Logic in `widget.ts`; run `npm run fix` or `npm run build` and commit `v1/widget.js`
 - [ ] New editor settings in `widgetFields.json` + `FieldData` + `applyFieldData`
 - [ ] Handle `onWidgetLoad` (fields + store init) and `onEventReceived` (redemptions + `kvstore:update`)
 - [ ] Store updates use full `WidgetState` objects
@@ -172,5 +206,6 @@ When adding behavior to blessMeter v1:
 - Editing `widget.js` directly (overwritten by build).
 - Partial `SE_API.store.set` payloads (wiping sibling keys).
 - Dot access on keys with hyphens (`session.data.follower-latest` breaks).
-- Relying on a single redemption payload path — always use the three-location fallback.
+- Relying on a single redemption payload path — always use the three-location fallback for **reward title** and the `getRedemptionUserIdentity` fallbacks for **user**.
+- Reading chat usernames from `event.name` or assuming `listener` is `redemption-latest` on live Twitch (`listener: "event"` + `type: "channelPointsRedemption"` is normal).
 - Expecting `widgetDuration` to queue chat `message` events.
