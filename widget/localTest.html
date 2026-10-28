@@ -323,6 +323,24 @@
           <input id="field-reports-should-display" type="checkbox" checked />
         </div>
         <div class="row">
+          <label for="field-critical-hits-enabled">criticalHitsEnabled</label>
+          <input id="field-critical-hits-enabled" type="checkbox" checked />
+          <label for="field-critical-bless-enabled">criticalBlessEnabled</label>
+          <input id="field-critical-bless-enabled" type="checkbox" checked />
+          <label for="field-critical-curse-enabled">criticalCurseEnabled</label>
+          <input id="field-critical-curse-enabled" type="checkbox" checked />
+          <label for="field-critical-blurse-enabled">criticalBlurseEnabled</label>
+          <input id="field-critical-blurse-enabled" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <label for="field-critical-chance">criticalHitChancePercent</label>
+          <input id="field-critical-chance" type="number" min="0" max="100" step="1" value="10" />
+          <label for="field-critical-min">criticalHitMinMultiplier</label>
+          <input id="field-critical-min" type="number" min="2" step="1" value="2" />
+          <label for="field-critical-max">criticalHitMaxMultiplier</label>
+          <input id="field-critical-max" type="number" min="2" step="1" value="3" />
+        </div>
+        <div class="row">
           <label for="field-emote-bless-enabled">emoteBlessEnabled</label>
           <input id="field-emote-bless-enabled" type="checkbox" />
         </div>
@@ -552,6 +570,13 @@
        * @property {number} [redemptionTypewriterHoldSeconds]
        * @property {number} [numberOfSecondsBetweenReports]
        * @property {boolean} [reportsShouldDisplay]
+       * @property {boolean} [criticalHitsEnabled]
+       * @property {boolean} [criticalBlessEnabled]
+       * @property {boolean} [criticalCurseEnabled]
+       * @property {boolean} [criticalBlurseEnabled]
+       * @property {number} [criticalHitChancePercent]
+       * @property {number} [criticalHitMinMultiplier]
+       * @property {number} [criticalHitMaxMultiplier]
        * @property {boolean} [emoteBlessEnabled]
        * @property {string} [emoteBlessEmoteNamesCsv]
        * @property {number} [emoteBlessWindowSeconds]
@@ -1047,6 +1072,13 @@
           redemptionTypewriterHoldSeconds: Number(document.getElementById("field-redemption-typewriter-hold").value),
           numberOfSecondsBetweenReports: Number(document.getElementById("field-seconds-between-reports").value),
           reportsShouldDisplay: document.getElementById("field-reports-should-display").checked,
+          criticalHitsEnabled: document.getElementById("field-critical-hits-enabled").checked,
+          criticalBlessEnabled: document.getElementById("field-critical-bless-enabled").checked,
+          criticalCurseEnabled: document.getElementById("field-critical-curse-enabled").checked,
+          criticalBlurseEnabled: document.getElementById("field-critical-blurse-enabled").checked,
+          criticalHitChancePercent: Number(document.getElementById("field-critical-chance").value),
+          criticalHitMinMultiplier: Number(document.getElementById("field-critical-min").value),
+          criticalHitMaxMultiplier: Number(document.getElementById("field-critical-max").value),
           emoteBlessEnabled: document.getElementById("field-emote-bless-enabled").checked,
           emoteBlessEmoteNamesCsv: document.getElementById("field-emote-bless-csv").value,
           emoteBlessWindowSeconds: Number(document.getElementById("field-emote-bless-window").value),
@@ -1247,6 +1279,27 @@
           }
           if (fields.reportsShouldDisplay && typeof fields.reportsShouldDisplay.value === "boolean") {
             document.getElementById("field-reports-should-display").checked = fields.reportsShouldDisplay.value;
+          }
+          const criticalCheckboxes = {
+            criticalHitsEnabled: "field-critical-hits-enabled",
+            criticalBlessEnabled: "field-critical-bless-enabled",
+            criticalCurseEnabled: "field-critical-curse-enabled",
+            criticalBlurseEnabled: "field-critical-blurse-enabled",
+          };
+          for (const [fieldName, elementId] of Object.entries(criticalCheckboxes)) {
+            if (fields[fieldName] && typeof fields[fieldName].value === "boolean") {
+              document.getElementById(elementId).checked = fields[fieldName].value;
+            }
+          }
+          const criticalNumbers = {
+            criticalHitChancePercent: "field-critical-chance",
+            criticalHitMinMultiplier: "field-critical-min",
+            criticalHitMaxMultiplier: "field-critical-max",
+          };
+          for (const [fieldName, elementId] of Object.entries(criticalNumbers)) {
+            if (fields[fieldName] && typeof fields[fieldName].value === "number") {
+              document.getElementById(elementId).value = String(fields[fieldName].value);
+            }
           }
           if (fields.emoteBlessEnabled && typeof fields.emoteBlessEnabled.value === "boolean") {
             document.getElementById("field-emote-bless-enabled").checked = fields.emoteBlessEnabled.value;
