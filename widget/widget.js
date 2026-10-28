@@ -16,6 +16,8 @@ const curseGlowForeverClass = "animated-curse-glow";
 const TYPE_BLESS = "bless";
 const TYPE_CURSE = "curse";
 const TYPE_BLURSE = "blurse";
+/** Meter points one blessed or cursed blurse outcome is worth. */
+const BLURSE_METER_POINTS_PER_OUTCOME = 2;
 /** Final Fantasy VI styled dialogue window, the widget's original look. */
 const THEME_FFVI = "ffvi";
 /** Chrono Trigger styled dialogue window. */
@@ -222,6 +224,7 @@ function incrementState(toIncrement, user, options) {
     const trackingKey = (_a = userRef === null || userRef === void 0 ? void 0 : userRef.trackingKey) !== null && _a !== void 0 ? _a : null;
     const recordRedemption = (_b = options === null || options === void 0 ? void 0 : options.recordRedemption) !== null && _b !== void 0 ? _b : true;
     void storeMutationQueue.enqueue(() => SE_API.store.get(STORE_KEY_NAME).then((obj) => {
+        var _a;
         console.log(`Retrieved widgetState from store is: ${JSON.stringify(obj)}`);
         if (storeHasBeenInitialized(obj)) {
             if (!canIncrement(obj, toIncrement)) {
@@ -249,10 +252,16 @@ function incrementState(toIncrement, user, options) {
                 applyRedemptionHistoryDisplayName(obj[redemptionHistoryKey][trackingKey], userRef.displayName);
             }
         }
-        const criticalMultiplier = (options === null || options === void 0 ? void 0 : options.allowCritical) === false ? 1 : rollCriticalMultiplier(toIncrement);
-        // A blurse counts as one redemption but moves its meter 2 per blessed or
-        // cursed outcome, so a critical scales the outcome counters instead.
-        const counterIncrement = toIncrement == StateKeys.numberOfBlurses ? 1 : criticalMultiplier;
+        const allowCritical = (_a = options === null || options === void 0 ? void 0 : options.allowCritical) !== null && _a !== void 0 ? _a : true;
+        // 1 for a normal hit; otherwise the integer impact multiplier.
+        const criticalMultiplier = allowCritical ? rollCriticalMultiplier(toIncrement) : 1;
+        // A blurse is still one redemption, so only bless and curse counters scale.
+        const redeemCounterIncrement = toIncrement == StateKeys.numberOfBlurses ? 1 : criticalMultiplier;
+        // A critical blurse instead scales its blessed/cursed outcome counter, which
+        // the meters weigh at BLURSE_METER_POINTS_PER_OUTCOME each.
+        const blurseOutcomeIncrement = criticalMultiplier;
+        const blurseMeterAmount = BLURSE_METER_POINTS_PER_OUTCOME * blurseOutcomeIncrement;
+        const blessCurseMeterAmount = criticalMultiplier;
         // stores info on the user who redeemed
         let charType = undefined;
         let meterTarget = undefined;
@@ -263,18 +272,18 @@ function incrementState(toIncrement, user, options) {
             if (Math.random() < 0.5) {
                 // blessed af
                 optionallyInitializeNumericField(obj, StateKeys.numberOfBlursesThatBlessed);
-                obj.current[StateKeys.numberOfBlursesThatBlessed] += criticalMultiplier;
-                obj.allTime[StateKeys.numberOfBlursesThatBlessed] += criticalMultiplier;
+                obj.current[StateKeys.numberOfBlursesThatBlessed] += blurseOutcomeIncrement;
+                obj.allTime[StateKeys.numberOfBlursesThatBlessed] += blurseOutcomeIncrement;
                 meterTarget = TYPE_BLESS;
-                meterAmount = 2 * criticalMultiplier;
+                meterAmount = blurseMeterAmount;
             }
             else {
                 // curse it bby
                 optionallyInitializeNumericField(obj, StateKeys.numberOfBlursesThatCursed);
-                obj.current[StateKeys.numberOfBlursesThatCursed] += criticalMultiplier;
-                obj.allTime[StateKeys.numberOfBlursesThatCursed] += criticalMultiplier;
+                obj.current[StateKeys.numberOfBlursesThatCursed] += blurseOutcomeIncrement;
+                obj.allTime[StateKeys.numberOfBlursesThatCursed] += blurseOutcomeIncrement;
                 meterTarget = TYPE_CURSE;
-                meterAmount = 2 * criticalMultiplier;
+                meterAmount = blurseMeterAmount;
             }
             if (trackingKey != null && obj[redemptionHistoryKey][trackingKey] != null) {
                 console.log("Incrementing blurses for user " + trackingKey);
@@ -288,8 +297,8 @@ function incrementState(toIncrement, user, options) {
                 }
             }
         }
-        obj.current[toIncrement] += counterIncrement;
-        obj.allTime[toIncrement] += counterIncrement;
+        obj.current[toIncrement] += redeemCounterIncrement;
+        obj.allTime[toIncrement] += redeemCounterIncrement;
         obj.lastUpdated = new Date();
         if (trackingKey != null && obj[redemptionHistoryKey][trackingKey] != null) {
             if (toIncrement == StateKeys.numberOfBlesses) {
@@ -298,7 +307,7 @@ function incrementState(toIncrement, user, options) {
                     obj[redemptionHistoryKey][trackingKey]["numberOfBlesses"] + 1;
                 charType = TYPE_BLESS;
                 meterTarget = TYPE_BLESS;
-                meterAmount = criticalMultiplier;
+                meterAmount = blessCurseMeterAmount;
             }
             else if (toIncrement == StateKeys.numberOfCurses) {
                 console.log("Incrementing curses for user " + trackingKey);
@@ -306,7 +315,7 @@ function incrementState(toIncrement, user, options) {
                     obj[redemptionHistoryKey][trackingKey]["numberOfCurses"] + 1;
                 charType = TYPE_CURSE;
                 meterTarget = TYPE_CURSE;
-                meterAmount = criticalMultiplier;
+                meterAmount = blessCurseMeterAmount;
             }
         }
         // Reusing this id on the new lastRedemption marks it as already announced.
@@ -711,8 +720,8 @@ function bothMetersAreAtMax(widgetState) {
     const numberOfCurses = getOrDefaultCount(widgetState.current[StateKeys.numberOfCurses]);
     const numberOfBlursesThatBlessed = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatBlessed]);
     const numberOfBlursesThatCursed = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatCursed]);
-    const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * 2;
-    const effectiveCurses = numberOfCurses + numberOfBlursesThatCursed * 2;
+    const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * BLURSE_METER_POINTS_PER_OUTCOME;
+    const effectiveCurses = numberOfCurses + numberOfBlursesThatCursed * BLURSE_METER_POINTS_PER_OUTCOME;
     return effectiveBlesses >= meterMaximum && effectiveCurses >= meterMaximum;
 }
 /**
@@ -930,13 +939,17 @@ function applyFieldData(fieldData) {
         criticalHitChancePercent = Math.min(100, Math.max(0, fieldData.criticalHitChancePercent));
     }
     if (fieldData.criticalHitMinMultiplier != null && typeof fieldData.criticalHitMinMultiplier === "number") {
-        criticalHitMinMultiplier = Math.max(2, Math.floor(fieldData.criticalHitMinMultiplier));
+        criticalHitMinMultiplier = sanitizeCriticalMultiplier("criticalHitMinMultiplier", fieldData.criticalHitMinMultiplier);
     }
     if (fieldData.criticalHitMaxMultiplier != null && typeof fieldData.criticalHitMaxMultiplier === "number") {
-        criticalHitMaxMultiplier = Math.max(2, Math.floor(fieldData.criticalHitMaxMultiplier));
+        criticalHitMaxMultiplier = sanitizeCriticalMultiplier("criticalHitMaxMultiplier", fieldData.criticalHitMaxMultiplier);
     }
-    // Keeps the range valid whichever bound a partial update changed.
+    // Checked after both bounds are applied so a partial update that changes
+    // only one of them is still validated against the other. max === min is
+    // valid and means a fixed multiplier; only an inverted range is an error.
     if (criticalHitMaxMultiplier < criticalHitMinMultiplier) {
+        console.error(`criticalHitMaxMultiplier (${criticalHitMaxMultiplier}) is less than criticalHitMinMultiplier ` +
+            `(${criticalHitMinMultiplier}); using ${criticalHitMinMultiplier} for both.`);
         criticalHitMaxMultiplier = criticalHitMinMultiplier;
     }
     if (fieldData.emoteBlessEnabled != null && typeof fieldData.emoteBlessEnabled === "boolean") {
@@ -964,6 +977,19 @@ function applyFieldData(fieldData) {
     if (fieldData.reportsShouldDisplay != null || fieldData.numberOfSecondsBetweenReports != null) {
         configurePeriodicReports();
     }
+}
+/**
+ * Coerces a configured critical multiplier to an integer of at least 2,
+ * logging an error when the configured value had to be changed.
+ * @param fieldName - Field the value came from, for the log message.
+ * @param value - The configured number.
+ */
+function sanitizeCriticalMultiplier(fieldName, value) {
+    const sanitized = Number.isFinite(value) ? Math.max(2, Math.floor(value)) : 2;
+    if (sanitized !== value) {
+        console.error(`${fieldName} must be an integer of at least 2; got ${value}, using ${sanitized}.`);
+    }
+    return sanitized;
 }
 /**
  * Parses {@link emoteBlessEmoteNamesCsv} into a lowercase lookup set for matching.
@@ -1240,8 +1266,8 @@ function processDisplay(widgetState, showAnimate) {
         updateMeterTitles(isShowingAll(widgetState));
     }
     else {
-        const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * 2;
-        const effectiveCurses = numberOfCurses + numberOfBlursesThatCursed * 2;
+        const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * BLURSE_METER_POINTS_PER_OUTCOME;
+        const effectiveCurses = numberOfCurses + numberOfBlursesThatCursed * BLURSE_METER_POINTS_PER_OUTCOME;
         const effectiveTotal = effectiveBlesses + effectiveCurses;
         console.log("Computing widths for the meters");
         console.log(`Current widths are bless: ${blessMeterFill.css("width")}, curse: ${curseMeterFill.css("width")}`);

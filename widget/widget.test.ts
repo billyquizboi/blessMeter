@@ -1439,11 +1439,37 @@ describe("critical hits", () => {
       expect(w.rollCriticalMultiplier("numberOfBlesses")).toBe(2);
     });
 
-    it("raises max to min when the range is inverted", () => {
+    it("raises max to min and logs an error when the range is inverted", () => {
       const { w, dom } = setupTestDOM();
+      const errorSpy = jest.spyOn(dom.window.console, "error").mockImplementation(() => undefined);
       w.applyFieldData({ ...criticalOn, criticalHitMinMultiplier: 6, criticalHitMaxMultiplier: 3 });
       mockRandom(dom, [0, 0.99]);
       expect(w.rollCriticalMultiplier("numberOfBlesses")).toBe(6);
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("criticalHitMaxMultiplier (3)"));
+    });
+
+    it("accepts max equal to min as a fixed multiplier without logging an error", () => {
+      const { w, dom } = setupTestDOM();
+      const errorSpy = jest.spyOn(dom.window.console, "error").mockImplementation(() => undefined);
+      w.applyFieldData({ ...criticalOn, criticalHitMinMultiplier: 4, criticalHitMaxMultiplier: 4 });
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it("validates a partial update against the previously configured bound", () => {
+      const { w, dom } = setupTestDOM();
+      const errorSpy = jest.spyOn(dom.window.console, "error").mockImplementation(() => undefined);
+      w.applyFieldData({ ...criticalOn, criticalHitMinMultiplier: 2, criticalHitMaxMultiplier: 3 });
+      w.applyFieldData({ criticalHitMinMultiplier: 5 });
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("criticalHitMaxMultiplier (3)"));
+      mockRandom(dom, [0, 0.99]);
+      expect(w.rollCriticalMultiplier("numberOfBlesses")).toBe(5);
+    });
+
+    it("logs an error when a configured multiplier has to be corrected", () => {
+      const { w, dom } = setupTestDOM();
+      const errorSpy = jest.spyOn(dom.window.console, "error").mockImplementation(() => undefined);
+      w.applyFieldData({ ...criticalOn, criticalHitMinMultiplier: 1, criticalHitMaxMultiplier: 3 });
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("criticalHitMinMultiplier must be an integer"));
     });
 
     it("clamps chance to 100 percent", () => {
