@@ -42,6 +42,91 @@ _These OBS instructions below were copied from google_
 - Click OK to add the source.
 - You can now position
 
+## Chrono Trigger (CT) theme and font
+
+The **CT** button switches the widget to a Chrono Trigger inspired menu look:
+
+- **Window background**: a vertical gradient sampled from the in-game main menu windows (blue-grey at the top fading to near black at the bottom) over a darkened version of the stone tile. The tile source is [ct_background_tile.png](./ct_background_tile.png); the CSS embeds it as a base64 `data:` URI because StreamElements only hosts the CSS, HTML, JS and fields you paste in. To change the tile, edit the PNG, re-encode it (`base64 -w0 ct_background_tile.png`) and replace the `data:image/png;base64,...` string in `widget.css`.
+- **Text**: [Chrono Trigger Monospaced](https://fontstruct.com/fontstructions/show/686711/chrono_trigger_monospaced_1) by Patrick H. Lauke (redux) on FontStruct, a recreation of the in-game menu font. It is licensed [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/), so you must credit the designer when you use or redistribute it. Final Fantasy, Chrono Trigger and all other trademarked material is the intellectual property of Square Enix.
+
+The font file is **not bundled** in this repository, because FontStruct only offers downloads to logged-in users. `widget.css` already declares an `@font-face` for it, and the CT theme uses this font stack:
+
+```css
+--ct-font-family: "Chrono Trigger Monospaced", "Press Start 2P", monospace;
+```
+
+Until you set the font up using one of the options below, the CT theme falls back to Press Start 2P (already loaded by the widget), which has the same 8px-cell proportions. Everything is sized to fit either font.
+
+### Getting the font file
+
+1. Create a free account at [fontstruct.com](https://fontstruct.com) and open the [font page](https://fontstruct.com/fontstructions/show/686711/chrono_trigger_monospaced_1).
+2. Click **Download** and unzip the archive. It contains a `.ttf`.
+
+### Option A: embed the font in widget.css (recommended)
+
+Works everywhere (StreamElements editor preview, OBS, any machine) with no hosting, and matches how the CT background tile is already shipped.
+
+1. Convert the TTF to a subset WOFF2 containing only printable ASCII (a few KB), using [fonttools](https://github.com/fonttools/fonttools):
+
+   ```bash
+   pip install fonttools brotli
+   pyftsubset ChronoTriggerMonospaced.ttf --unicodes="U+0020-007E" --flavor=woff2 --output-file=ctm.woff2
+   base64 -w0 ctm.woff2 > ctm.b64    # on macOS: base64 -i ctm.woff2 | tr -d '\n' > ctm.b64
+   ```
+
+   (A web converter such as [Transfonter](https://transfonter.org/) does the same, including the base64 step.)
+
+2. In `widget.css`, add the data URI to the `src` of the existing `@font-face`:
+
+   ```css
+   @font-face {
+     font-family: "Chrono Trigger Monospaced";
+     src:
+       local("Chrono Trigger Monospaced"),
+       url("data:font/woff2;base64,PASTE_CONTENTS_OF_ctm.b64_HERE") format("woff2");
+     font-weight: 400;
+     font-style: normal;
+     font-display: swap;
+   }
+   ```
+
+3. Paste the updated `widget.css` into the StreamElements CSS tab.
+
+Trade-off: the CSS grows by a few KB to tens of KB, and your copy of `widget.css` is no longer identical to the repository's.
+
+### Option B: host the font file and reference it by URL
+
+Keeps `widget.css` small. Host `ChronoTriggerMonospaced.woff2` (or the `.ttf`) somewhere that serves it over **HTTPS** with an `Access-Control-Allow-Origin` header, because browsers fetch web fonts with CORS. [GitHub Pages](https://pages.github.com/) and [jsDelivr](https://www.jsdelivr.com/?docs=gh) (for a font committed to a public GitHub repo) both qualify; so does any object storage or CDN bucket with CORS enabled.
+
+```css
+src:
+  local("Chrono Trigger Monospaced"),
+  url("https://your-host.example/fonts/ChronoTriggerMonospaced.woff2") format("woff2");
+```
+
+Trade-offs: the overlay depends on that host staying up, and if you commit the font into a repo you also need to include the CC BY credit alongside it. A relative `url()` does not work in StreamElements, since only the pasted CSS is hosted.
+
+### Option C: install the font on the streaming PC
+
+No code change needed: `widget.css` already tries `local("Chrono Trigger Monospaced")`.
+
+1. Install the `.ttf` on the machine that runs OBS (Windows: right-click, **Install for all users**; macOS: Font Book; Linux: copy to `~/.fonts` and run `fc-cache -f`).
+2. Fully restart OBS, then refresh the browser source.
+
+Trade-offs: only that machine sees the font. The StreamElements editor preview, other browsers and any other computer showing the overlay fall back to Press Start 2P. This is the fastest way to try the font out locally with `npm run dev`.
+
+### Tuning text size for the font
+
+Sizes for the CT theme come from three CSS variables at the top of the CT section in `widget.css`:
+
+| Variable                  | Default | Used for                                       |
+| ------------------------- | ------- | ---------------------------------------------- |
+| `--ct-font-size`          | `16px`  | Buttons, meter titles, counts                  |
+| `--ct-font-size-small`    | `14px`  | Redemption and top-redeemer list announcements |
+| `--ct-font-size-headline` | `16px`  | Centered report and transition headlines       |
+
+Pixel fonts are sharpest when the rendered size is a whole multiple of the font's native pixel grid. If the text looks blurry, uneven, too small or clipped with the real font, adjust these values (try multiples such as `16px` and `24px`, or the size at which each pixel lands on a whole screen pixel) and re-check the longest strings: `ALL CURSE`, `Test Blurse`, and a top-redeemers row with a long username. The meter title column is sized from the font itself (`min-width: 9ch`), so it grows or shrinks with the font automatically.
+
 ## Development
 
 All commands below are run from the **repository root** (the folder that contains `package.json`, one level above `widget/`).
