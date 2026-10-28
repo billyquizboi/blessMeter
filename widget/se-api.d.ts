@@ -76,6 +76,11 @@ interface LastRedemption {
    * announcement ids were introduced do not carry one.
    */
   id?: string | null;
+  /**
+   * Integer multiplier (above 1) when this redemption was a critical hit.
+   * {@link meterAmount} already includes it; absent for normal redemptions.
+   */
+  criticalMultiplier?: number;
 }
 
 /**
@@ -172,6 +177,14 @@ interface FieldData {
   redemptionTypewriterHoldSeconds?: number;
   numberOfSecondsBetweenReports?: number;
   reportsShouldDisplay?: boolean;
+  criticalHitsEnabled?: boolean;
+  criticalBlessEnabled?: boolean;
+  criticalCurseEnabled?: boolean;
+  criticalBlurseEnabled?: boolean;
+  /** Chance (0-100) that an enabled redemption is a critical hit. */
+  criticalHitChancePercent?: number;
+  criticalHitMinMultiplier?: number;
+  criticalHitMaxMultiplier?: number;
   emoteBlessEnabled?: boolean;
   emoteBlessEmoteNamesCsv?: string;
   emoteBlessWindowSeconds?: number;
@@ -187,6 +200,8 @@ interface IncrementStateOptions {
    * their own announcement (e.g. the emote-triggered bless).
    */
   recordRedemption?: boolean;
+  /** When false, the increment never rolls a critical hit. Defaults to true. */
+  allowCritical?: boolean;
 }
 
 interface SEEventDetail {

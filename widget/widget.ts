@@ -9,6 +9,11 @@ const TYPE_BLESS = "bless";
 const TYPE_CURSE = "curse";
 const TYPE_BLURSE = "blurse";
 
+type RedemptionType = typeof TYPE_BLESS | typeof TYPE_CURSE | typeof TYPE_BLURSE;
+
+/** Meter points one blessed or cursed blurse outcome is worth. */
+const BLURSE_METER_POINTS_PER_OUTCOME = 2;
+
 /** Final Fantasy VI styled dialogue window, the widget's original look. */
 const THEME_FFVI = "ffvi";
 /** Chrono Trigger styled dialogue window. */
@@ -81,6 +86,15 @@ let showChars = true;
 let showRedemptionAnnouncements = true;
 let numberOfSecondsBetweenReports = 90;
 let reportsShouldDisplay = true;
+
+/** Master switch for critical hits; the widgetFields.json default turns it on. */
+let criticalHitsEnabled = false;
+let criticalBlessEnabled = true;
+let criticalCurseEnabled = true;
+let criticalBlurseEnabled = true;
+let criticalHitChancePercent = 10;
+let criticalHitMinMultiplier = 2;
+let criticalHitMaxMultiplier = 3;
 
 let emoteBlessEnabled = false;
 let emoteBlessEmoteNamesCsv = "Kappa,PogChamp";
@@ -272,6 +286,17 @@ function incrementState(
         }
       }
 
+      const allowCritical = options?.allowCritical ?? true;
+      // 1 for a normal hit; otherwise the integer impact multiplier.
+      const criticalMultiplier = allowCritical ? rollCriticalMultiplier(toIncrement) : 1;
+      // A blurse is still one redemption, so only bless and curse counters scale.
+      const redeemCounterIncrement = toIncrement == StateKeys.numberOfBlurses ? 1 : criticalMultiplier;
+      // A critical blurse instead scales its blessed/cursed outcome counter, which
+      // the meters weigh at BLURSE_METER_POINTS_PER_OUTCOME each.
+      const blurseOutcomeIncrement = criticalMultiplier;
+      const blurseMeterAmount = BLURSE_METER_POINTS_PER_OUTCOME * blurseOutcomeIncrement;
+      const blessCurseMeterAmount = criticalMultiplier;
+
       // stores info on the user who redeemed
       let charType: string | undefined = undefined;
       let meterTarget: string | undefined = undefined;
@@ -283,17 +308,17 @@ function incrementState(
         if (Math.random() < 0.5) {
           // blessed af
           optionallyInitializeNumericField(obj, StateKeys.numberOfBlursesThatBlessed);
-          (obj.current as Record<string, number>)[StateKeys.numberOfBlursesThatBlessed] += 1;
-          obj.allTime[StateKeys.numberOfBlursesThatBlessed] += 1;
+          (obj.current as Record<string, number>)[StateKeys.numberOfBlursesThatBlessed] += blurseOutcomeIncrement;
+          obj.allTime[StateKeys.numberOfBlursesThatBlessed] += blurseOutcomeIncrement;
           meterTarget = TYPE_BLESS;
-          meterAmount = 2;
+          meterAmount = blurseMeterAmount;
         } else {
           // curse it bby
           optionallyInitializeNumericField(obj, StateKeys.numberOfBlursesThatCursed);
-          (obj.current as Record<string, number>)[StateKeys.numberOfBlursesThatCursed] += 1;
-          obj.allTime[StateKeys.numberOfBlursesThatCursed] += 1;
+          (obj.current as Record<string, number>)[StateKeys.numberOfBlursesThatCursed] += blurseOutcomeIncrement;
+          obj.allTime[StateKeys.numberOfBlursesThatCursed] += blurseOutcomeIncrement;
           meterTarget = TYPE_CURSE;
-          meterAmount = 2;
+          meterAmount = blurseMeterAmount;
         }
 
         if (trackingKey != null && obj[redemptionHistoryKey][trackingKey] != null) {
@@ -307,8 +332,8 @@ function incrementState(
           }
         }
       }
-      (obj.current as Record<string, number>)[toIncrement] += 1;
-      obj.allTime[toIncrement] += 1;
+      (obj.current as Record<string, number>)[toIncrement] += redeemCounterIncrement;
+      obj.allTime[toIncrement] += redeemCounterIncrement;
       obj.lastUpdated = new Date();
 
       if (trackingKey != null && obj[redemptionHistoryKey][trackingKey] != null) {
@@ -318,14 +343,14 @@ function incrementState(
             obj[redemptionHistoryKey][trackingKey]["numberOfBlesses"] + 1;
           charType = TYPE_BLESS;
           meterTarget = TYPE_BLESS;
-          meterAmount = 1;
+          meterAmount = blessCurseMeterAmount;
         } else if (toIncrement == StateKeys.numberOfCurses) {
           console.log("Incrementing curses for user " + trackingKey);
           obj[redemptionHistoryKey][trackingKey][StateKeys.numberOfCurses] =
             obj[redemptionHistoryKey][trackingKey]["numberOfCurses"] + 1;
           charType = TYPE_CURSE;
           meterTarget = TYPE_CURSE;
-          meterAmount = 1;
+          meterAmount = blessCurseMeterAmount;
         }
       }
 
@@ -349,6 +374,9 @@ function incrementState(
           // of minting one that would read as "not yet announced".
           id: metersReset ? previousRedemptionId : createRedemptionId(),
         };
+        if (criticalMultiplier > 1) {
+          obj["lastRedemption"].criticalMultiplier = criticalMultiplier;
+        }
       }
 
       if (metersReset) {
@@ -365,6 +393,74 @@ function incrementState(
       return SE_API.store.set(STORE_KEY_NAME, obj);
     })
   );
+}
+
+/**
+ * Maps a {@link StateKeys} counter name to the redemption type it represents.
+ * @returns The type constant, or undefined for counters that are not redeems.
+ */
+function getRedemptionTypeForCounter(counterName: string): RedemptionType | undefined {
+  if (counterName === StateKeys.numberOfBlesses) {
+    return TYPE_BLESS;
+  }
+  if (counterName === StateKeys.numberOfCurses) {
+    return TYPE_CURSE;
+  }
+  if (counterName === StateKeys.numberOfBlurses) {
+    return TYPE_BLURSE;
+  }
+  return undefined;
+}
+
+/**
+ * @param charType - One of {@link TYPE_BLESS}, {@link TYPE_CURSE}, or {@link TYPE_BLURSE}.
+ * @returns True when critical hits are switched on globally and for this type.
+ */
+function isCriticalHitEnabledFor(charType: RedemptionType): boolean {
+  if (!criticalHitsEnabled) {
+    return false;
+  }
+  if (charType === TYPE_BLESS) {
+    return criticalBlessEnabled;
+  }
+  if (charType === TYPE_CURSE) {
+    return criticalCurseEnabled;
+  }
+  if (charType === TYPE_BLURSE) {
+    return criticalBlurseEnabled;
+  }
+  return false;
+}
+
+/**
+ * Rolls for a critical hit on a redemption.
+ * Math.random is only consumed when criticals are enabled for the type, so the
+ * feature being off never perturbs other random outcomes (such as blurse).
+ * @param counterName - The {@link StateKeys} counter being incremented.
+ * @returns 1 for a normal hit, otherwise an integer between
+ *   {@link criticalHitMinMultiplier} and {@link criticalHitMaxMultiplier}.
+ */
+function rollCriticalMultiplier(counterName: string): number {
+  const charType = getRedemptionTypeForCounter(counterName);
+  if (charType == undefined || !isCriticalHitEnabledFor(charType)) {
+    return 1;
+  }
+  if (!(Math.random() * 100 < criticalHitChancePercent)) {
+    return 1;
+  }
+  const span = criticalHitMaxMultiplier - criticalHitMinMultiplier + 1;
+  const multiplier = criticalHitMinMultiplier + Math.floor(Math.random() * span);
+  console.log(`Critical hit! x${multiplier}`);
+  return multiplier;
+}
+
+/**
+ * @param redemption - The stored redemption.
+ * @returns The critical multiplier when it is a valid integer above 1, else 1.
+ */
+function getCriticalMultiplier(redemption: LastRedemption): number {
+  const multiplier = redemption.criticalMultiplier;
+  return typeof multiplier === "number" && Number.isInteger(multiplier) && multiplier > 1 ? multiplier : 1;
 }
 
 /**
@@ -685,8 +781,8 @@ function bothMetersAreAtMax(widgetState: WidgetState): boolean {
   const numberOfBlursesThatBlessed = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatBlessed]);
   const numberOfBlursesThatCursed = getOrDefaultCount(widgetState.current[StateKeys.numberOfBlursesThatCursed]);
 
-  const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * 2;
-  const effectiveCurses = numberOfCurses + numberOfBlursesThatCursed * 2;
+  const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * BLURSE_METER_POINTS_PER_OUTCOME;
+  const effectiveCurses = numberOfCurses + numberOfBlursesThatCursed * BLURSE_METER_POINTS_PER_OUTCOME;
 
   return effectiveBlesses >= meterMaximum && effectiveCurses >= meterMaximum;
 }
@@ -907,6 +1003,43 @@ function applyFieldData(fieldData: FieldData | undefined): void {
   if (fieldData.reportsShouldDisplay != null && typeof fieldData.reportsShouldDisplay === "boolean") {
     reportsShouldDisplay = fieldData.reportsShouldDisplay;
   }
+  if (fieldData.criticalHitsEnabled != null && typeof fieldData.criticalHitsEnabled === "boolean") {
+    criticalHitsEnabled = fieldData.criticalHitsEnabled;
+  }
+  if (fieldData.criticalBlessEnabled != null && typeof fieldData.criticalBlessEnabled === "boolean") {
+    criticalBlessEnabled = fieldData.criticalBlessEnabled;
+  }
+  if (fieldData.criticalCurseEnabled != null && typeof fieldData.criticalCurseEnabled === "boolean") {
+    criticalCurseEnabled = fieldData.criticalCurseEnabled;
+  }
+  if (fieldData.criticalBlurseEnabled != null && typeof fieldData.criticalBlurseEnabled === "boolean") {
+    criticalBlurseEnabled = fieldData.criticalBlurseEnabled;
+  }
+  if (fieldData.criticalHitChancePercent != null && typeof fieldData.criticalHitChancePercent === "number") {
+    criticalHitChancePercent = Math.min(100, Math.max(0, fieldData.criticalHitChancePercent));
+  }
+  if (fieldData.criticalHitMinMultiplier != null && typeof fieldData.criticalHitMinMultiplier === "number") {
+    criticalHitMinMultiplier = sanitizeCriticalMultiplier(
+      "criticalHitMinMultiplier",
+      fieldData.criticalHitMinMultiplier
+    );
+  }
+  if (fieldData.criticalHitMaxMultiplier != null && typeof fieldData.criticalHitMaxMultiplier === "number") {
+    criticalHitMaxMultiplier = sanitizeCriticalMultiplier(
+      "criticalHitMaxMultiplier",
+      fieldData.criticalHitMaxMultiplier
+    );
+  }
+  // Checked after both bounds are applied so a partial update that changes
+  // only one of them is still validated against the other. max === min is
+  // valid and means a fixed multiplier; only an inverted range is an error.
+  if (criticalHitMaxMultiplier < criticalHitMinMultiplier) {
+    console.error(
+      `criticalHitMaxMultiplier (${criticalHitMaxMultiplier}) is less than criticalHitMinMultiplier ` +
+        `(${criticalHitMinMultiplier}); using ${criticalHitMinMultiplier} for both.`
+    );
+    criticalHitMaxMultiplier = criticalHitMinMultiplier;
+  }
   if (fieldData.emoteBlessEnabled != null && typeof fieldData.emoteBlessEnabled === "boolean") {
     emoteBlessEnabled = fieldData.emoteBlessEnabled;
   }
@@ -932,6 +1065,20 @@ function applyFieldData(fieldData: FieldData | undefined): void {
   if (fieldData.reportsShouldDisplay != null || fieldData.numberOfSecondsBetweenReports != null) {
     configurePeriodicReports();
   }
+}
+
+/**
+ * Coerces a configured critical multiplier to an integer of at least 2,
+ * logging an error when the configured value had to be changed.
+ * @param fieldName - Field the value came from, for the log message.
+ * @param value - The configured number.
+ */
+function sanitizeCriticalMultiplier(fieldName: string, value: number): number {
+  const sanitized = Number.isFinite(value) ? Math.max(2, Math.floor(value)) : 2;
+  if (sanitized !== value) {
+    console.error(`${fieldName} must be an integer of at least 2; got ${value}, using ${sanitized}.`);
+  }
+  return sanitized;
 }
 
 /**
@@ -1105,7 +1252,7 @@ function triggerEmoteBlessReward(distinctDisplayNames: string[], matchCount: num
     const creditedUser = distinctDisplayNames.length === 1 ? distinctDisplayNames[0] : null;
     // The typewriter above is this feature's announcement, so skip stamping a
     // redemption id that would trigger a second one.
-    incrementState(StateKeys.numberOfBlesses, creditedUser, { recordRedemption: false });
+    incrementState(StateKeys.numberOfBlesses, creditedUser, { recordRedemption: false, allowCritical: false });
   });
 }
 
@@ -1238,8 +1385,8 @@ function processDisplay(widgetState: WidgetState, showAnimate: boolean): Promise
     updateToggleButtonDisplay(isShowingAll(widgetState));
     updateMeterTitles(isShowingAll(widgetState));
   } else {
-    const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * 2;
-    const effectiveCurses = numberOfCurses + numberOfBlursesThatCursed * 2;
+    const effectiveBlesses = numberOfBlesses + numberOfBlursesThatBlessed * BLURSE_METER_POINTS_PER_OUTCOME;
+    const effectiveCurses = numberOfCurses + numberOfBlursesThatCursed * BLURSE_METER_POINTS_PER_OUTCOME;
     const effectiveTotal = effectiveBlesses + effectiveCurses;
 
     console.log("Computing widths for the meters");
@@ -1329,7 +1476,22 @@ function hasValidLastRedemption(lastRedemption: any): lastRedemption is LastRede
  * @param redemption - The most recent redemption recorded in widget state.
  */
 async function animateRedemptionAnnouncement(redemption: LastRedemption): Promise<void> {
-  await animateOverlayTypewriter(buildRedemptionAnnouncementSegments(redemption));
+  const criticalMultiplier = getCriticalMultiplier(redemption);
+  const critical = criticalMultiplier > 1;
+  if (critical) {
+    // The dialogue window only fits three lines, so the critical callout gets
+    // its own centered step ahead of the usual summary.
+    await animateOverlayTypewriter(buildCriticalHitSegments(criticalMultiplier), { layout: "headline", critical });
+  }
+  await animateOverlayTypewriter(buildRedemptionAnnouncementSegments(redemption), { critical });
+}
+
+/**
+ * Typewriter copy for the critical-hit callout shown before a critical's summary.
+ * @param multiplier - The integer critical multiplier.
+ */
+function buildCriticalHitSegments(multiplier: number): AnnouncementSegment[] {
+  return [{ text: `CRITICAL HIT! x${multiplier}`, colorClass: "redemption-text-critical" }];
 }
 
 /**
@@ -1341,6 +1503,8 @@ type OverlayAnnouncementLayout = "default" | "headline" | "list";
 
 interface OverlayTypewriterOptions {
   layout?: OverlayAnnouncementLayout;
+  /** Adds the critical-hit flash styling to the announcement window. */
+  critical?: boolean;
 }
 
 /** Centered headline overlay used for report titles and meter view transitions. */
@@ -1380,7 +1544,7 @@ async function animateOverlayTypewriter(
   }
 
   announcement
-    .removeClass("is-headline is-list is-redemption")
+    .removeClass("is-headline is-list is-redemption is-critical")
     .addClass("visible")
     .attr("aria-hidden", "false")
     .empty()
@@ -1391,6 +1555,10 @@ async function animateOverlayTypewriter(
     announcement.addClass("is-list");
   } else {
     announcement.addClass("is-redemption");
+  }
+
+  if (options?.critical) {
+    announcement.addClass("is-critical");
   }
 
   meterPanel.addClass("hidden");
@@ -1405,7 +1573,7 @@ async function animateOverlayTypewriter(
   }
   await waitMs(redemptionHoldAfterTypeMs);
 
-  announcement.removeClass("visible is-headline is-list is-redemption").attr("aria-hidden", "true").empty();
+  announcement.removeClass("visible is-headline is-list is-redemption is-critical").attr("aria-hidden", "true").empty();
   meterPanel.removeClass("hidden");
 }
 

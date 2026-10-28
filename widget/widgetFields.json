@@ -31,6 +31,48 @@
     "label": "Show top-redeemers and all-time report periodically?",
     "value": true
   },
+  "criticalHitsEnabled": {
+    "type": "checkbox",
+    "label": "Enable random critical hits (extra impact) on redeems?",
+    "value": true
+  },
+  "criticalBlessEnabled": {
+    "type": "checkbox",
+    "label": "Critical hits: allow on Bless the Run?",
+    "value": true
+  },
+  "criticalCurseEnabled": {
+    "type": "checkbox",
+    "label": "Critical hits: allow on Curse the Run?",
+    "value": true
+  },
+  "criticalBlurseEnabled": {
+    "type": "checkbox",
+    "label": "Critical hits: allow on Blurse the Run?",
+    "value": true
+  },
+  "criticalHitChancePercent": {
+    "type": "number",
+    "label": "Critical hits: chance (percent, 0-100) that a redeem is critical",
+    "value": 10,
+    "min": 0,
+    "max": 100,
+    "step": 1
+  },
+  "criticalHitMinMultiplier": {
+    "type": "number",
+    "label": "Critical hits: minimum impact multiplier (integer, at least 2)",
+    "value": 2,
+    "min": 2,
+    "step": 1
+  },
+  "criticalHitMaxMultiplier": {
+    "type": "number",
+    "label": "Critical hits: maximum impact multiplier (integer)",
+    "value": 3,
+    "min": 2,
+    "step": 1
+  },
   "emoteBlessEnabled": {
     "type": "checkbox",
     "label": "Enable emote-triggered bless?",

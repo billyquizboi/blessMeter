@@ -123,6 +123,9 @@ declare global {
       redeemers: { userName: string; count: number }[]
     ) => { text: string; colorClass?: string }[];
     applyFieldData: (fieldData: FieldData) => void;
+    rollCriticalMultiplier: (counterName: string) => number;
+    getCriticalMultiplier: (redemption: LastRedemption) => number;
+    buildCriticalHitSegments: (multiplier: number) => { text: string; colorClass?: string }[];
     getRedemptionAnnouncementId: (widgetState: WidgetState | null | undefined) => string | null;
     parseEmoteNamesCsv: (csv: string) => string[];
     findMatchingTrackedEmotesInChat: (message: ChatMessageData, trackedLower: Set<string>) => string[];
@@ -1340,6 +1343,325 @@ describe("incrementState", () => {
     expect(saved?.current.numberOfBlesses).toBe(2);
     expect(saved?.allTime.numberOfBlesses).toBe(2);
     expect(saved?.redemptionHistory?.alice.numberOfBlesses).toBe(2);
+  });
+});
+
+// ===========================================================================
+// Critical hits
+// ===========================================================================
+describe("critical hits", () => {
+  const criticalOn: FieldData = {
+    criticalHitsEnabled: true,
+    criticalHitChancePercent: 100,
+    criticalHitMinMultiplier: 2,
+    criticalHitMaxMultiplier: 3,
+    reportsShouldDisplay: false,
+    numberOfSecondsBetweenReports: 0,
+  };
+
+  /** Feeds Math.random from a fixed sequence, then 0.5 once it runs out. */
+  function mockRandom(dom: JSDOM, values: number[]): jest.SpyInstance {
+    const queue = [...values];
+    return jest.spyOn(dom.window.Math, "random").mockImplementation(() => queue.shift() ?? 0.5);
+  }
+
+  describe("rollCriticalMultiplier", () => {
+    it("never rolls and never consumes randomness while the feature is off", () => {
+      const { w, dom } = setupTestDOM();
+      const randomSpy = mockRandom(dom, [0]);
+      expect(w.rollCriticalMultiplier("numberOfBlesses")).toBe(1);
+      expect(randomSpy).not.toHaveBeenCalled();
+    });
+
+    it("ships with the master flag off in code and defaults 2-3x via applyFieldData", () => {
+      const { w, dom } = setupTestDOM();
+      w.applyFieldData({ criticalHitsEnabled: true, criticalHitChancePercent: 100 });
+      mockRandom(dom, [0, 0.999]);
+      expect(w.rollCriticalMultiplier("numberOfBlesses")).toBe(3);
+    });
+
+    it("returns 1 when the roll misses the chance", () => {
+      const { w, dom } = setupTestDOM();
+      w.applyFieldData({ ...criticalOn, criticalHitChancePercent: 10 });
+      mockRandom(dom, [0.1]);
+      expect(w.rollCriticalMultiplier("numberOfBlesses")).toBe(1);
+    });
+
+    it("crits when the roll lands under the chance and maps the second roll onto min..max", () => {
+      const { w, dom } = setupTestDOM();
+      w.applyFieldData({
+        ...criticalOn,
+        criticalHitChancePercent: 10,
+        criticalHitMinMultiplier: 2,
+        criticalHitMaxMultiplier: 5,
+      });
+      const randomSpy = mockRandom(dom, [0.099, 0, 0.099, 0.26, 0.099, 0.51, 0.099, 0.99]);
+      const results = [1, 2, 3, 4].map(() => w.rollCriticalMultiplier("numberOfCurses"));
+      expect(results).toEqual([2, 3, 4, 5]);
+      randomSpy.mockRestore();
+    });
+
+    it("always returns the single value when min equals max", () => {
+      const { w, dom } = setupTestDOM();
+      w.applyFieldData({ ...criticalOn, criticalHitMinMultiplier: 4, criticalHitMaxMultiplier: 4 });
+      mockRandom(dom, [0, 0.9]);
+      expect(w.rollCriticalMultiplier("numberOfBlurses")).toBe(4);
+    });
+
+    it("respects the per-type flags", () => {
+      const { w, dom } = setupTestDOM();
+      w.applyFieldData({ ...criticalOn, criticalCurseEnabled: false });
+      mockRandom(dom, [0, 0, 0, 0, 0, 0]);
+      expect(w.rollCriticalMultiplier("numberOfBlesses")).toBeGreaterThan(1);
+      expect(w.rollCriticalMultiplier("numberOfCurses")).toBe(1);
+      expect(w.rollCriticalMultiplier("numberOfBlurses")).toBeGreaterThan(1);
+    });
+
+    it("never crits at 0 percent chance", () => {
+      const { w, dom } = setupTestDOM();
+      w.applyFieldData({ ...criticalOn, criticalHitChancePercent: 0 });
+      mockRandom(dom, [0, 0]);
+      expect(w.rollCriticalMultiplier("numberOfBlesses")).toBe(1);
+    });
+
+    it("ignores counters that are not redeems", () => {
+      const { w } = setupTestDOM();
+      w.applyFieldData(criticalOn);
+      expect(w.rollCriticalMultiplier("numberOfBlursesThatBlessed")).toBe(1);
+    });
+  });
+
+  describe("applyFieldData multiplier sanitizing", () => {
+    it("floors fractional multipliers and keeps min at 2 or more", () => {
+      const { w, dom } = setupTestDOM();
+      w.applyFieldData({ ...criticalOn, criticalHitMinMultiplier: 0.5, criticalHitMaxMultiplier: 2.9 });
+      mockRandom(dom, [0, 0.99]);
+      expect(w.rollCriticalMultiplier("numberOfBlesses")).toBe(2);
+    });
+
+    it("raises max to min and logs an error when the range is inverted", () => {
+      const { w, dom } = setupTestDOM();
+      const errorSpy = jest.spyOn(dom.window.console, "error").mockImplementation(() => undefined);
+      w.applyFieldData({ ...criticalOn, criticalHitMinMultiplier: 6, criticalHitMaxMultiplier: 3 });
+      mockRandom(dom, [0, 0.99]);
+      expect(w.rollCriticalMultiplier("numberOfBlesses")).toBe(6);
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("criticalHitMaxMultiplier (3)"));
+    });
+
+    it("accepts max equal to min as a fixed multiplier without logging an error", () => {
+      const { w, dom } = setupTestDOM();
+      const errorSpy = jest.spyOn(dom.window.console, "error").mockImplementation(() => undefined);
+      w.applyFieldData({ ...criticalOn, criticalHitMinMultiplier: 4, criticalHitMaxMultiplier: 4 });
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it("validates a partial update against the previously configured bound", () => {
+      const { w, dom } = setupTestDOM();
+      const errorSpy = jest.spyOn(dom.window.console, "error").mockImplementation(() => undefined);
+      w.applyFieldData({ ...criticalOn, criticalHitMinMultiplier: 2, criticalHitMaxMultiplier: 3 });
+      w.applyFieldData({ criticalHitMinMultiplier: 5 });
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("criticalHitMaxMultiplier (3)"));
+      mockRandom(dom, [0, 0.99]);
+      expect(w.rollCriticalMultiplier("numberOfBlesses")).toBe(5);
+    });
+
+    it("logs an error when a configured multiplier has to be corrected", () => {
+      const { w, dom } = setupTestDOM();
+      const errorSpy = jest.spyOn(dom.window.console, "error").mockImplementation(() => undefined);
+      w.applyFieldData({ ...criticalOn, criticalHitMinMultiplier: 1, criticalHitMaxMultiplier: 3 });
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("criticalHitMinMultiplier must be an integer"));
+    });
+
+    it("clamps chance to 100 percent", () => {
+      const { w, dom } = setupTestDOM();
+      w.applyFieldData({ ...criticalOn, criticalHitChancePercent: 500 });
+      mockRandom(dom, [0.999, 0]);
+      expect(w.rollCriticalMultiplier("numberOfBlesses")).toBe(2);
+    });
+  });
+
+  describe("incrementState", () => {
+    it("scales a critical bless by the rolled multiplier and records it for the announcement", async () => {
+      const { w, mockSEAPI, dom } = setupTestDOM(makeState());
+      w.applyFieldData(criticalOn);
+      mockRandom(dom, [0, 0.99]);
+
+      w.incrementState("numberOfBlesses", "alice");
+      await flushPromises();
+
+      const saved = mockSEAPI.store._data["blessCurseMeterState"]!;
+      expect(saved.current.numberOfBlesses).toBe(3);
+      expect(saved.allTime.numberOfBlesses).toBe(3);
+      expect(saved.redemptionHistory?.alice.numberOfBlesses).toBe(1);
+      expect(saved.lastRedemption).toMatchObject({
+        charType: "bless",
+        meterTarget: "bless",
+        meterAmount: 3,
+        criticalMultiplier: 3,
+      });
+    });
+
+    it("scales a critical curse", async () => {
+      const { w, mockSEAPI, dom } = setupTestDOM(makeState());
+      w.applyFieldData(criticalOn);
+      mockRandom(dom, [0, 0]);
+
+      w.incrementState("numberOfCurses", "bob");
+      await flushPromises();
+
+      const saved = mockSEAPI.store._data["blessCurseMeterState"]!;
+      expect(saved.current.numberOfCurses).toBe(2);
+      expect(saved.allTime.numberOfCurses).toBe(2);
+      expect(saved.lastRedemption).toMatchObject({ meterTarget: "curse", meterAmount: 2, criticalMultiplier: 2 });
+    });
+
+    it("scales a critical blurse on whichever meter it landed on", async () => {
+      const { w, mockSEAPI, dom } = setupTestDOM(makeState());
+      w.applyFieldData(criticalOn);
+      // crit chance, multiplier pick (3x), blurse outcome (blessed)
+      mockRandom(dom, [0, 0.99, 0.1]);
+
+      w.incrementState("numberOfBlurses", "carol");
+      await flushPromises();
+
+      const saved = mockSEAPI.store._data["blessCurseMeterState"]!;
+      expect(saved.current.numberOfBlurses).toBe(1);
+      expect(saved.current.numberOfBlursesThatBlessed).toBe(3);
+      expect(saved.current.numberOfBlursesThatCursed).toBe(0);
+      expect(saved.allTime.numberOfBlursesThatBlessed).toBe(3);
+      expect(saved.redemptionHistory?.carol.numberOfBlurses).toBe(1);
+      expect(saved.redemptionHistory?.carol.numberOfBlursesThatBlessed).toBe(1);
+      expect(saved.lastRedemption).toMatchObject({ meterTarget: "bless", meterAmount: 6, criticalMultiplier: 3 });
+    });
+
+    it.each([
+      { outcome: 0.1, meter: "bless", meterSelector: "div.bless-container div.meter-fill" },
+      { outcome: 0.9, meter: "curse", meterSelector: "div.curse-container div.meter-fill" },
+    ])(
+      "fills the $meter meter by 2 x the critical multiplier for a critical blurse",
+      async ({ outcome, meterSelector }) => {
+        const { w, mockSEAPI, dom } = setupTestDOM(makeState());
+        w.applyFieldData(criticalOn);
+        // crit chance, multiplier pick (3x), blurse outcome
+        mockRandom(dom, [0, 0.99, outcome]);
+
+        w.incrementState("numberOfBlurses", "carol");
+        await flushPromises();
+
+        const saved = mockSEAPI.store._data["blessCurseMeterState"]!;
+        const counter = outcome < 0.5 ? "numberOfBlursesThatBlessed" : "numberOfBlursesThatCursed";
+        expect(saved.current[counter]).toBe(3);
+
+        w.updateDisplay(saved, false, false);
+        await flushPromises();
+
+        const fill = w.document.querySelector(meterSelector) as HTMLElement;
+        const keyframes = (fill.animate as jest.Mock).mock.calls.at(-1)![0] as { width: string }[];
+        // 3 outcomes x 2 points each = 6 of a 15 point meter
+        expect(keyframes[1].width).toBe("40.00%");
+        expect(w.bothMetersAreAtMax(saved)).toBe(false);
+      }
+    );
+
+    it("leaves a normal hit unchanged and omits the critical marker", async () => {
+      const { w, mockSEAPI, dom } = setupTestDOM(makeState());
+      w.applyFieldData({ ...criticalOn, criticalHitChancePercent: 10 });
+      mockRandom(dom, [0.5]);
+
+      w.incrementState("numberOfBlesses", "alice");
+      await flushPromises();
+
+      const saved = mockSEAPI.store._data["blessCurseMeterState"]!;
+      expect(saved.current.numberOfBlesses).toBe(1);
+      expect(saved.lastRedemption?.meterAmount).toBe(1);
+      expect(saved.lastRedemption).not.toHaveProperty("criticalMultiplier");
+    });
+
+    it("does not roll for increments that opt out (emote bless)", async () => {
+      const { w, mockSEAPI, dom } = setupTestDOM(makeState());
+      w.applyFieldData(criticalOn);
+      const randomSpy = mockRandom(dom, [0, 0.99]);
+
+      w.incrementState("numberOfBlesses", "alice", { recordRedemption: false, allowCritical: false });
+      await flushPromises();
+
+      expect(randomSpy).not.toHaveBeenCalled();
+      expect(mockSEAPI.store._data["blessCurseMeterState"]!.current.numberOfBlesses).toBe(1);
+    });
+  });
+
+  describe("announcement", () => {
+    it("treats missing, non-integer, and sub-2 multipliers as a normal hit", () => {
+      const { w } = setupTestDOM();
+      expect(w.getCriticalMultiplier(makeLastRedemption())).toBe(1);
+      expect(w.getCriticalMultiplier(makeLastRedemption({ criticalMultiplier: 1 }))).toBe(1);
+      expect(w.getCriticalMultiplier(makeLastRedemption({ criticalMultiplier: 2.5 }))).toBe(1);
+      expect(w.getCriticalMultiplier(makeLastRedemption({ criticalMultiplier: 3 }))).toBe(3);
+    });
+
+    it("keeps the summary at three lines and builds a separate critical callout", () => {
+      const { w } = setupTestDOM();
+      const summary = w.buildRedemptionAnnouncementSegments(
+        makeLastRedemption({ meterAmount: 3, criticalMultiplier: 3 })
+      );
+      expect(summary.map((segment) => segment.text).join("")).toBe("testUserName\nBLESSED the run\nImpact: +3 BLESS");
+      expect(w.buildCriticalHitSegments(3)).toEqual([
+        { text: "CRITICAL HIT! x3", colorClass: "redemption-text-critical" },
+      ]);
+    });
+
+    it("types the CRITICAL HIT callout before the summary for criticals only", async () => {
+      jest.useFakeTimers();
+      try {
+        const { w } = setupTestDOM();
+        const textOf = () => w.document.querySelector(".redemption-announcement-text")?.textContent;
+
+        const promise = w.animateRedemptionAnnouncement(makeLastRedemption({ meterAmount: 3, criticalMultiplier: 3 }));
+        await flushMicrotasks();
+        await jest.advanceTimersByTimeAsync(45 * 20);
+        expect(textOf()).toBe("CRITICAL HIT! x3");
+        expect(w.document.querySelector(".redemption-announcement")?.classList.contains("is-headline")).toBe(true);
+
+        await jest.advanceTimersByTimeAsync(600 + 45 * 15);
+        expect(textOf()).toContain("testUserName");
+        expect(textOf()).not.toContain("CRITICAL");
+        await jest.runAllTimersAsync();
+        await promise;
+
+        const normal = w.animateRedemptionAnnouncement(makeLastRedemption());
+        await flushMicrotasks();
+        await jest.advanceTimersByTimeAsync(45 * 30);
+        expect(textOf()).not.toContain("CRITICAL");
+        await jest.runAllTimersAsync();
+        await normal;
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("flags the announcement window while a critical types and clears it afterwards", async () => {
+      jest.useFakeTimers();
+      try {
+        const { w } = setupTestDOM();
+        const announcement = w.document.querySelector(".redemption-announcement")!;
+
+        const promise = w.animateRedemptionAnnouncement(makeLastRedemption({ meterAmount: 2, criticalMultiplier: 2 }));
+        await flushMicrotasks();
+        expect(announcement.classList.contains("is-critical")).toBe(true);
+
+        await jest.runAllTimersAsync();
+        await promise;
+        expect(announcement.classList.contains("is-critical")).toBe(false);
+
+        const normal = w.animateRedemptionAnnouncement(makeLastRedemption());
+        await flushMicrotasks();
+        expect(announcement.classList.contains("is-critical")).toBe(false);
+        await jest.runAllTimersAsync();
+        await normal;
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 });
 

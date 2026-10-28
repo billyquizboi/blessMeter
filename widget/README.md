@@ -135,6 +135,24 @@ To run the automated test suite:
 npm run test
 ```
 
+## Critical hits
+
+Like a critical hit in a video game, a Bless, Curse, or Blurse redeem can randomly land for extra impact. A critical multiplies the meter movement by a random whole number between the configured minimum and maximum (2x to 3x by default). A critical redeem first types a flashing gold `CRITICAL HIT! xN` callout, and the usual summary that follows keeps a glowing gold window and shows the multiplied impact (for example `+3 BLESS`).
+
+Configure it in [widgetFields.json](./widgetFields.json):
+
+| Field                      | Default | Description                                                      |
+| -------------------------- | ------- | ---------------------------------------------------------------- |
+| `criticalHitsEnabled`      | `true`  | Master on/off switch for the feature                             |
+| `criticalBlessEnabled`     | `true`  | Allow criticals on Bless the Run                                 |
+| `criticalCurseEnabled`     | `true`  | Allow criticals on Curse the Run                                 |
+| `criticalBlurseEnabled`    | `true`  | Allow criticals on Blurse the Run                                |
+| `criticalHitChancePercent` | `10`    | Chance (0-100) that an enabled redeem is critical                |
+| `criticalHitMinMultiplier` | `2`     | Minimum impact multiplier, an integer of at least 2              |
+| `criticalHitMaxMultiplier` | `3`     | Maximum impact multiplier, an integer (raised to min if smaller) |
+
+A critical Bless or Curse adds the multiplier to the meter count, and a critical Blurse multiplies its usual 2 points. Per-user redeem counts in the top-redeemer reports still count the redeem once. Emote-triggered blesses never crit.
+
 ## How it works
 
 The widget has event listeners which are called and process when certain redemptions are redeemed in twitch chat.
