@@ -1508,6 +1508,35 @@ describe("critical hits", () => {
       expect(saved.lastRedemption).toMatchObject({ meterTarget: "bless", meterAmount: 6, criticalMultiplier: 3 });
     });
 
+    it.each([
+      { outcome: 0.1, meter: "bless", meterSelector: "div.bless-container div.meter-fill" },
+      { outcome: 0.9, meter: "curse", meterSelector: "div.curse-container div.meter-fill" },
+    ])(
+      "fills the $meter meter by 2 x the critical multiplier for a critical blurse",
+      async ({ outcome, meterSelector }) => {
+        const { w, mockSEAPI, dom } = setupTestDOM(makeState());
+        w.applyFieldData(criticalOn);
+        // crit chance, multiplier pick (3x), blurse outcome
+        mockRandom(dom, [0, 0.99, outcome]);
+
+        w.incrementState("numberOfBlurses", "carol");
+        await flushPromises();
+
+        const saved = mockSEAPI.store._data["blessCurseMeterState"]!;
+        const counter = outcome < 0.5 ? "numberOfBlursesThatBlessed" : "numberOfBlursesThatCursed";
+        expect(saved.current[counter]).toBe(3);
+
+        w.updateDisplay(saved, false, false);
+        await flushPromises();
+
+        const fill = w.document.querySelector(meterSelector) as HTMLElement;
+        const keyframes = (fill.animate as jest.Mock).mock.calls.at(-1)![0] as { width: string }[];
+        // 3 outcomes x 2 points each = 6 of a 15 point meter
+        expect(keyframes[1].width).toBe("40.00%");
+        expect(w.bothMetersAreAtMax(saved)).toBe(false);
+      }
+    );
+
     it("leaves a normal hit unchanged and omits the critical marker", async () => {
       const { w, mockSEAPI, dom } = setupTestDOM(makeState());
       w.applyFieldData({ ...criticalOn, criticalHitChancePercent: 10 });
